@@ -23,7 +23,7 @@ export default function RecordsScreen() {
           </View>
           <View style={styles.uploadContent}>
             <Text style={styles.uploadTitle}>饮食拍照</Text>
-            <Text style={styles.uploadSubtitle}>通过 AI 智能识别食物热量</Text>
+            <Text style={styles.uploadSubtitle}>上传照片后识别食物热量</Text>
           </View>
           <MaterialCommunityIcons name="chevron-right" size={24} color={colors.muted} />
         </TouchableOpacity>

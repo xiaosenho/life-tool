@@ -57,12 +57,12 @@ export const mediaService = {
       });
 
       if (!uploadResponse.ok) {
-        throw new Error(`Upload failed with status ${uploadResponse.status}`);
+        throw new Error(`图片上传失败，状态码：${uploadResponse.status}`);
       }
 
       return true;
     } catch (error) {
-      console.error("Direct upload error:", error);
+      console.error("直传图片失败：", error);
       throw error;
     }
   },
@@ -83,7 +83,7 @@ export const mediaService = {
     // 1. Get token
     const tokenRes = await this.getUploadToken(resolvedType, purpose, resolvedFileSize);
     if (!tokenRes.success || !tokenRes.data) {
-      throw new Error(tokenRes.error?.message || "Failed to get upload token");
+      throw new Error(tokenRes.error?.message || "获取上传授权失败");
     }
 
     const { uploadUrl, assetId, objectKey, headers } = tokenRes.data;
@@ -103,7 +103,7 @@ export const mediaService = {
     });
 
     if (!saveRes.success || !saveRes.data) {
-      throw new Error(saveRes.error?.message || "Failed to save asset metadata");
+      throw new Error(saveRes.error?.message || "保存图片信息失败");
     }
 
     return saveRes.data;

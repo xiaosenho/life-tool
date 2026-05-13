@@ -26,12 +26,12 @@ export default function RegisterScreen() {
 
   const handleRegister = async () => {
     if (!email || !password || !displayName || !confirmPassword) {
-      setError("Please fill in all fields");
+      setError("请填写所有信息");
       return;
     }
 
     if (password !== confirmPassword) {
-      setError("Passwords do not match");
+      setError("两次输入的密码不一致");
       return;
     }
 
@@ -42,33 +42,33 @@ export default function RegisterScreen() {
       const response = await authService.register(email, password, displayName);
       setAuth(response.user, response.accessToken);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Registration failed");
+      setError(err instanceof Error ? err.message : "注册失败，请稍后再试");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <Screen title="Join Us">
+    <Screen title="创建账号">
       <View style={styles.container}>
-        <Text style={styles.subtitle}>Create an account to start tracking</Text>
+        <Text style={styles.subtitle}>创建账号后即可开始记录和同步生活数据</Text>
 
         <View style={styles.form}>
           <View style={styles.inputContainer}>
-            <Text style={styles.label}>Display Name</Text>
+            <Text style={styles.label}>昵称</Text>
             <TextInput
               style={styles.input}
-              placeholder="How should we call you?"
+              placeholder="请输入昵称"
               value={displayName}
               onChangeText={setDisplayName}
             />
           </View>
 
           <View style={styles.inputContainer}>
-            <Text style={styles.label}>Email</Text>
+            <Text style={styles.label}>邮箱</Text>
             <TextInput
               style={styles.input}
-              placeholder="Enter your email"
+              placeholder="请输入邮箱"
               value={email}
               onChangeText={setEmail}
               autoCapitalize="none"
@@ -77,10 +77,10 @@ export default function RegisterScreen() {
           </View>
 
           <View style={styles.inputContainer}>
-            <Text style={styles.label}>Password</Text>
+            <Text style={styles.label}>密码</Text>
             <TextInput
               style={styles.input}
-              placeholder="Create a password"
+              placeholder="请设置密码"
               value={password}
               onChangeText={setPassword}
               secureTextEntry
@@ -88,10 +88,10 @@ export default function RegisterScreen() {
           </View>
 
           <View style={styles.inputContainer}>
-            <Text style={styles.label}>Confirm Password</Text>
+            <Text style={styles.label}>确认密码</Text>
             <TextInput
               style={styles.input}
-              placeholder="Confirm your password"
+              placeholder="请再次输入密码"
               value={confirmPassword}
               onChangeText={setConfirmPassword}
               secureTextEntry
@@ -108,14 +108,14 @@ export default function RegisterScreen() {
             {loading ? (
               <ActivityIndicator color="#fff" />
             ) : (
-              <Text style={styles.buttonText}>Create Account</Text>
+              <Text style={styles.buttonText}>注册</Text>
             )}
           </TouchableOpacity>
 
           <View style={styles.footer}>
-            <Text style={styles.footerText}>Already have an account? </Text>
+            <Text style={styles.footerText}>已有账号？</Text>
             <TouchableOpacity onPress={() => router.back()}>
-              <Text style={styles.linkText}>Sign In</Text>
+              <Text style={styles.linkText}>去登录</Text>
             </TouchableOpacity>
           </View>
         </View>

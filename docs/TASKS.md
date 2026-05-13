@@ -166,6 +166,24 @@ blocked
   - 登录后进入 Today 页。
 - 风险等级：中
 
+### TASK-FE-000：全局页面中文化
+
+- 状态：done
+- 推荐负责人：Codex
+- 影响文件：
+  - `frontend/app/**`
+  - `frontend/src/services/**`
+  - `docs/AGENT_RULES.md`
+  - `docs/TASKS.md`
+- 描述：
+  - 面向中国用户，所有用户可见页面文案统一使用简体中文。
+  - 登录、注册、演示账号、错误提示、上传状态、空状态和入口说明不得保留英文。
+  - 将中文化要求固化到 Agent 前端规范，后续 Agent 开发必须遵守。
+- 验收标准：
+  - 主要页面标题、按钮、表单标签、占位符、Tab 和错误提示为中文。
+  - `npm run typecheck` 通过。
+- 风险等级：低
+
 ### TASK-BE-102：实现同步 API
 
 - 状态：done

@@ -44,7 +44,7 @@ export default function ProfileScreen() {
       await authService.logout();
       clearAuth();
     } catch (error) {
-      console.error("Logout failed", error);
+      console.error("退出登录失败：", error);
     }
   };
 

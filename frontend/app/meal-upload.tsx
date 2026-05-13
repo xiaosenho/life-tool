@@ -31,7 +31,7 @@ export default function MealUploadScreen() {
       let result;
       if (useCamera) {
         if (Platform.OS === 'web') {
-          Alert.alert("不支持", "Web 端暂不支持直接拍照，请从相册选择。");
+          Alert.alert("暂不支持", "网页端暂不支持直接拍照，请从相册选择。");
           return;
         }
         
@@ -65,7 +65,7 @@ export default function MealUploadScreen() {
         });
       }
     } catch (err) {
-      console.error("Pick image error:", err);
+      console.error("选择图片失败：", err);
       setError("选择图片失败");
     }
   };
@@ -84,7 +84,7 @@ export default function MealUploadScreen() {
       setAsset(result);
       setStatus("success");
     } catch (err: any) {
-      console.error("Upload failed:", err);
+      console.error("上传图片失败：", err);
       setStatus("error");
       setError(err.message || "上传失败，请检查网络或配置");
     }
@@ -109,21 +109,21 @@ export default function MealUploadScreen() {
             <MaterialCommunityIcons name="food-apple" size={48} color={colors.accent} />
           </View>
           <Text style={styles.emptyTitle}>记录你的饮食</Text>
-          <Text style={styles.emptySubtitle}>拍一张照片，AI 将为你识别热量和营养</Text>
-          
+          <Text style={styles.emptySubtitle}>拍一张照片，后续将为你识别热量和营养</Text>
+
           <View style={styles.buttonGroup}>
             {Platform.OS !== 'web' && (
-              <TouchableOpacity 
-                style={[styles.button, styles.primaryButton]} 
+              <TouchableOpacity
+                style={[styles.button, styles.primaryButton]}
                 onPress={() => pickImage(true)}
               >
                 <MaterialCommunityIcons name="camera" size={24} color="#FFF" />
                 <Text style={styles.primaryButtonText}>拍照记录</Text>
               </TouchableOpacity>
             )}
-            
-            <TouchableOpacity 
-              style={[styles.button, styles.secondaryButton]} 
+
+            <TouchableOpacity
+              style={[styles.button, styles.secondaryButton]}
               onPress={() => pickImage(false)}
             >
               <MaterialCommunityIcons name="image" size={24} color={colors.accent} />
@@ -162,20 +162,20 @@ export default function MealUploadScreen() {
                 <MaterialCommunityIcons name="check-circle" size={24} color="green" />
                 <Text style={styles.successTitle}>上传成功</Text>
               </View>
-              
+
               <View style={styles.infoRow}>
-                <Text style={styles.infoLabel}>资产 ID:</Text>
+                <Text style={styles.infoLabel}>资产编号：</Text>
                 <Text style={styles.infoValue}>{asset?.id}</Text>
               </View>
 
               <View style={styles.aiPlaceholder}>
                 <MaterialCommunityIcons name="robot" size={32} color={colors.muted} />
                 <Text style={styles.aiText}>等待识别接口接入...</Text>
-                <Text style={styles.aiHint}>后续将自动展示 AI 识别出的食物、重量及热量估算。</Text>
+                <Text style={styles.aiHint}>后续将自动展示识别出的食物、重量及热量估算。</Text>
               </View>
 
-              <TouchableOpacity 
-                style={[styles.button, styles.primaryButton, { marginTop: 24 }]} 
+              <TouchableOpacity
+                style={[styles.button, styles.primaryButton, { marginTop: 24 }]}
                 onPress={() => router.back()}
               >
                 <Text style={styles.primaryButtonText}>返回</Text>

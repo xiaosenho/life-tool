@@ -39,7 +39,7 @@ export const apiClient = {
           data: null,
           error: result.error || {
             code: "UNKNOWN_ERROR",
-            message: "An unexpected error occurred",
+            message: "请求失败，请稍后再试",
           },
         };
       }
@@ -55,7 +55,7 @@ export const apiClient = {
         data: null,
         error: {
           code: "NETWORK_ERROR",
-          message: error instanceof Error ? error.message : "Network error",
+          message: error instanceof Error ? error.message : "网络异常，请检查连接",
         },
       };
     }

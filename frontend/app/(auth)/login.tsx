@@ -24,7 +24,7 @@ export default function LoginScreen() {
 
   const handleLogin = async () => {
     if (!email || !password) {
-      setError("Please fill in all fields");
+      setError("请填写邮箱和密码");
       return;
     }
 
@@ -34,25 +34,24 @@ export default function LoginScreen() {
     try {
       const response = await authService.login(email, password);
       setAuth(response.user, response.accessToken);
-      // Root _layout will handle navigation to "/"
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Login failed");
+      setError(err instanceof Error ? err.message : "登录失败，请稍后再试");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <Screen title="Welcome Back">
+    <Screen title="欢迎回来">
       <View style={styles.container}>
-        <Text style={styles.subtitle}>Sign in to continue your journey</Text>
+        <Text style={styles.subtitle}>登录后继续记录你的生活状态</Text>
 
         <View style={styles.form}>
           <View style={styles.inputContainer}>
-            <Text style={styles.label}>Email</Text>
+            <Text style={styles.label}>邮箱</Text>
             <TextInput
               style={styles.input}
-              placeholder="Enter your email"
+              placeholder="请输入邮箱"
               value={email}
               onChangeText={setEmail}
               autoCapitalize="none"
@@ -61,10 +60,10 @@ export default function LoginScreen() {
           </View>
 
           <View style={styles.inputContainer}>
-            <Text style={styles.label}>Password</Text>
+            <Text style={styles.label}>密码</Text>
             <TextInput
               style={styles.input}
-              placeholder="Enter your password"
+              placeholder="请输入密码"
               value={password}
               onChangeText={setPassword}
               secureTextEntry
@@ -81,22 +80,22 @@ export default function LoginScreen() {
             {loading ? (
               <ActivityIndicator color="#fff" />
             ) : (
-              <Text style={styles.buttonText}>Sign In</Text>
+              <Text style={styles.buttonText}>登录</Text>
             )}
           </TouchableOpacity>
 
           <View style={styles.footer}>
-            <Text style={styles.footerText}>Don't have an account? </Text>
+            <Text style={styles.footerText}>还没有账号？</Text>
             <TouchableOpacity onPress={() => router.push("/register")}>
-              <Text style={styles.linkText}>Sign Up</Text>
+              <Text style={styles.linkText}>去注册</Text>
             </TouchableOpacity>
           </View>
         </View>
-        
+
         <View style={styles.demoInfo}>
-          <Text style={styles.demoText}>Demo Account:</Text>
-          <Text style={styles.demoText}>Email: test@example.com</Text>
-          <Text style={styles.demoText}>Password: password</Text>
+          <Text style={styles.demoText}>演示账号</Text>
+          <Text style={styles.demoText}>邮箱：test@example.com</Text>
+          <Text style={styles.demoText}>密码：password</Text>
         </View>
       </View>
     </Screen>

@@ -25,11 +25,11 @@ export const authService = {
           user: {
             id: "1",
             email: "test@example.com",
-            displayName: "Test User",
+            displayName: "测试用户",
           },
         };
       }
-      throw new Error("Invalid email or password");
+      throw new Error("邮箱或密码错误");
     }
 
     const response = await apiClient.post<AuthResponse>("/auth/login", {
@@ -38,7 +38,7 @@ export const authService = {
     });
 
     if (!response.success || !response.data) {
-      throw new Error(response.error?.message || "Login failed");
+      throw new Error(response.error?.message || "登录失败");
     }
 
     return response.data;
@@ -69,7 +69,7 @@ export const authService = {
     });
 
     if (!response.success || !response.data) {
-      throw new Error(response.error?.message || "Registration failed");
+      throw new Error(response.error?.message || "注册失败");
     }
 
     return response.data;
@@ -87,12 +87,12 @@ export const authService = {
       return {
         id: "1",
         email: "test@example.com",
-        displayName: "Test User",
+        displayName: "测试用户",
       };
     }
     const response = await apiClient.get<User>("/me");
     if (!response.success || !response.data) {
-      throw new Error(response.error?.message || "Failed to fetch user");
+      throw new Error(response.error?.message || "获取用户信息失败");
     }
     return response.data;
   },
