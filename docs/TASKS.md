@@ -31,6 +31,29 @@ blocked
   - `docs/DEPLOYMENT.md` 包含完整的本地开发流程。
 - 风险等级：低
 
+### TASK-INFRA-002：阿里云服务器基础设施部署配置
+
+- 状态：done
+- 推荐负责人：DeepSeek
+- 影响文件：
+  - `docker-compose.yml`
+  - `backend/.env.example`
+  - `docs/DEPLOYMENT.md`
+  - `README.md`
+  - `docs/TASKS.md`
+- 描述：
+  - PostgreSQL/Redis 端口绑定 127.0.0.1，默认不对公网开放。
+  - 敏感值通过 .env 文件注入（POSTGRES_PASSWORD、JWT_SECRET 等），不硬编码生产密码。
+  - backend/.env.example 增加阿里云部署说明和变量注释。
+  - docs/DEPLOYMENT.md 增加阿里云 ECS 部署章节：安全组、SSH、Docker 安装、启动 compose、Nginx 反代、备份、日志、升级。
+  - 公网只应开放 22/80/443，数据库和 Redis 不对公网暴露。
+- 验收标准：
+  - `docker compose up -d` 不传 .env 默认使用本地开发密码。
+  - 传入 .env 生产密码后覆盖默认值。
+  - PostgreSQL 和 Redis 端口只监听 127.0.0.1。
+  - 部署文档包含完整阿里云 ECS 搭建流程。
+- 风险等级：低
+
 ## Phase 0：项目初始化
 
 ### TASK-DOC-001：建立项目基础文档

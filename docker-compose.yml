@@ -1,16 +1,14 @@
-version: "3.9"
-
 services:
   postgres:
     image: postgres:16-alpine
     container_name: lifetool-postgres
     restart: unless-stopped
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     environment:
       POSTGRES_DB: lifetool
       POSTGRES_USER: lifetool
-      POSTGRES_PASSWORD: lifetool_dev
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-lifetool_dev}
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -24,7 +22,7 @@ services:
     container_name: lifetool-redis
     restart: unless-stopped
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     volumes:
       - redisdata:/data
     healthcheck:
