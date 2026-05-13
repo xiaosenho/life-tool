@@ -98,11 +98,12 @@ blocked
 
 ### TASK-BE-101：实现认证模块
 
-- 状态：todo
+- 状态：review
 - 推荐负责人：Claude
 - 影响文件：
   - `backend/src/main/**/auth/**`
   - `backend/src/main/**/users/**`
+  - `backend/src/main/**/common/**`
 - 验收标准：
   - 支持注册、登录、刷新 token、退出登录。
   - 密码哈希存储。
