@@ -1,0 +1,33 @@
+docs/DEPLOYMENT.md
+  63fc0a5f8e28a8fb 350,415-418,469
+backend/src/main/java/com/lifetool/media/CosUploadUrlSigner.java
+  63fc0a5f8e28a8fb 1-50
+backend/src/main/java/com/lifetool/media/MediaConfig.java
+  63fc0a5f8e28a8fb 23-28,40-41,46-48,57-59
+backend/src/test/java/com/lifetool/media/MediaCosSigningTest.java
+  63fc0a5f8e28a8fb 1-56
+frontend/tsconfig.json
+  63fc0a5f8e28a8fb 15
+backend/src/main/java/com/lifetool/media/MediaService.java
+  63fc0a5f8e28a8fb 18,20,23,36
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.14",
+  "base_commit_sha": "dcee4cf5963325aa49f115ea71965a4cef23773a",
+  "prompts": {
+    "63fc0a5f8e28a8fb": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_1df2cbba3ffeb0L9kBx6q4RQfg",
+        "model": "deepseek/deepseek-v4-flash"
+      },
+      "human_author": "zhouxiaojie <i_zhouxiaojie@cvte.com>",
+      "messages": [],
+      "total_additions": 896,
+      "total_deletions": 27,
+      "accepted_lines": 134,
+      "overriden_lines": 0
+    }
+  }
+}
