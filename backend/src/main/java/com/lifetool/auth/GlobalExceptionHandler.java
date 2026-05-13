@@ -7,6 +7,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import com.lifetool.common.ApiResponse;
+import com.lifetool.events.EventException;
 import com.lifetool.focus.FocusException;
 import com.lifetool.friends.FriendException;
 import com.lifetool.leaderboards.LeaderboardException;
@@ -68,6 +69,16 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(LedgerException.class)
     public ResponseEntity<ApiResponse<Void>> handleLedger(LedgerException ex) {
+        HttpStatus status = switch (ex.getCode()) {
+            case "NOT_FOUND" -> HttpStatus.NOT_FOUND;
+            case "FORBIDDEN" -> HttpStatus.FORBIDDEN;
+            default -> HttpStatus.BAD_REQUEST;
+        };
+        return ResponseEntity.status(status).body(ApiResponse.fail(ex.getCode(), ex.getMessage()));
+    }
+
+    @ExceptionHandler(EventException.class)
+    public ResponseEntity<ApiResponse<Void>> handleEvent(EventException ex) {
         HttpStatus status = switch (ex.getCode()) {
             case "NOT_FOUND" -> HttpStatus.NOT_FOUND;
             case "FORBIDDEN" -> HttpStatus.FORBIDDEN;
