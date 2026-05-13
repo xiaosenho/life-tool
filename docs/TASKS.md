@@ -393,7 +393,7 @@ blocked
 
 ### TASK-BE-107：实现专注偏好接口
 
-- 状态：todo
+- 状态：done
 - 推荐负责人：Claude
 - 影响文件：
   - `backend/src/main/**/focus/**`
@@ -411,7 +411,7 @@ blocked
 
 ### TASK-FE-107：实现可设置专注时长
 
-- 状态：todo
+- 状态：done
 - 推荐负责人：Gemini
 - 影响文件：
   - `frontend/app/(tabs)/focus.tsx`
