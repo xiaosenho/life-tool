@@ -1,0 +1,39 @@
+backend/src/main/java/com/lifetool/focus/FocusPreference.java
+  a6dd26586e4ad98e 1-73
+backend/src/main/java/com/lifetool/focus/FocusPreferenceController.java
+  a6dd26586e4ad98e 1-43
+backend/src/main/java/com/lifetool/focus/dto/FocusPreferenceResponse.java
+  a6dd26586e4ad98e 1-22
+backend/src/main/java/com/lifetool/focus/dto/UpdateFocusPreferenceRequest.java
+  a6dd26586e4ad98e 1-53
+backend/src/main/java/com/lifetool/auth/GlobalExceptionHandler.java
+  a6dd26586e4ad98e 10,60-67
+backend/src/main/java/com/lifetool/focus/FocusPreferenceService.java
+  a6dd26586e4ad98e 1-47
+backend/src/main/java/com/lifetool/focus/FocusPreferenceStore.java
+  a6dd26586e4ad98e 1-22
+backend/src/main/java/com/lifetool/focus/FocusException.java
+  a6dd26586e4ad98e 1-15
+backend/src/test/java/com/lifetool/focus/FocusPreferenceControllerTest.java
+  a6dd26586e4ad98e 1-175
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.14",
+  "base_commit_sha": "c3b3bdd403bc2d72c95542bd144538f334f19f1e",
+  "prompts": {
+    "a6dd26586e4ad98e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f9040c3e-0842-46f4-8a48-5620306de510",
+        "model": "glm-5"
+      },
+      "human_author": "zhouxiaojie <i_zhouxiaojie@cvte.com>",
+      "messages": [],
+      "total_additions": 459,
+      "total_deletions": 0,
+      "accepted_lines": 459,
+      "overriden_lines": 0
+    }
+  }
+}
