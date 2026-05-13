@@ -110,7 +110,7 @@ blocked
   - `.github/workflows/ci.yml`
 - 描述：
   - 后端初始化后启用 Maven 测试。
-  - 前端初始化后启用 pnpm lint/build。
+  - 前端初始化后启用 npm lint/build。
 - 验收标准：
   - pull request 时自动执行后端和前端检查。
 - 风险等级：低
@@ -119,7 +119,7 @@ blocked
 
 ### TASK-BE-101：实现认证模块
 
-- 状态：review
+- 状态：done
 - 推荐负责人：Claude
 - 影响文件：
   - `backend/src/main/**/auth/**`
@@ -133,7 +133,7 @@ blocked
 
 ### TASK-FE-101：实现登录注册页面
 
-- 状态：todo
+- 状态：done
 - 推荐负责人：Gemini
 - 影响文件：
   - `frontend/**/auth/**`
