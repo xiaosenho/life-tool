@@ -342,3 +342,26 @@ blocked
   - 用户可以进行多轮 AI 对话。
   - 页面清楚提示 AI 建议仅供参考。
 - 风险等级：中
+
+### TASK-DB-001：生成 PostgreSQL 数据库 DDL
+
+- 状态：done
+- 推荐负责人：DeepSeek
+- 影响文件：
+  - `docs/DATABASE.md`
+  - `docs/TASKS.md`
+  - `backend/src/main/resources/db/migration/V1__init_schema.sql`
+- 描述：
+  - 为 LifeTool 生成 PostgreSQL 16 数据库 DDL，覆盖 12 个业务域：用户与认证、隐私、同步、专注、习惯、好友、排行榜/统计、饮食、记账、重要事件、媒体、AI。
+  - 使用 uuid 主键 + pgcrypto 扩展。
+  - 所有用户私有数据带 user_id 外键。
+  - 关键状态字段使用 CHECK 约束，不创建 enum。
+  - 常用查询字段添加索引。
+  - 同步模型基于全局递增 server_version + sync_mutations 表，支持 /sync/push 和 /sync/pull 的 cursor 分页。
+  - 编写 docs/DATABASE.md 中文文档说明表分组、关系、同步版本模型、隐私原则和迁移建议。
+- 验收标准：
+  - DDL 在 PostgreSQL 16 空库上可执行。
+  - 所有 12 个业务域都有对应表。
+  - 同步版本模型支持游标拉取和实体版本管理。
+  - docs/DATABASE.md 文档完整，可指导后端开发。
+- 风险等级：低
