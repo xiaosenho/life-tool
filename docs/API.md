@@ -234,7 +234,154 @@ GET /api/leaderboards/streaks
 }
 ```
 
-## 8. 错误码
+## 8. Media
+
+```text
+POST /api/media/upload-token
+POST /api/media/assets
+GET  /api/media/assets/{id}
+DELETE /api/media/assets/{id}
+```
+
+### POST /api/media/upload-token
+
+用途：
+
+- 后端为当前用户生成短有效期上传授权。
+- 当前暂定对接腾讯云 COS。
+- 客户端用授权直传图片，不经过后端中转大文件。
+
+请求：
+
+```json
+{
+  "contentType": "image/jpeg",
+  "purpose": "meal_photo",
+  "fileSize": 512000
+}
+```
+
+响应：
+
+```json
+{
+  "assetId": "uuid",
+  "uploadUrl": "https://cos.example.com/...",
+  "objectKey": "users/user_uuid/media/asset_uuid.jpg",
+  "expiresAt": "2026-05-13T12:10:00Z",
+  "headers": {
+    "Content-Type": "image/jpeg"
+  }
+}
+```
+
+### POST /api/media/assets
+
+请求：
+
+```json
+{
+  "assetId": "uuid",
+  "objectKey": "users/user_uuid/media/asset_uuid.jpg",
+  "contentType": "image/jpeg",
+  "purpose": "meal_photo",
+  "fileSize": 512000,
+  "width": 1280,
+  "height": 960
+}
+```
+
+响应：
+
+```json
+{
+  "id": "uuid",
+  "purpose": "meal_photo",
+  "status": "uploaded",
+  "createdAt": "2026-05-13T12:00:00Z"
+}
+```
+
+## 9. AI
+
+```text
+POST /api/ai/food-recognition/jobs
+GET  /api/ai/food-recognition/jobs/{id}
+POST /api/ai/life-advice
+POST /api/ai/chat/sessions
+POST /api/ai/chat/sessions/{id}/messages
+GET  /api/ai/chat/sessions/{id}/messages
+```
+
+### POST /api/ai/food-recognition/jobs
+
+请求：
+
+```json
+{
+  "mediaAssetId": "uuid",
+  "mealType": "lunch",
+  "occurredAt": "2026-05-13T12:00:00Z"
+}
+```
+
+响应：
+
+```json
+{
+  "jobId": "uuid",
+  "status": "pending"
+}
+```
+
+### GET /api/ai/food-recognition/jobs/{id}
+
+响应：
+
+```json
+{
+  "jobId": "uuid",
+  "status": "succeeded",
+  "result": {
+    "items": [
+      {
+        "name": "米饭",
+        "estimatedGrams": 150,
+        "estimatedCalories": 174,
+        "confidence": 0.78
+      }
+    ],
+    "totalCalories": 174,
+    "notes": "结果为估算值，请确认后保存。"
+  }
+}
+```
+
+### POST /api/ai/life-advice
+
+请求：
+
+```json
+{
+  "period": "last_7_days",
+  "topics": ["focus", "habits", "diet"]
+}
+```
+
+响应：
+
+```json
+{
+  "summary": "你最近 7 天专注时间较稳定，但晚餐热量偏高。",
+  "suggestions": [
+    "把高强度专注安排在上午。",
+    "晚餐优先记录主食和含糖饮料。"
+  ],
+  "disclaimer": "AI 建议仅供参考，不构成医疗或营养诊断。"
+}
+```
+
+## 10. 错误码
 
 | code | 含义 |
 | --- | --- |
@@ -244,4 +391,7 @@ GET /api/leaderboards/streaks
 | NOT_FOUND | 资源不存在 |
 | CONFLICT | 数据冲突 |
 | RATE_LIMITED | 请求过快 |
+| FILE_TOO_LARGE | 文件过大 |
+| UNSUPPORTED_MEDIA_TYPE | 不支持的媒体类型 |
+| AI_JOB_FAILED | AI 任务失败 |
 | INTERNAL_ERROR | 服务端错误 |
