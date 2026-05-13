@@ -220,7 +220,7 @@ blocked
 
 ### TASK-INFRA-003：配置腾讯云 COS 媒体存储
 
-- 状态：review
+- 状态：done
 - 推荐负责人：DeepSeek
 - 影响文件：
   - `docs/DEPLOYMENT.md`
@@ -238,7 +238,7 @@ blocked
 
 ### TASK-BE-104：实现媒体上传授权与资产记录
 
-- 状态：todo
+- 状态：done
 - 推荐负责人：Claude
 - 影响文件：
   - `backend/src/main/**/media/**`
@@ -273,7 +273,7 @@ blocked
 
 ### TASK-FE-104：实现饮食拍照上传与识别结果确认
 
-- 状态：todo
+- 状态：done
 - 推荐负责人：Gemini
 - 影响文件：
   - `frontend/**/records/**`
