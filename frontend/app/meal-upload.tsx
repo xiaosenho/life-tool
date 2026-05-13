@@ -16,8 +16,9 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { Screen } from "@/components/Screen";
 import { colors } from "@/theme/colors";
 import { mediaService, AssetResponse } from "@/services/mediaService";
+import { aiService, FoodResult } from "@/services/aiService";
 
-type UploadStatus = "idle" | "uploading" | "success" | "error";
+type UploadStatus = "idle" | "uploading" | "recognizing" | "success" | "error";
 
 export default function MealUploadScreen() {
   const router = useRouter();
@@ -25,6 +26,7 @@ export default function MealUploadScreen() {
   const [status, setStatus] = useState<UploadStatus>("idle");
   const [error, setError] = useState<string | null>(null);
   const [asset, setAsset] = useState<AssetResponse | null>(null);
+  const [foodResult, setFoodResult] = useState<FoodResult | null>(null);
 
   const pickImage = async (useCamera: boolean) => {
     try {
@@ -34,13 +36,11 @@ export default function MealUploadScreen() {
           Alert.alert("暂不支持", "网页端暂不支持直接拍照，请从相册选择。");
           return;
         }
-        
         const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
         if (permissionResult.granted === false) {
           Alert.alert("需要权限", "需要相机权限才能拍照。");
           return;
         }
-        
         result = await ImagePicker.launchCameraAsync({
           mediaTypes: ImagePicker.MediaTypeOptions.Images,
           allowsEditing: true,
@@ -82,7 +82,17 @@ export default function MealUploadScreen() {
         type: metadata.type,
       });
       setAsset(result);
-      setStatus("success");
+
+      setStatus("recognizing");
+      const job = await aiService.createFoodRecognitionJob(result.id);
+      const recognition = await aiService.waitForJobCompletion(job.jobId);
+      if (recognition.status === "succeeded" && recognition.result) {
+        setFoodResult(recognition.result);
+        setStatus("success");
+      } else {
+        setStatus("error");
+        setError("AI 识别失败，请重试");
+      }
     } catch (err: any) {
       console.error("上传图片失败：", err);
       setStatus("error");
@@ -95,13 +105,11 @@ export default function MealUploadScreen() {
     setStatus("idle");
     setError(null);
     setAsset(null);
+    setFoodResult(null);
   };
 
   return (
-    <Screen 
-      title="饮食拍照" 
-      contentContainerStyle={styles.scrollContent}
-    >
+    <Screen title="饮食拍照" contentContainerStyle={styles.scrollContent}>
       <Stack.Screen options={{ headerTitle: "饮食拍照" }} />
       {!image ? (
         <View style={styles.emptyState}>
@@ -109,7 +117,7 @@ export default function MealUploadScreen() {
             <MaterialCommunityIcons name="food-apple" size={48} color={colors.accent} />
           </View>
           <Text style={styles.emptyTitle}>记录你的饮食</Text>
-          <Text style={styles.emptySubtitle}>拍一张照片，后续将为你识别热量和营养</Text>
+          <Text style={styles.emptySubtitle}>拍一张照片，AI 将自动识别食物和热量</Text>
 
           <View style={styles.buttonGroup}>
             {Platform.OS !== 'web' && (
@@ -121,7 +129,6 @@ export default function MealUploadScreen() {
                 <Text style={styles.primaryButtonText}>拍照记录</Text>
               </TouchableOpacity>
             )}
-
             <TouchableOpacity
               style={[styles.button, styles.secondaryButton]}
               onPress={() => pickImage(false)}
@@ -135,10 +142,12 @@ export default function MealUploadScreen() {
         <View style={styles.uploadingContainer}>
           <View style={styles.previewContainer}>
             <Image source={{ uri: image }} style={styles.preview} />
-            {status === "uploading" && (
+            {(status === "uploading" || status === "recognizing") && (
               <View style={styles.overlay}>
                 <ActivityIndicator size="large" color="#FFF" />
-                <Text style={styles.overlayText}>正在上传...</Text>
+                <Text style={styles.overlayText}>
+                  {status === "uploading" ? "正在上传..." : "AI 识别中..."}
+                </Text>
               </View>
             )}
           </View>
@@ -147,38 +156,48 @@ export default function MealUploadScreen() {
             <View style={styles.errorBox}>
               <MaterialCommunityIcons name="alert-circle" size={24} color={colors.error} />
               <Text style={styles.errorText}>{error}</Text>
-              <TouchableOpacity style={styles.retryButton} onPress={() => handleUpload(image, { width: 0, height: 0, fileSize: 0, type: "image/jpeg" })}>
-                <Text style={styles.retryButtonText}>重试</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.cancelButton} onPress={reset}>
-                <Text style={styles.cancelButtonText}>取消</Text>
+              <TouchableOpacity style={styles.retryButton} onPress={reset}>
+                <Text style={styles.retryButtonText}>重新选择</Text>
               </TouchableOpacity>
             </View>
           )}
 
-          {status === "success" && (
+          {status === "success" && foodResult && (
             <View style={styles.successContainer}>
               <View style={styles.successHeader}>
                 <MaterialCommunityIcons name="check-circle" size={24} color="green" />
-                <Text style={styles.successTitle}>上传成功</Text>
+                <Text style={styles.successTitle}>识别完成</Text>
               </View>
 
-              <View style={styles.infoRow}>
-                <Text style={styles.infoLabel}>资产编号：</Text>
-                <Text style={styles.infoValue}>{asset?.id}</Text>
+              <View style={styles.calorieCard}>
+                <Text style={styles.calorieLabel}>估算总热量</Text>
+                <Text style={styles.calorieValue}>{foodResult.totalCalories}</Text>
+                <Text style={styles.calorieUnit}>千卡</Text>
               </View>
 
-              <View style={styles.aiPlaceholder}>
-                <MaterialCommunityIcons name="robot" size={32} color={colors.muted} />
-                <Text style={styles.aiText}>等待识别接口接入...</Text>
-                <Text style={styles.aiHint}>后续将自动展示识别出的食物、重量及热量估算。</Text>
+              <View style={styles.foodList}>
+                {foodResult.items.map((item, idx) => (
+                  <View key={idx} style={styles.foodItem}>
+                    <View style={styles.foodInfo}>
+                      <Text style={styles.foodName}>{item.name}</Text>
+                      <Text style={styles.foodDetail}>
+                        {item.estimatedGrams}g · 约 {item.estimatedCalories} 千卡
+                      </Text>
+                    </View>
+                    <Text style={styles.confidence}>
+                      {Math.round(item.confidence * 100)}%
+                    </Text>
+                  </View>
+                ))}
               </View>
+
+              <Text style={styles.notes}>{foodResult.notes}</Text>
 
               <TouchableOpacity
                 style={[styles.button, styles.primaryButton, { marginTop: 24 }]}
                 onPress={() => router.back()}
               >
-                <Text style={styles.primaryButtonText}>返回</Text>
+                <Text style={styles.primaryButtonText}>确认并返回</Text>
               </TouchableOpacity>
             </View>
           )}
@@ -189,25 +208,6 @@ export default function MealUploadScreen() {
 }
 
 const styles = StyleSheet.create({
-  aiHint: {
-    color: colors.muted,
-    fontSize: 12,
-    marginTop: 4,
-    textAlign: "center",
-  },
-  aiPlaceholder: {
-    alignItems: "center",
-    backgroundColor: colors.background,
-    borderRadius: 12,
-    marginTop: 20,
-    padding: 24,
-  },
-  aiText: {
-    color: colors.muted,
-    fontSize: 14,
-    fontWeight: "600",
-    marginTop: 8,
-  },
   button: {
     alignItems: "center",
     borderRadius: 12,
@@ -222,13 +222,32 @@ const styles = StyleSheet.create({
     marginTop: 32,
     width: "100%",
   },
-  cancelButton: {
-    marginTop: 8,
-    padding: 8,
+  calorieCard: {
+    alignItems: "center",
+    backgroundColor: `${colors.accent}10`,
+    borderRadius: 16,
+    marginTop: 20,
+    padding: 24,
   },
-  cancelButtonText: {
+  calorieLabel: {
     color: colors.muted,
     fontSize: 14,
+  },
+  calorieUnit: {
+    color: colors.muted,
+    fontSize: 14,
+    marginTop: 4,
+  },
+  calorieValue: {
+    color: colors.accent,
+    fontSize: 48,
+    fontWeight: "800",
+    marginTop: 8,
+  },
+  confidence: {
+    color: colors.muted,
+    fontSize: 13,
+    fontWeight: "600",
   },
   emptySubtitle: {
     color: colors.muted,
@@ -262,6 +281,30 @@ const styles = StyleSheet.create({
     marginVertical: 12,
     textAlign: "center",
   },
+  foodDetail: {
+    color: colors.muted,
+    fontSize: 12,
+    marginTop: 2,
+  },
+  foodInfo: {
+    flex: 1,
+  },
+  foodItem: {
+    alignItems: "center",
+    borderBottomWidth: 1,
+    borderColor: colors.border,
+    flexDirection: "row",
+    paddingVertical: 14,
+  },
+  foodList: {
+    marginTop: 16,
+    width: "100%",
+  },
+  foodName: {
+    color: colors.text,
+    fontSize: 16,
+    fontWeight: "600",
+  },
   iconCircle: {
     alignItems: "center",
     backgroundColor: `${colors.accent}10`,
@@ -270,19 +313,12 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     width: 100,
   },
-  infoLabel: {
+  notes: {
     color: colors.muted,
     fontSize: 12,
-  },
-  infoRow: {
-    flexDirection: "row",
-    gap: 8,
-    marginTop: 8,
-  },
-  infoValue: {
-    color: colors.text,
-    fontSize: 12,
-    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+    fontStyle: "italic",
+    marginTop: 16,
+    textAlign: "center",
   },
   overlay: {
     ...StyleSheet.absoluteFill,

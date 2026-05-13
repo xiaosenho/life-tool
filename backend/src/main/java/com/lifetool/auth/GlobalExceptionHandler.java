@@ -6,6 +6,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
+import com.lifetool.ai.AiException;
 import com.lifetool.common.ApiResponse;
 import com.lifetool.friends.FriendException;
 import com.lifetool.leaderboards.LeaderboardException;
@@ -51,6 +52,16 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(LeaderboardException.class)
     public ResponseEntity<ApiResponse<Void>> handleLeaderboard(LeaderboardException ex) {
         HttpStatus status = switch (ex.getCode()) {
+            default -> HttpStatus.BAD_REQUEST;
+        };
+        return ResponseEntity.status(status).body(ApiResponse.fail(ex.getCode(), ex.getMessage()));
+    }
+
+    @ExceptionHandler(AiException.class)
+    public ResponseEntity<ApiResponse<Void>> handleAi(AiException ex) {
+        HttpStatus status = switch (ex.getCode()) {
+            case "NOT_FOUND" -> HttpStatus.NOT_FOUND;
+            case "FORBIDDEN" -> HttpStatus.FORBIDDEN;
             default -> HttpStatus.BAD_REQUEST;
         };
         return ResponseEntity.status(status).body(ApiResponse.fail(ex.getCode(), ex.getMessage()));

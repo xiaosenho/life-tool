@@ -1,5 +1,7 @@
 import { useState, useEffect } from "react";
 import { View, TouchableOpacity, Text, StyleSheet, ActivityIndicator, Alert } from "react-native";
+import { useRouter } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 import { MetricCard } from "@/components/MetricCard";
 import { Screen } from "@/components/Screen";
 import { useAuthStore } from "@/store/authStore";
@@ -10,6 +12,7 @@ import { syncStateRepository } from "@/db/syncStateRepository";
 
 export default function ProfileScreen() {
   const { user, clearAuth } = useAuthStore();
+  const router = useRouter();
   const [lastSync, setLastSync] = useState<string | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
 
@@ -63,6 +66,15 @@ export default function ProfileScreen() {
         />
         <MetricCard label="隐私" value="默认私密" accent="green" />
 
+        <TouchableOpacity style={styles.aiEntry} onPress={() => router.push("/ai-chat")}>
+          <Ionicons name="bulb-outline" size={24} color={colors.accent} />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.aiEntryTitle}>AI 助手</Text>
+            <Text style={styles.aiEntrySubtitle}>获取生活建议和智能对话</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color={colors.muted} />
+        </TouchableOpacity>
+
         <View style={styles.syncSection}>
           <View style={styles.syncInfo}>
             <Text style={styles.syncLabel}>上次同步：</Text>
@@ -90,6 +102,27 @@ export default function ProfileScreen() {
 }
 
 const styles = StyleSheet.create({
+  aiEntry: {
+    alignItems: "center",
+    backgroundColor: `${colors.accent}08`,
+    borderColor: `${colors.accent}20`,
+    borderRadius: 12,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 12,
+    marginTop: 12,
+    padding: 16,
+  },
+  aiEntryTitle: {
+    color: colors.text,
+    fontSize: 16,
+    fontWeight: "700",
+  },
+  aiEntrySubtitle: {
+    color: colors.muted,
+    fontSize: 12,
+    marginTop: 2,
+  },
   syncSection: {
     backgroundColor: colors.surface,
     borderRadius: 12,

@@ -179,3 +179,56 @@ CREATE INDEX idx_meal_logs_note ON meal_logs USING gin (to_tsvector('simple', no
 - V1 只提供数据库结构，不代表后端已经切换到 JPA/数据库仓储。
 - 当前后端仍有部分内存仓储实现，后续应按模块逐步迁移到 Repository。
 - `backend/src/main/resources/db/migration/V1__init_schema.sql` 按 Flyway 迁移文件组织，但项目尚未接入 Flyway 依赖；接入时可直接复用该路径。
+
+## 11. V2 规划补充
+
+以下能力已进入产品规划，但是否需要新增表要在实现前复查现有 V1 DDL。原则是：**如果 V1 已发布，不直接修改 `V1__init_schema.sql`，使用新的 `V2__*.sql` 迁移补充。**
+
+### 11.1 专注偏好
+
+建议新增 `focus_preferences`：
+
+| 字段 | 说明 |
+|------|------|
+| `user_id` | 用户 ID，建议唯一 |
+| `default_focus_minutes` | 默认专注时长，1 到 180 |
+| `short_break_minutes` | 短休息时长 |
+| `long_break_minutes` | 长休息时长 |
+| `auto_start_break` | 是否自动开始休息 |
+
+同步实体类型建议使用 `focus_preference`。
+
+### 11.2 月度预算
+
+建议新增 `ledger_budgets`：
+
+| 字段 | 说明 |
+|------|------|
+| `user_id` | 用户 ID |
+| `budget_month` | 预算月份，如 `2026-05-01` 表示 2026 年 5 月 |
+| `category` | 分类预算，空值表示整月总预算 |
+| `amount` | 预算金额 |
+| `currency` | 币种，默认 CNY |
+
+唯一约束建议：`(user_id, budget_month, category)`，其中总预算可通过部分唯一索引处理 `category IS NULL`。
+
+### 11.3 纪念日与重要事件
+
+现有 `event_logs` 可承载重要事件，但纪念日需要更明确的重复和提醒语义。实现前有两个选择：
+
+1. 扩展 `event_logs`，增加 `event_date`、`repeat_rule`、`remind_days_before`、`event_type`。
+2. 新增 `anniversary_events`，专门承载纪念日、生日和重复提醒。
+
+推荐先新增 `anniversary_events`，避免和普通事件记录混在一起：
+
+| 字段 | 说明 |
+|------|------|
+| `user_id` | 用户 ID |
+| `event_type` | anniversary / birthday / important_day / todo_reminder |
+| `title` | 标题 |
+| `event_date` | 原始日期 |
+| `repeat_rule` | none / yearly / monthly / weekly |
+| `remind_days_before` | 提前提醒天数数组，可用 jsonb |
+| `media_asset_id` | 可选图片 |
+
+客户端负责本地通知调度，服务端负责保存提醒规则并支持多设备恢复。
