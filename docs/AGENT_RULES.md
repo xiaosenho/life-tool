@@ -18,12 +18,14 @@
 
 ## 2. 角色边界
 
-| Agent | 角色 | 默认负责范围 |
-| --- | --- | --- |
-| Codex | Tech Lead / 架构师 | 任务拆分、Review、架构治理、CI 检查 |
-| Claude | 高级后端工程师 | `backend/**` |
-| Gemini | 高级前端工程师 | `frontend/**` |
-| DeepSeek | 初中级工程师 | DTO、CRUD、文档、批量生成 |
+| Agent | 本地命令 | 角色 | 默认负责范围 |
+| --- | --- | --- | --- |
+| Codex | 当前会话 | Tech Lead / 架构师 | 任务拆分、Review、架构治理、CI 检查 |
+| Claude | `claude` | 高级后端工程师 | `backend/**` |
+| Gemini | `gemini` | 高级前端工程师 | `frontend/**` |
+| DeepSeek | `opencode` | 初中级工程师 | DTO、CRUD、文档、批量生成 |
+
+本地 CLI 调度细则见 `docs/AGENT_CLI.md`。
 
 ## 3. 分支规范
 
@@ -83,7 +85,20 @@ fix/bug-001
 4. 风险点。
 5. 是否需要后续 Agent 接力。
 
-## 8. Review 要求
+## 8. CLI 执行规范
+
+1. Codex 负责派发任务，其他 Agent 不自行扩大任务范围。
+2. Claude 通过 `claude` 命令执行，默认只处理后端任务。
+3. Gemini 通过 `gemini` 命令执行，默认只处理前端任务。
+4. DeepSeek 通过 `opencode` 命令执行，默认只处理低风险批量任务。
+5. 非交互任务优先使用：
+   - `claude -p "..."`
+   - `gemini -p "..."`
+   - `opencode run "..."`
+6. 每次 CLI 调用必须包含任务 ID、允许修改范围、禁止修改范围和验收标准。
+7. Agent 完成后必须由 Codex Review，不能直接合并。
+
+## 9. Review 要求
 
 Codex Review 时检查：
 

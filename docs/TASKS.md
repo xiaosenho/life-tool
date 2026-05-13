@@ -29,6 +29,26 @@ blocked
   - 每个 Agent 能明确自己的负责范围。
 - 风险等级：低
 
+### TASK-DOC-002：落实本地 Agent CLI 调度规范
+
+- 状态：done
+- 推荐负责人：Codex
+- 影响文件：
+  - `README.md`
+  - `docs/AGENT_CLI.md`
+  - `docs/AGENT_RULES.md`
+  - `docs/WORKFLOW.md`
+  - `docs/TASKS.md`
+- 描述：
+  - 将本机已安装的 `claude`、`gemini`、`opencode` 命令写入项目文档。
+  - 明确 Codex 作为管理者如何调度 Claude、Gemini、DeepSeek。
+  - 补充每个 CLI 的推荐执行方式和 Prompt 模板。
+- 验收标准：
+  - 文档中能明确看出每个 Agent 使用哪个本地命令。
+  - 文档中包含后端、前端、低风险任务的 CLI 调度模板。
+  - Agent 执行前后的责任边界清晰。
+- 风险等级：低
+
 ### TASK-BE-001：初始化 Spring Boot 后端工程
 
 - 状态：todo

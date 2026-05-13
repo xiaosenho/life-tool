@@ -41,7 +41,27 @@ CI 自动测试
 | Gemini | 高级前端工程师 | React / Expo / UI / 移动端 |
 | DeepSeek | 初中级工程师 | CRUD、DTO、文档、批量生成 |
 
-## 4. Codex 拆任务 Prompt
+## 4. 本地 CLI 调度
+
+当前项目已配置本地 Agent CLI：
+
+| Agent | 命令 | 用法 |
+| --- | --- | --- |
+| Claude | `claude` | 后端开发、重构、测试 |
+| Gemini | `gemini` | Expo、React Native、移动端 UI |
+| DeepSeek | `opencode` | DTO、CRUD、文档、批量生成 |
+
+详细命令模板见 `docs/AGENT_CLI.md`。
+
+常用非交互形式：
+
+```bash
+claude -p "只完成 TASK-BE-001，只修改 backend/**。"
+gemini -p "只完成 TASK-FE-001，只修改 frontend/**。"
+opencode run "只完成 TASK-DOC-001，只修改任务指定文件。"
+```
+
+## 5. Codex 拆任务 Prompt
 
 ```text
 阅读 docs/PRD.md 与 docs/ARCHITECTURE.md。
@@ -62,7 +82,7 @@ CI 自动测试
 6. 风险等级
 ```
 
-## 5. Claude 后端开发 Prompt
+## 6. Claude 后端开发 Prompt
 
 ```text
 你是高级后端工程师。
@@ -83,7 +103,7 @@ TASK-BE-001
 5. 输出变更说明
 ```
 
-## 6. Gemini 前端开发 Prompt
+## 7. Gemini 前端开发 Prompt
 
 ```text
 你是高级前端工程师。
@@ -104,7 +124,7 @@ TASK-FE-001
 5. 输出变更说明
 ```
 
-## 7. DeepSeek 辅助开发 Prompt
+## 8. DeepSeek 辅助开发 Prompt
 
 ```text
 根据 docs/API.md：
@@ -120,7 +140,7 @@ TASK-FE-001
 3. 不引入新依赖
 ```
 
-## 8. Codex Review Prompt
+## 9. Codex Review Prompt
 
 ```text
 你是项目 Tech Lead。
@@ -141,7 +161,7 @@ Review：
 只输出必须修改项。
 ```
 
-## 9. 协作原则
+## 10. 协作原则
 
 - 一个任务，一个分支，一个负责人。
 - 禁止同时修改同一文件。
@@ -149,7 +169,7 @@ Review：
 - 共享协议先改文档，再改代码。
 - CI 通过后再进入人工确认。
 
-## 10. 推荐执行顺序
+## 11. 推荐执行顺序
 
 1. Codex 建立文档和任务。
 2. Claude 初始化后端。

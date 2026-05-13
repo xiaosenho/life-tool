@@ -19,6 +19,7 @@
 3. [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 4. [docs/API.md](docs/API.md)
 5. [docs/TASKS.md](docs/TASKS.md)
+6. [docs/AGENT_CLI.md](docs/AGENT_CLI.md)
 
 ## 推荐 Agent 分工
 
@@ -29,8 +30,19 @@
 | Gemini | 高级前端工程师 | `frontend/`、Expo、移动端 UI |
 | DeepSeek | 初中级工程师 | DTO、CRUD、文档、批量生成、脚手架 |
 
+## 本地 Agent CLI
+
+本机已安装并配置：
+
+- `claude`：Claude 后端开发 CLI。
+- `gemini`：Gemini 前端开发 CLI。
+- `opencode`：DeepSeek API 已配置，用于低风险批量任务。
+
+具体调度方式见 [docs/AGENT_CLI.md](docs/AGENT_CLI.md)。
+
 ## 当前状态
 
 - 已建立多 Agent 项目结构。
 - 已建立基础文档。
+- 已记录本地 Claude / Gemini / DeepSeek CLI 调度规范。
 - 尚未初始化后端和前端工程代码。
