@@ -15,10 +15,12 @@ public class MediaService {
 
     private final MediaAssetStore store;
     private final MediaConfig config;
+    private final CosUploadUrlSigner uploadUrlSigner;
 
-    public MediaService(MediaAssetStore store, MediaConfig config) {
+    public MediaService(MediaAssetStore store, MediaConfig config, CosUploadUrlSigner uploadUrlSigner) {
         this.store = store;
         this.config = config;
+        this.uploadUrlSigner = uploadUrlSigner;
     }
 
     public UploadTokenResponse generateUploadToken(String userId, UploadTokenRequest req) {
@@ -30,8 +32,8 @@ public class MediaService {
         String ext = extensionFor(req.contentType());
         String objectKey = "users/" + userId + "/media/" + assetId + "." + ext;
 
-        String uploadUrl = buildUploadUrl(objectKey);
         Instant expiresAt = Instant.now().plusSeconds(config.getUploadTokenTtlSeconds());
+        String uploadUrl = uploadUrlSigner.generatePutUrl(objectKey, expiresAt);
 
         return new UploadTokenResponse(
                 assetId,
@@ -102,15 +104,6 @@ public class MediaService {
             throw new MediaException("FILE_TOO_LARGE",
                     "File size " + fileSize + " exceeds maximum " + config.getMaxImageBytes() + " bytes");
         }
-    }
-
-    private String buildUploadUrl(String objectKey) {
-        String baseUrl = config.getCosPublicBaseUrl();
-        if (baseUrl != null && !baseUrl.isBlank()) {
-            String normalized = baseUrl.endsWith("/") ? baseUrl : baseUrl + "/";
-            return normalized + objectKey;
-        }
-        return "http://localhost:8080/mock-cos/" + objectKey;
     }
 
     private static String extensionFor(String contentType) {

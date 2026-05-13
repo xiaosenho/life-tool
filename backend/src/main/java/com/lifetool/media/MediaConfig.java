@@ -20,6 +20,12 @@ public class MediaConfig {
     @Value("${COS_BUCKET:life-tool-media}")
     private String cosBucket;
 
+    @Value("${COS_SECRET_ID:}")
+    private String cosSecretId;
+
+    @Value("${COS_SECRET_KEY:}")
+    private String cosSecretKey;
+
     @Value("${COS_PUBLIC_BASE_URL:}")
     private String cosPublicBaseUrl;
 
@@ -31,9 +37,15 @@ public class MediaConfig {
 
     public String getCosRegion() { return cosRegion; }
     public String getCosBucket() { return cosBucket; }
+    public String getCosSecretId() { return cosSecretId; }
+    public String getCosSecretKey() { return cosSecretKey; }
     public String getCosPublicBaseUrl() { return cosPublicBaseUrl; }
     public int getUploadTokenTtlSeconds() { return uploadTokenTtlSeconds; }
     public long getMaxImageBytes() { return maxImageBytes; }
+
+    public boolean isCosSigningEnabled() {
+        return hasText(cosSecretId) && hasText(cosSecretKey) && hasText(cosBucket) && hasText(cosRegion);
+    }
 
     public boolean isContentTypeAllowed(String contentType) {
         return ALLOWED_CONTENT_TYPES.contains(contentType);
@@ -41,5 +53,9 @@ public class MediaConfig {
 
     public boolean isPurposeAllowed(String purpose) {
         return ALLOWED_PURPOSES.contains(purpose);
+    }
+
+    private static boolean hasText(String value) {
+        return value != null && !value.isBlank();
     }
 }

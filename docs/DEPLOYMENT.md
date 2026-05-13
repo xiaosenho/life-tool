@@ -347,7 +347,7 @@ curl http://localhost:8080/api/health
 [
   {
     "AllowedOrigin": ["*"],
-    "AllowedMethod": ["PUT", "POST", "HEAD"],
+    "AllowedMethod": ["PUT", "GET", "HEAD", "OPTIONS"],
     "AllowedHeader": ["*"],
     "ExposeHeader": ["ETag", "x-cos-request-id"],
     "MaxAgeSeconds": 3600
@@ -412,6 +412,10 @@ COS_UPLOAD_TOKEN_TTL_SECONDS=300
 MEDIA_MAX_IMAGE_BYTES=10485760
 ```
 
+后端只有在 `COS_SECRET_ID`、`COS_SECRET_KEY`、`COS_BUCKET`、`COS_REGION` 都配置后才会签发真实腾讯云 COS 预签名 PUT URL；本地开发未配置密钥时会返回 `http://localhost:8080/mock-cos/...`，前端会把它当作模拟上传处理。
+
+> 注意：预签名上传 URL 使用 COS 源站域名生成，不使用 CDN 域名上传。`COS_PUBLIC_BASE_URL` 后续主要用于展示/下载图片地址，私有读场景建议改为后端签发短有效期下载 URL。
+
 ## 5. 在阿里云 ECS 上注入 COS 配置
 
 在阿里云 ECS 服务器上，COS 配置直接追加到已有的 `backend/.env` 文件中：
@@ -461,6 +465,8 @@ cd /opt/lifetool/backend && pkill -f "spring-boot:run" && set -a && source .env 
 | 上传授权有效期 | 300 秒（5 分钟，可通过 `COS_UPLOAD_TOKEN_TTL_SECONDS` 调整） |
 
 > 客户端上传流程：客户端调用 `POST /api/media/upload-token` 获取短有效期上传凭证 → 客户端直传 COS → 上传完成后调用 `POST /api/media/assets` 创建媒体资产记录 → 后端记录文件元数据并关联当前用户。
+
+后端当前使用腾讯云 XML Java SDK `com.qcloud:cos_api` 生成 `PUT` 预签名 URL，客户端不得持有 `COS_SECRET_ID` 或 `COS_SECRET_KEY`。
 
 ## 8. 安全注意事项
 
