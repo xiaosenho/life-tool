@@ -17,14 +17,14 @@
 | 用户与认证 | `users`, `refresh_tokens`, `devices` | 注册、登录、多设备管理 | MVP |
 | 隐私 | `privacy_settings` | 按数据类型的可见性控制 | MVP |
 | 同步 | `server_versions`, `sync_mutations` | 多设备数据同步 | MVP |
-| 专注 | `focus_sessions` | 番茄钟、倒计时、正计时记录 | MVP |
+| 专注 | `focus_sessions`, `focus_preferences` | 番茄钟、倒计时、正计时记录 + 偏好 | MVP + V2 |
 | 习惯 | `habits`, `habit_checkins` | 习惯定义与每日打卡 | MVP |
 | 好友 | `friendships` | 好友申请、通过、删除 | MVP |
 | 统计/排行榜 | `daily_stats` | 每日用户汇总统计 | MVP |
 | 媒体 | `media_assets` | 图片/文件元数据管理 | Phase 2 |
 | 饮食 | `meal_logs`, `meal_items` | 饮食记录与食物条目 | Phase 2 |
-| 记账 | `ledger_transactions` | 收支流水记录 | Phase 2 |
-| 重要事件 | `event_logs` | 重要日期事件记录 | Phase 2 |
+| 记账 | `ledger_transactions`, `ledger_budgets` | 收支流水记录 + 月度预算 | Phase 2 + V2 |
+| 重要事件 | `event_logs`, `anniversary_events` | 重要日期事件记录 + 纪念日重复提醒 | Phase 2 + V2 |
 | AI | `ai_analysis_jobs`, `ai_chat_sessions`, `ai_chat_messages` | AI 分析任务与对话 | Phase 2 |
 
 ## 3. 关键关系
@@ -35,12 +35,15 @@ users (1) ──< devices
 users (1) ──< privacy_settings         (每个 data_type 一行)
 users (1) ──< sync_mutations
 users (1) ──< focus_sessions
+users (1) ──< focus_preferences        (每用户一行，unique)
 users (1) ──< habits (1) ──< habit_checkins
 users (1) ──< friendships              (requester_id / addressee_id 双向指向 users)
 users (1) ──< daily_stats              (每个 stat_date 一行)
 users (1) ──< meal_logs (1) ──< meal_items
 users (1) ──< ledger_transactions
+users (1) ──< ledger_budgets           (每用户每月可有多条)
 users (1) ──< event_logs
+users (1) ──< anniversary_events       (每用户可多个纪念日)
 users (1) ──< media_assets
 users (1) ──< ai_analysis_jobs
 users (1) ──< ai_chat_sessions (1) ──< ai_chat_messages
@@ -50,6 +53,7 @@ media_assets 被以下表通过 media_asset_id 引用：
   - meal_logs.media_asset_id
   - ledger_transactions.media_asset_id
   - event_logs.media_asset_id
+  - anniversary_events.media_asset_id
   - ai_analysis_jobs.media_asset_id
 ```
 
@@ -149,8 +153,9 @@ media_assets 被以下表通过 media_asset_id 引用：
 
 ### 9.1 分阶段迁移
 
-1. **V1（当前）**：初始化所有表结构。
-2. **V2+**：根据实际需求添加字段、索引或调整约束，不在 V1 中过度设计。
+1. **V1**：初始化所有表结构（MVP + Phase 2 基础表）。
+2. **V2**：补充专注偏好、月度预算、纪念日与重复提醒（TASK-DB-002）。
+3. **V3+**：根据实际需求添加字段、索引或调整约束，不在 V1/V2 中过度设计。
 
 ### 9.2 常见变更模式
 
@@ -183,55 +188,62 @@ CREATE INDEX idx_meal_logs_note ON meal_logs USING gin (to_tsvector('simple', no
 - 当前后端仍有部分内存仓储实现，后续应按模块逐步迁移到 Repository。
 - `backend/src/main/resources/db/migration/V1__init_schema.sql` 按 Flyway 迁移文件组织，但项目尚未接入 Flyway 依赖；接入时可直接复用该路径。
 
-## 11. V2 规划补充
+## 11. V2 已迁移内容
 
-以下能力已进入产品规划，但是否需要新增表要在实现前复查现有 V1 DDL。原则是：**如果 V1 已发布，不直接修改 `V1__init_schema.sql`，使用新的 `V2__*.sql` 迁移补充。**
+V2 新增 `focus_preferences`、`ledger_budgets`、`anniversary_events` 三张表，对应迁移文件 `V2__add_focus_preferences_budgets_anniversaries.sql`。
 
-### 11.1 专注偏好
+### 11.1 专注偏好 (`focus_preferences`)
 
-建议新增 `focus_preferences`：
+| 字段 | 类型 | 约束 | 说明 |
+|------|------|------|------|
+| `user_id` | uuid | FK → users, NOT NULL, UNIQUE | 每个用户一条 |
+| `default_focus_minutes` | int | CHECK 1~180, NOT NULL, DEFAULT 25 | 默认专注时长（分钟） |
+| `short_break_minutes` | int | CHECK 0~60, NOT NULL, DEFAULT 5 | 短休息时长（分钟） |
+| `long_break_minutes` | int | CHECK 0~60, NOT NULL, DEFAULT 15 | 长休息时长（分钟） |
+| `auto_start_break` | boolean | NOT NULL, DEFAULT false | 是否自动开始休息 |
 
-| 字段 | 说明 |
-|------|------|
-| `user_id` | 用户 ID，建议唯一 |
-| `default_focus_minutes` | 默认专注时长，1 到 180 |
-| `short_break_minutes` | 短休息时长 |
-| `long_break_minutes` | 长休息时长 |
-| `auto_start_break` | 是否自动开始休息 |
+- 唯一约束：`uq_focus_preferences_user` — 部分唯一索引 `(user_id)`，保证每用户一条。
+- 同步 entity_type：`focus_preference`（已在 §4.3 注册）。
 
-同步实体类型建议使用 `focus_preference`。
+### 11.2 月度预算 (`ledger_budgets`)
 
-### 11.2 月度预算
+| 字段 | 类型 | 约束 | 说明 |
+|------|------|------|------|
+| `user_id` | uuid | FK → users, NOT NULL | |
+| `budget_month` | date | NOT NULL, CHECK 当月第一天 | 预算月份，存当月第一天 |
+| `category` | text | NULL 表示整月总预算 | 分类预算标识 |
+| `amount` | numeric(14,2) | CHECK >= 0, NOT NULL | 预算金额 |
+| `currency` | text | NOT NULL, DEFAULT 'CNY' | 币种 |
 
-建议新增 `ledger_budgets`：
+- 唯一约束：
+  - `uq_ledger_budgets_category` — 部分唯一索引 `(user_id, budget_month, category) WHERE category IS NOT NULL AND deleted_at IS NULL`。
+  - `uq_ledger_budgets_total` — 部分唯一索引 `(user_id, budget_month) WHERE category IS NULL AND deleted_at IS NULL`。
+- 索引：`idx_ledger_budgets_user_month` — `(user_id, budget_month)` 支持按月查询。
+- 同步 entity_type：`ledger_budget`（已在 §4.3 注册）。
 
-| 字段 | 说明 |
-|------|------|
-| `user_id` | 用户 ID |
-| `budget_month` | 预算月份，如 `2026-05-01` 表示 2026 年 5 月 |
-| `category` | 分类预算，空值表示整月总预算 |
-| `amount` | 预算金额 |
-| `currency` | 币种，默认 CNY |
+### 11.3 纪念日与重要事件 (`anniversary_events`)
 
-唯一约束建议：`(user_id, budget_month, category)`，其中总预算可通过部分唯一索引处理 `category IS NULL`。
+| 字段 | 类型 | 约束 | 说明 |
+|------|------|------|------|
+| `user_id` | uuid | FK → users, NOT NULL | |
+| `event_type` | text | CHECK, NOT NULL | anniversary / birthday / important_day / todo_reminder |
+| `title` | text | NOT NULL | |
+| `event_date` | date | NOT NULL | 原始事件日期 |
+| `repeat_rule` | text | CHECK, NOT NULL, DEFAULT 'none' | none / yearly / monthly / weekly |
+| `remind_days_before` | jsonb | NOT NULL, DEFAULT '[]', CHECK array | 提前提醒天数数组 |
+| `note` | text | NULL | |
+| `media_asset_id` | uuid | FK → media_assets, ON DELETE SET NULL | 可选关联图片 |
 
-### 11.3 纪念日与重要事件
+- 索引：
+  - `idx_anniversary_events_user_date` — `(user_id, event_date)` 支持按日期范围查询即将到来事件。
+  - `idx_anniversary_events_user_type` — `(user_id, event_type)` 支持按事件类型过滤。
+- 同步 entity_type：`anniversary_event`（已在 §4.3 注册）。
 
-现有 `event_logs` 可承载重要事件，但纪念日需要更明确的重复和提醒语义。实现前有两个选择：
+### 11.4 V2 表与现有表关系
 
-1. 扩展 `event_logs`，增加 `event_date`、`repeat_rule`、`remind_days_before`、`event_type`。
-2. 新增 `anniversary_events`，专门承载纪念日、生日和重复提醒。
-
-推荐先新增 `anniversary_events`，避免和普通事件记录混在一起：
-
-| 字段 | 说明 |
-|------|------|
-| `user_id` | 用户 ID |
-| `event_type` | anniversary / birthday / important_day / todo_reminder |
-| `title` | 标题 |
-| `event_date` | 原始日期 |
-| `repeat_rule` | none / yearly / monthly / weekly |
-| `remind_days_before` | 提前提醒天数数组，可用 jsonb |
-| `media_asset_id` | 可选图片 |
-
-客户端负责本地通知调度，服务端负责保存提醒规则并支持多设备恢复。
+```
+users (1) ──< focus_preferences        (每用户一行，unique)
+users (1) ──< ledger_budgets           (每用户每月可有多条：总预算 + 分类预算)
+users (1) ──< anniversary_events       (每用户可多个纪念日)
+media_assets (1) ──< anniversary_events (通过 media_asset_id)
+```

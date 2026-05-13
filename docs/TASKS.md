@@ -511,7 +511,7 @@ blocked
 
 ### TASK-DB-002：补充专注偏好、预算和纪念日 DDL
 
-- 状态：todo
+- 状态：done
 - 推荐负责人：DeepSeek
 - 影响文件：
   - `backend/src/main/resources/db/migration/**`
