@@ -1,13 +1,25 @@
 import React, { useState, useEffect, useRef } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, Alert } from "react-native";
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  Alert,
+  TextInput,
+  ScrollView,
+} from "react-native";
 import { Screen } from "@/components/Screen";
 import { colors } from "@/theme/colors";
 import { focusService } from "@/services/focusService";
 
-const INITIAL_TIME = 25 * 60;
+const PRESET_MINUTES = [15, 25, 45, 60];
+const DEFAULT_MINUTES = 25;
 
 export default function FocusScreen() {
-  const [timeLeft, setTimeLeft] = useState(INITIAL_TIME);
+  const [timeLeft, setTimeLeft] = useState(DEFAULT_MINUTES * 60);
+  const [targetMinutes, setTargetMinutes] = useState(DEFAULT_MINUTES);
+  const [defaultMinutes, setDefaultMinutes] = useState(DEFAULT_MINUTES);
+  const [customMinutes, setCustomMinutes] = useState(String(DEFAULT_MINUTES));
   const [isActive, setIsActive] = useState(false);
   const [todayStats, setTodayStats] = useState({ totalSeconds: 0, sessionCount: 0 });
   const [startedAt, setStartedAt] = useState<string | null>(null);
@@ -15,15 +27,16 @@ export default function FocusScreen() {
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
+    loadPreference();
     loadTodayStats();
   }, []);
 
   useEffect(() => {
     if (isActive && timeLeft > 0) {
       timerRef.current = setInterval(() => {
-        setTimeLeft((prev) => prev - 1);
+        setTimeLeft((prev) => Math.max(prev - 1, 0));
       }, 1000);
-    } else if (timeLeft === 0) {
+    } else if (isActive && timeLeft === 0) {
       handleComplete();
     } else {
       if (timerRef.current) clearInterval(timerRef.current);
@@ -34,9 +47,46 @@ export default function FocusScreen() {
     };
   }, [isActive, timeLeft]);
 
+  const loadPreference = async () => {
+    const preference = await focusService.getPreference();
+    setDefaultMinutes(preference.default_focus_minutes);
+    setTargetMinutes(preference.default_focus_minutes);
+    setCustomMinutes(String(preference.default_focus_minutes));
+    setTimeLeft(preference.default_focus_minutes * 60);
+  };
+
   const loadTodayStats = async () => {
     const stats = await focusService.getTodayStats();
     setTodayStats(stats);
+  };
+
+  const selectMinutes = (minutes: number) => {
+    if (startedAt) return;
+    setTargetMinutes(minutes);
+    setCustomMinutes(String(minutes));
+    setTimeLeft(minutes * 60);
+  };
+
+  const applyCustomMinutes = () => {
+    const minutes = Number(customMinutes);
+    if (!Number.isInteger(minutes) || minutes < 1 || minutes > 180) {
+      Alert.alert("提示", "专注时长需在 1-180 分钟之间。");
+      setCustomMinutes(String(targetMinutes));
+      return;
+    }
+    selectMinutes(minutes);
+  };
+
+  const saveDefaultMinutes = async () => {
+    try {
+      const preference = await focusService.savePreference({
+        defaultFocusMinutes: targetMinutes,
+      });
+      setDefaultMinutes(preference.default_focus_minutes);
+      Alert.alert("已保存", "下次进入专注页会使用这个默认时长。");
+    } catch (error) {
+      Alert.alert("保存失败", error instanceof Error ? error.message : "请稍后重试。");
+    }
   };
 
   const toggleTimer = () => {
@@ -48,13 +98,14 @@ export default function FocusScreen() {
 
   const resetTimer = () => {
     setIsActive(false);
-    setTimeLeft(INITIAL_TIME);
+    setTimeLeft(targetMinutes * 60);
     setStartedAt(null);
   };
 
   const handleComplete = async () => {
     setIsActive(false);
-    const actualSeconds = INITIAL_TIME - timeLeft;
+    const targetSeconds = targetMinutes * 60;
+    const actualSeconds = Math.max(targetSeconds - timeLeft, 0);
     if (actualSeconds < 10) {
       Alert.alert("提示", "专注时间太短，将不会记录。");
       resetTimer();
@@ -64,7 +115,7 @@ export default function FocusScreen() {
     try {
       await focusService.saveSession({
         mode: "pomodoro",
-        target_seconds: INITIAL_TIME,
+        target_seconds: targetSeconds,
         actual_seconds: actualSeconds,
         status: "completed",
         started_at: startedAt || new Date().toISOString(),
@@ -90,9 +141,11 @@ export default function FocusScreen() {
     return `${mins} 分钟`;
   };
 
+  const canEditTarget = !startedAt;
+
   return (
     <Screen title="专注">
-      <View style={styles.container}>
+      <ScrollView contentContainerStyle={styles.container}>
         <View style={styles.statsRow}>
           <View style={styles.statBox}>
             <Text style={styles.statLabel}>今日专注</Text>
@@ -106,7 +159,75 @@ export default function FocusScreen() {
 
         <View style={styles.timerContainer}>
           <Text style={styles.timerText}>{formatTime(timeLeft)}</Text>
-          <Text style={styles.modeText}>番茄钟 (25分钟)</Text>
+          <Text style={styles.modeText}>番茄钟 ({targetMinutes} 分钟)</Text>
+        </View>
+
+        <View style={styles.preferencePanel}>
+          <View style={styles.preferenceHeader}>
+            <View>
+              <Text style={styles.sectionTitle}>本次时长</Text>
+              <Text style={styles.sectionHint}>默认 {defaultMinutes} 分钟</Text>
+            </View>
+            <TouchableOpacity
+              style={[
+                styles.saveDefaultButton,
+                targetMinutes === defaultMinutes && styles.disabledButton,
+              ]}
+              onPress={saveDefaultMinutes}
+              disabled={targetMinutes === defaultMinutes}
+            >
+              <Text style={styles.saveDefaultText}>设为默认</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.presets}>
+            {PRESET_MINUTES.map((minutes) => (
+              <TouchableOpacity
+                key={minutes}
+                style={[
+                  styles.presetButton,
+                  targetMinutes === minutes && styles.presetButtonActive,
+                  !canEditTarget && styles.disabledButton,
+                ]}
+                onPress={() => selectMinutes(minutes)}
+                disabled={!canEditTarget}
+              >
+                <Text
+                  style={[
+                    styles.presetText,
+                    targetMinutes === minutes && styles.presetTextActive,
+                  ]}
+                >
+                  {minutes} 分钟
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          <View style={styles.customRow}>
+            <TextInput
+              style={[styles.customInput, !canEditTarget && styles.disabledInput]}
+              value={customMinutes}
+              onChangeText={setCustomMinutes}
+              onBlur={applyCustomMinutes}
+              onSubmitEditing={applyCustomMinutes}
+              keyboardType="number-pad"
+              editable={canEditTarget}
+              maxLength={3}
+            />
+            <Text style={styles.customUnit}>分钟</Text>
+            <TouchableOpacity
+              style={[styles.applyButton, !canEditTarget && styles.disabledButton]}
+              onPress={applyCustomMinutes}
+              disabled={!canEditTarget}
+            >
+              <Text style={styles.applyButtonText}>应用</Text>
+            </TouchableOpacity>
+          </View>
+
+          {!canEditTarget && (
+            <Text style={styles.lockHint}>计时开始后，本次目标时长会锁定。</Text>
+          )}
         </View>
 
         <View style={styles.controls}>
@@ -127,16 +248,17 @@ export default function FocusScreen() {
             <Text style={styles.buttonText}>重置</Text>
           </TouchableOpacity>
         </View>
-      </View>
+      </ScrollView>
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
+    flexGrow: 1,
     padding: 20,
     alignItems: "center",
+    paddingBottom: 36,
   },
   statsRow: {
     flexDirection: "row",
@@ -148,7 +270,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     backgroundColor: colors.surface,
     padding: 15,
-    borderRadius: 12,
+    borderRadius: 8,
     width: "45%",
     elevation: 2,
     shadowColor: "#000",
@@ -167,9 +289,9 @@ const styles = StyleSheet.create({
     color: colors.text,
   },
   timerContainer: {
-    width: 250,
-    height: 250,
-    borderRadius: 125,
+    width: 240,
+    height: 240,
+    borderRadius: 120,
     borderWidth: 10,
     borderColor: colors.accent,
     justifyContent: "center",
@@ -186,15 +308,125 @@ const styles = StyleSheet.create({
     color: colors.muted,
     marginTop: 10,
   },
+  preferencePanel: {
+    width: "100%",
+    backgroundColor: colors.surface,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 16,
+    marginBottom: 28,
+  },
+  preferenceHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 14,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: colors.text,
+  },
+  sectionHint: {
+    fontSize: 13,
+    color: colors.muted,
+    marginTop: 3,
+  },
+  saveDefaultButton: {
+    borderWidth: 1,
+    borderColor: colors.accent,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  saveDefaultText: {
+    color: colors.accent,
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  presets: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+    marginBottom: 14,
+  },
+  presetButton: {
+    minWidth: 76,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: "center",
+  },
+  presetButtonActive: {
+    backgroundColor: colors.accent,
+    borderColor: colors.accent,
+  },
+  presetText: {
+    color: colors.text,
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  presetTextActive: {
+    color: colors.surface,
+  },
+  customRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  customInput: {
+    width: 90,
+    minHeight: 42,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    fontSize: 16,
+    color: colors.text,
+    backgroundColor: colors.surface,
+  },
+  disabledInput: {
+    backgroundColor: colors.background,
+    color: colors.muted,
+  },
+  customUnit: {
+    fontSize: 15,
+    color: colors.muted,
+  },
+  applyButton: {
+    minHeight: 42,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    backgroundColor: colors.text,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  applyButtonText: {
+    color: colors.surface,
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  disabledButton: {
+    opacity: 0.45,
+  },
+  lockHint: {
+    color: colors.muted,
+    fontSize: 13,
+    marginTop: 10,
+  },
   controls: {
     flexDirection: "row",
     justifyContent: "center",
+    flexWrap: "wrap",
     gap: 15,
   },
   button: {
     paddingHorizontal: 30,
     paddingVertical: 12,
-    borderRadius: 25,
+    borderRadius: 8,
     minWidth: 100,
     alignItems: "center",
   },

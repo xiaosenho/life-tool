@@ -41,6 +41,18 @@ export const SCHEMA = {
       updated_at TEXT DEFAULT CURRENT_TIMESTAMP
     );
   `,
+  focus_preferences: `
+    CREATE TABLE IF NOT EXISTS focus_preferences (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL UNIQUE,
+      default_focus_minutes INTEGER NOT NULL,
+      short_break_minutes INTEGER NOT NULL,
+      long_break_minutes INTEGER NOT NULL,
+      auto_start_break INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+    );
+  `,
   habits: `
     CREATE TABLE IF NOT EXISTS habits (
       id TEXT PRIMARY KEY,

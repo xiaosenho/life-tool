@@ -15,6 +15,7 @@ export async function initDatabase() {
   await db.execAsync(SCHEMA.sync_state);
   await db.execAsync(SCHEMA.tasks);
   await db.execAsync(SCHEMA.focus_sessions);
+  await db.execAsync(SCHEMA.focus_preferences);
   await db.execAsync(SCHEMA.habits);
   await db.execAsync(SCHEMA.habit_checkins);
 

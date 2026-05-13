@@ -6,6 +6,7 @@ const state = new Map<string, string>();
 const mutations: Row[] = [];
 const tasks = new Map<string, Row>();
 const focusSessions = new Map<string, Row>();
+const focusPreferences = new Map<string, Row>();
 const habits = new Map<string, Row>();
 const habitCheckins = new Map<string, Row>();
 let mutationIdSeq = 1;
@@ -86,6 +87,20 @@ const webDb = {
         note: params[8],
         created_at: params[9] || new Date().toISOString(),
         updated_at: params[10] || new Date().toISOString(),
+      });
+      return undefined;
+    }
+
+    if (sql.includes('INSERT OR REPLACE INTO focus_preferences')) {
+      focusPreferences.set(params[1], {
+        id: params[0],
+        user_id: params[1],
+        default_focus_minutes: params[2],
+        short_break_minutes: params[3],
+        long_break_minutes: params[4],
+        auto_start_break: params[5],
+        created_at: params[6] || new Date().toISOString(),
+        updated_at: params[7] || new Date().toISOString(),
       });
       return undefined;
     }
@@ -175,6 +190,11 @@ const webDb = {
       return value == null ? null : ({ value } as T);
     }
 
+    if (sql.includes('FROM focus_preferences')) {
+      const preference = focusPreferences.get(params[0]);
+      return preference == null ? null : (preference as T);
+    }
+
     return null;
   },
 };
@@ -184,6 +204,7 @@ export async function initDatabase() {
   await webDb.execAsync(SCHEMA.sync_state);
   await webDb.execAsync(SCHEMA.tasks);
   await webDb.execAsync(SCHEMA.focus_sessions);
+  await webDb.execAsync(SCHEMA.focus_preferences);
   await webDb.execAsync(SCHEMA.habits);
   await webDb.execAsync(SCHEMA.habit_checkins);
   console.log('Web preview database initialized');

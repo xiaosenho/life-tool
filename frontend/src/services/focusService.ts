@@ -17,12 +17,54 @@ export interface FocusSession {
   updated_at: string;
 }
 
+export interface FocusPreference {
+  id: string;
+  user_id: string;
+  default_focus_minutes: number;
+  short_break_minutes: number;
+  long_break_minutes: number;
+  auto_start_break: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface FocusPreferenceInput {
+  defaultFocusMinutes?: number;
+  shortBreakMinutes?: number;
+  longBreakMinutes?: number;
+  autoStartBreak?: boolean;
+}
+
+const DEFAULT_FOCUS_MINUTES = 25;
+const DEFAULT_SHORT_BREAK_MINUTES = 5;
+const DEFAULT_LONG_BREAK_MINUTES = 15;
+
+function createDefaultPreference(userId: string): FocusPreference {
+  const now = new Date().toISOString();
+  return {
+    id: `focus_preference_${userId}`,
+    user_id: userId,
+    default_focus_minutes: DEFAULT_FOCUS_MINUTES,
+    short_break_minutes: DEFAULT_SHORT_BREAK_MINUTES,
+    long_break_minutes: DEFAULT_LONG_BREAK_MINUTES,
+    auto_start_break: false,
+    created_at: now,
+    updated_at: now,
+  };
+}
+
+function validatePreferenceMinutes(value: number, min: number, max: number, label: string) {
+  if (!Number.isInteger(value) || value < min || value > max) {
+    throw new Error(`${label}需在 ${min}-${max} 分钟之间`);
+  }
+}
+
 export const focusService = {
   async saveSession(sessionData: Omit<FocusSession, 'id' | 'user_id' | 'created_at' | 'updated_at'>) {
     const db = await getDb();
     const id = createLocalId('focus');
     const userId = useAuthStore.getState().user?.id;
-    
+
     if (!userId) {
       throw new Error('User not authenticated');
     }
@@ -39,12 +81,12 @@ export const focusService = {
     // 1. Write to local business table
     await db.runAsync(
       `INSERT INTO focus_sessions (
-        id, user_id, mode, target_seconds, actual_seconds, status, 
+        id, user_id, mode, target_seconds, actual_seconds, status,
         started_at, ended_at, note, created_at, updated_at
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
-        session.id, session.user_id, session.mode, session.target_seconds, 
-        session.actual_seconds, session.status, session.started_at, 
+        session.id, session.user_id, session.mode, session.target_seconds,
+        session.actual_seconds, session.status, session.started_at,
         session.ended_at, session.note, session.created_at, session.updated_at
       ]
     );
@@ -53,6 +95,73 @@ export const focusService = {
     await syncService.enqueueMutation('focus_session', session.id, 'create', session);
 
     return session;
+  },
+
+  async getPreference() {
+    const db = await getDb();
+    const userId = useAuthStore.getState().user?.id;
+    if (!userId) return createDefaultPreference('guest');
+
+    const row = await db.getFirstAsync<any>(
+      'SELECT * FROM focus_preferences WHERE user_id = ?',
+      [userId]
+    );
+
+    if (!row) {
+      return createDefaultPreference(userId);
+    }
+
+    return {
+      ...row,
+      auto_start_break: Boolean(row.auto_start_break),
+    } as FocusPreference;
+  },
+
+  async savePreference(input: FocusPreferenceInput) {
+    const db = await getDb();
+    const userId = useAuthStore.getState().user?.id;
+    if (!userId) {
+      throw new Error('User not authenticated');
+    }
+
+    const current = await this.getPreference();
+    const now = new Date().toISOString();
+    const preference: FocusPreference = {
+      ...current,
+      id: current.id || `focus_preference_${userId}`,
+      user_id: userId,
+      default_focus_minutes: input.defaultFocusMinutes ?? current.default_focus_minutes,
+      short_break_minutes: input.shortBreakMinutes ?? current.short_break_minutes,
+      long_break_minutes: input.longBreakMinutes ?? current.long_break_minutes,
+      auto_start_break: input.autoStartBreak ?? current.auto_start_break,
+      updated_at: now,
+      created_at: current.created_at || now,
+    };
+
+    validatePreferenceMinutes(preference.default_focus_minutes, 1, 180, '专注时长');
+    validatePreferenceMinutes(preference.short_break_minutes, 0, 60, '短休息时长');
+    validatePreferenceMinutes(preference.long_break_minutes, 0, 60, '长休息时长');
+
+    await db.runAsync(
+      `INSERT OR REPLACE INTO focus_preferences (
+        id, user_id, default_focus_minutes, short_break_minutes, long_break_minutes,
+        auto_start_break, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        preference.id,
+        preference.user_id,
+        preference.default_focus_minutes,
+        preference.short_break_minutes,
+        preference.long_break_minutes,
+        preference.auto_start_break ? 1 : 0,
+        preference.created_at,
+        preference.updated_at,
+      ]
+    );
+
+    await syncService.enqueueMutation('focus_preference', preference.id, 'update', preference);
+
+    return preference;
   },
 
   async getSessions() {
