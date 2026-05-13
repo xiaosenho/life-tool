@@ -1,0 +1,31 @@
+docker-compose.yml
+  7edce49a5e049316 1-38
+README.md
+  7edce49a5e049316 23,49-51
+docs/DEPLOYMENT.md
+  7edce49a5e049316 1-45,52-90
+docs/TASKS.md
+  7edce49a5e049316 13-33
+backend/.env.example
+  7edce49a5e049316 1-9,12-14
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.14",
+  "base_commit_sha": "623a016d72d59d1ca3b99068dde635c4d0a4e2b0",
+  "prompts": {
+    "7edce49a5e049316": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_1dfa46f15ffeCLdPznpj7FFfUK",
+        "model": "deepseek/deepseek-chat"
+      },
+      "human_author": "zhouxiaojie <i_zhouxiaojie@cvte.com>",
+      "messages": [],
+      "total_additions": 163,
+      "total_deletions": 1,
+      "accepted_lines": 159,
+      "overriden_lines": 4
+    }
+  }
+}
