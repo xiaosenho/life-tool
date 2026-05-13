@@ -10,6 +10,7 @@ import com.lifetool.common.ApiResponse;
 import com.lifetool.focus.FocusException;
 import com.lifetool.friends.FriendException;
 import com.lifetool.leaderboards.LeaderboardException;
+import com.lifetool.ledger.LedgerException;
 import com.lifetool.media.MediaException;
 
 @RestControllerAdvice
@@ -60,6 +61,16 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(FocusException.class)
     public ResponseEntity<ApiResponse<Void>> handleFocus(FocusException ex) {
         HttpStatus status = switch (ex.getCode()) {
+            default -> HttpStatus.BAD_REQUEST;
+        };
+        return ResponseEntity.status(status).body(ApiResponse.fail(ex.getCode(), ex.getMessage()));
+    }
+
+    @ExceptionHandler(LedgerException.class)
+    public ResponseEntity<ApiResponse<Void>> handleLedger(LedgerException ex) {
+        HttpStatus status = switch (ex.getCode()) {
+            case "NOT_FOUND" -> HttpStatus.NOT_FOUND;
+            case "FORBIDDEN" -> HttpStatus.FORBIDDEN;
             default -> HttpStatus.BAD_REQUEST;
         };
         return ResponseEntity.status(status).body(ApiResponse.fail(ex.getCode(), ex.getMessage()));
