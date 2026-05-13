@@ -1,0 +1,61 @@
+backend/src/main/java/com/lifetool/auth/JwtProvider.java
+  2ad0bcc58be6e851 1-85
+backend/src/main/java/com/lifetool/users/User.java
+  2ad0bcc58be6e851 1-27
+backend/src/main/java/com/lifetool/auth/dto/LoginRequest.java
+  2ad0bcc58be6e851 1-9
+backend/src/main/java/com/lifetool/auth/GlobalExceptionHandler.java
+  2ad0bcc58be6e851 1-33
+backend/src/main/java/com/lifetool/auth/dto/RefreshRequest.java
+  2ad0bcc58be6e851 1-6
+backend/src/main/java/com/lifetool/auth/AuthController.java
+  2ad0bcc58be6e851 1-56
+backend/src/main/java/com/lifetool/auth/dto/AuthResponse.java
+  2ad0bcc58be6e851 1-7
+backend/src/main/java/com/lifetool/auth/JwtAuthenticationFilter.java
+  2ad0bcc58be6e851 1-39
+backend/src/main/java/com/lifetool/auth/UserController.java
+  2ad0bcc58be6e851 1-31
+backend/src/main/java/com/lifetool/auth/AuthException.java
+  2ad0bcc58be6e851 1-13
+backend/src/main/java/com/lifetool/users/UserRepository.java
+  2ad0bcc58be6e851 1-32
+backend/src/main/java/com/lifetool/auth/dto/RegisterRequest.java
+  2ad0bcc58be6e851 1-11
+backend/src/main/java/com/lifetool/auth/AuthService.java
+  2ad0bcc58be6e851 1-68
+backend/pom.xml
+  2ad0bcc58be6e851 37-57,63-65
+backend/src/main/resources/application.yml
+  2ad0bcc58be6e851 7-11
+backend/src/test/java/com/lifetool/auth/AuthControllerTest.java
+  2ad0bcc58be6e851 1-147
+docs/TASKS.md
+  2ad0bcc58be6e851 101,106
+backend/src/main/java/com/lifetool/auth/SecurityConfig.java
+  2ad0bcc58be6e851 1-62
+backend/src/main/java/com/lifetool/common/ApiResponse.java
+  2ad0bcc58be6e851 1-18
+backend/src/test/java/com/lifetool/health/HealthControllerTest.java
+  2ad0bcc58be6e851 10-11,14-15
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.14",
+  "base_commit_sha": "b59a5aaa09b4d5ac8c5f61e29783ba40980cbab3",
+  "prompts": {
+    "2ad0bcc58be6e851": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1bda689e-2b53-4a5e-b59e-2ee3cbdf2a12",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "zhouxiaojie <i_zhouxiaojie@cvte.com>",
+      "messages": [],
+      "total_additions": 683,
+      "total_deletions": 3,
+      "accepted_lines": 683,
+      "overriden_lines": 0
+    }
+  }
+}
