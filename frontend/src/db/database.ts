@@ -20,6 +20,7 @@ export async function initDatabase() {
   await db.execAsync(SCHEMA.habit_checkins);
   await db.execAsync(SCHEMA.ledger_transactions);
   await db.execAsync(SCHEMA.ledger_budgets);
+  await db.execAsync(SCHEMA.anniversary_events);
 
   console.log('Database initialized');
   return db;

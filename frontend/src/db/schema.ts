@@ -110,5 +110,21 @@ export const SCHEMA = {
       created_at TEXT DEFAULT CURRENT_TIMESTAMP,
       updated_at TEXT DEFAULT CURRENT_TIMESTAMP
     );
+  `,
+  anniversary_events: `
+    CREATE TABLE IF NOT EXISTS anniversary_events (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      type TEXT NOT NULL,
+      title TEXT NOT NULL,
+      event_date TEXT NOT NULL,
+      repeat_rule TEXT NOT NULL DEFAULT 'none',
+      remind_days_before TEXT NOT NULL DEFAULT '[]',
+      note TEXT,
+      media_asset_id TEXT,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      deleted_at TEXT
+    );
   `
 };

@@ -11,6 +11,7 @@ const habits = new Map<string, Row>();
 const habitCheckins = new Map<string, Row>();
 const ledgerTransactions = new Map<string, Row>();
 const ledgerBudgets = new Map<string, Row>();
+const anniversaryEvents = new Map<string, Row>();
 let mutationIdSeq = 1;
 
 const webDb = {
@@ -208,6 +209,44 @@ const webDb = {
       return undefined;
     }
 
+    if (sql.includes('INSERT INTO anniversary_events')) {
+      anniversaryEvents.set(params[0], {
+        id: params[0],
+        user_id: params[1],
+        type: params[2],
+        title: params[3],
+        event_date: params[4],
+        repeat_rule: params[5],
+        remind_days_before: params[6],
+        note: params[7],
+        media_asset_id: params[8],
+        created_at: params[9] || new Date().toISOString(),
+        updated_at: params[10] || new Date().toISOString(),
+        deleted_at: params[11],
+      });
+      return undefined;
+    }
+
+    if (sql.includes('UPDATE anniversary_events SET')) {
+      const event = anniversaryEvents.get(params[params.length - 1]);
+      if (event) {
+        if (sql.includes('deleted_at')) {
+          event.deleted_at = params[0];
+          event.updated_at = params[1];
+        } else {
+          event.type = params[0];
+          event.title = params[1];
+          event.event_date = params[2];
+          event.repeat_rule = params[3];
+          event.remind_days_before = params[4];
+          event.note = params[5];
+          event.media_asset_id = params[6];
+          event.updated_at = params[7];
+        }
+      }
+      return undefined;
+    }
+
     return undefined;
   },
 
@@ -268,6 +307,15 @@ const webDb = {
       return rows as T[];
     }
 
+    if (sql.includes('FROM anniversary_events')) {
+      let rows = Array.from(anniversaryEvents.values());
+      if (sql.includes('WHERE user_id = ?')) {
+        rows = rows.filter((event) => event.user_id === params[0]);
+      }
+      rows = rows.filter((event) => event.deleted_at == null);
+      return rows.sort((a, b) => String(a.event_date).localeCompare(String(b.event_date))) as T[];
+    }
+
     return [];
   },
 
@@ -290,6 +338,14 @@ const webDb = {
       return transaction as T;
     }
 
+    if (sql.includes('FROM anniversary_events')) {
+      const event = anniversaryEvents.get(params[0]);
+      if (!event || event.user_id !== params[1] || event.deleted_at != null) {
+        return null;
+      }
+      return event as T;
+    }
+
     return null;
   },
 };
@@ -304,6 +360,7 @@ export async function initDatabase() {
   await webDb.execAsync(SCHEMA.habit_checkins);
   await webDb.execAsync(SCHEMA.ledger_transactions);
   await webDb.execAsync(SCHEMA.ledger_budgets);
+  await webDb.execAsync(SCHEMA.anniversary_events);
   console.log('Web preview database initialized');
   return webDb;
 }

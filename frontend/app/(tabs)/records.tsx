@@ -17,9 +17,27 @@ import {
   LedgerTransaction,
   LedgerTransactionType,
 } from "@/services/ledgerService";
+import {
+  AnniversaryEvent,
+  eventService,
+  EventType,
+  RepeatRule,
+} from "@/services/eventService";
 import { colors } from "@/theme/colors";
 
 const CATEGORIES = ["餐饮", "交通", "购物", "住房", "娱乐", "医疗", "工资", "其他"];
+const EVENT_TYPES: { value: EventType; label: string }[] = [
+  { value: "anniversary", label: "纪念日" },
+  { value: "birthday", label: "生日" },
+  { value: "important_day", label: "重要日" },
+  { value: "todo_reminder", label: "提醒" },
+];
+const REPEAT_RULES: { value: RepeatRule; label: string }[] = [
+  { value: "none", label: "不重复" },
+  { value: "yearly", label: "每年" },
+  { value: "monthly", label: "每月" },
+  { value: "weekly", label: "每周" },
+];
 
 function currentMonth() {
   return new Date().toISOString().slice(0, 7);
@@ -45,6 +63,13 @@ export default function RecordsScreen() {
   const [mediaAssetId, setMediaAssetId] = useState("");
   const [budgetAmount, setBudgetAmount] = useState("");
   const [transactions, setTransactions] = useState<LedgerTransaction[]>([]);
+  const [eventType, setEventType] = useState<EventType>("anniversary");
+  const [eventTitle, setEventTitle] = useState("");
+  const [eventDate, setEventDate] = useState(today());
+  const [repeatRule, setRepeatRule] = useState<RepeatRule>("yearly");
+  const [remindDays, setRemindDays] = useState("7,1");
+  const [eventNote, setEventNote] = useState("");
+  const [upcomingEvents, setUpcomingEvents] = useState<AnniversaryEvent[]>([]);
   const [summary, setSummary] = useState({
     income: 0,
     expense: 0,
@@ -60,6 +85,7 @@ export default function RecordsScreen() {
 
   useEffect(() => {
     loadLedger();
+    loadEvents();
   }, []);
 
   const loadLedger = async () => {
@@ -130,6 +156,60 @@ export default function RecordsScreen() {
     try {
       await ledgerService.deleteTransaction(id);
       await loadLedger();
+    } catch (error) {
+      Alert.alert("删除失败", error instanceof Error ? error.message : "请稍后重试。");
+    }
+  };
+
+  const loadEvents = async () => {
+    try {
+      const events = await eventService.getUpcoming(366);
+      setUpcomingEvents(events);
+    } catch (error) {
+      console.warn("加载纪念日失败", error);
+    }
+  };
+
+  const parseReminders = () => {
+    if (!remindDays.trim()) return [];
+    return remindDays
+      .split(",")
+      .map((item) => Number(item.trim()))
+      .filter((item) => Number.isFinite(item));
+  };
+
+  const submitEvent = async () => {
+    if (!eventTitle.trim()) {
+      Alert.alert("提示", "请输入事件标题。");
+      return;
+    }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(eventDate)) {
+      Alert.alert("提示", "日期格式需为 YYYY-MM-DD。");
+      return;
+    }
+
+    try {
+      await eventService.createEvent({
+        type: eventType,
+        title: eventTitle,
+        eventDate,
+        repeatRule,
+        remindDaysBefore: parseReminders(),
+        note: eventNote.trim() || null,
+      });
+      setEventTitle("");
+      setEventNote("");
+      await loadEvents();
+      Alert.alert("已保存", "这个重要日已保存到本地。");
+    } catch (error) {
+      Alert.alert("保存失败", error instanceof Error ? error.message : "请稍后重试。");
+    }
+  };
+
+  const deleteEvent = async (id: string) => {
+    try {
+      await eventService.deleteEvent(id);
+      await loadEvents();
     } catch (error) {
       Alert.alert("删除失败", error instanceof Error ? error.message : "请稍后重试。");
     }
@@ -302,7 +382,115 @@ export default function RecordsScreen() {
       </View>
 
       <View style={styles.section}>
-        <MetricCard label="事件" value="0 条" accent="blue" />
+        <Text style={styles.sectionTitle}>纪念日</Text>
+        <MetricCard label="未来一年事件" value={`${upcomingEvents.length} 条`} accent="blue" />
+
+        <View style={styles.panel}>
+          <Text style={styles.panelTitle}>新增重要日</Text>
+          <View style={styles.categoryGrid}>
+            {EVENT_TYPES.map((item) => (
+              <TouchableOpacity
+                key={item.value}
+                style={[
+                  styles.categoryButton,
+                  eventType === item.value && styles.categoryButtonActive,
+                ]}
+                onPress={() => setEventType(item.value)}
+              >
+                <Text
+                  style={[
+                    styles.categoryText,
+                    eventType === item.value && styles.categoryTextActive,
+                  ]}
+                >
+                  {item.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+          <TextInput
+            style={styles.input}
+            value={eventTitle}
+            onChangeText={setEventTitle}
+            placeholder="标题"
+            placeholderTextColor={colors.muted}
+          />
+          <View style={styles.twoColumns}>
+            <TextInput
+              style={[styles.input, styles.halfInput]}
+              value={eventDate}
+              onChangeText={setEventDate}
+              placeholder="日期"
+              placeholderTextColor={colors.muted}
+            />
+            <TextInput
+              style={[styles.input, styles.halfInput]}
+              value={remindDays}
+              onChangeText={setRemindDays}
+              placeholder="提醒天数"
+              placeholderTextColor={colors.muted}
+            />
+          </View>
+          <View style={styles.categoryGrid}>
+            {REPEAT_RULES.map((item) => (
+              <TouchableOpacity
+                key={item.value}
+                style={[
+                  styles.categoryButton,
+                  repeatRule === item.value && styles.categoryButtonActive,
+                ]}
+                onPress={() => setRepeatRule(item.value)}
+              >
+                <Text
+                  style={[
+                    styles.categoryText,
+                    repeatRule === item.value && styles.categoryTextActive,
+                  ]}
+                >
+                  {item.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+          <TextInput
+            style={styles.input}
+            value={eventNote}
+            onChangeText={setEventNote}
+            placeholder="备注"
+            placeholderTextColor={colors.muted}
+          />
+          <TouchableOpacity style={styles.primaryButton} onPress={submitEvent}>
+            <MaterialCommunityIcons name="calendar-plus" size={20} color={colors.surface} />
+            <Text style={styles.primaryButtonText}>保存重要日</Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.panel}>
+          <Text style={styles.panelTitle}>即将到来</Text>
+          {upcomingEvents.length === 0 ? (
+            <Text style={styles.emptyText}>暂无纪念日或提醒</Text>
+          ) : (
+            upcomingEvents.slice(0, 8).map((event) => (
+              <View key={event.id} style={styles.transactionRow}>
+                <View style={styles.transactionMain}>
+                  <Text style={styles.transactionTitle}>{event.title}</Text>
+                  <Text style={styles.transactionMeta}>
+                    {event.nextOccurrenceDate} · {event.repeat_rule === "none" ? "不重复" : "重复"}
+                  </Text>
+                </View>
+                <Text style={[styles.transactionAmount, styles.eventCountdown]}>
+                  {event.daysUntil === 0 ? "今天" : `${event.daysUntil} 天`}
+                </Text>
+                <TouchableOpacity
+                  style={styles.iconButton}
+                  onPress={() => deleteEvent(event.id)}
+                >
+                  <MaterialCommunityIcons name="trash-can-outline" size={18} color={colors.muted} />
+                </TouchableOpacity>
+              </View>
+            ))
+          )}
+        </View>
       </View>
     </Screen>
   );
@@ -355,6 +543,9 @@ const styles = StyleSheet.create({
   },
   halfInput: {
     flex: 1,
+  },
+  eventCountdown: {
+    color: colors.accent,
   },
   iconButton: {
     alignItems: "center",
