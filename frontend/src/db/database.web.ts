@@ -5,6 +5,9 @@ type Row = Record<string, any>;
 const state = new Map<string, string>();
 const mutations: Row[] = [];
 const tasks = new Map<string, Row>();
+const focusSessions = new Map<string, Row>();
+const habits = new Map<string, Row>();
+const habitCheckins = new Map<string, Row>();
 let mutationIdSeq = 1;
 
 const webDb = {
@@ -70,10 +73,60 @@ const webDb = {
       return undefined;
     }
 
+    if (sql.includes('INSERT INTO focus_sessions')) {
+      focusSessions.set(params[0], {
+        id: params[0],
+        user_id: params[1],
+        mode: params[2],
+        target_seconds: params[3],
+        actual_seconds: params[4],
+        status: params[5],
+        started_at: params[6],
+        ended_at: params[7],
+        note: params[8],
+        created_at: params[9] || new Date().toISOString(),
+        updated_at: params[10] || new Date().toISOString(),
+      });
+      return undefined;
+    }
+
+    if (sql.includes('INSERT INTO habits')) {
+      habits.set(params[0], {
+        id: params[0],
+        user_id: params[1],
+        name: params[2],
+        description: params[3],
+        frequency_type: params[4],
+        frequency_days: params[5],
+        target_count: params[6],
+        color: params[7],
+        icon: params[8],
+        is_archived: params[9],
+        created_at: params[10] || new Date().toISOString(),
+        updated_at: params[11] || new Date().toISOString(),
+        deleted_at: params[12],
+      });
+      return undefined;
+    }
+
+    if (sql.includes('INSERT INTO habit_checkins')) {
+      habitCheckins.set(params[0], {
+        id: params[0],
+        user_id: params[1],
+        habit_id: params[2],
+        checkin_date: params[3],
+        count: params[4],
+        note: params[5],
+        created_at: params[6] || new Date().toISOString(),
+        updated_at: params[7] || new Date().toISOString(),
+      });
+      return undefined;
+    }
+
     return undefined;
   },
 
-  async getAllAsync<T>(sql: string): Promise<T[]> {
+  async getAllAsync<T>(sql: string, params: any[] = []): Promise<T[]> {
     if (sql.includes('FROM sync_mutations')) {
       return mutations
         .filter((mutation) => mutation.synced === 0)
@@ -83,6 +136,34 @@ const webDb = {
     if (sql.includes('FROM tasks')) {
       return Array.from(tasks.values())
         .sort((a, b) => String(b.updated_at).localeCompare(String(a.updated_at))) as T[];
+    }
+
+    if (sql.includes('FROM focus_sessions')) {
+      return Array.from(focusSessions.values())
+        .filter((session) => (params[0] ? session.user_id === params[0] : true))
+        .filter((session) => (params[1] ? String(session.started_at).startsWith(String(params[1]).replace('%', '')) : true))
+        .filter((session) => (sql.includes("status = 'completed'") ? session.status === 'completed' : true))
+        .sort((a, b) => String(b.started_at).localeCompare(String(a.started_at))) as T[];
+    }
+
+    if (sql.includes('FROM habits')) {
+      return Array.from(habits.values())
+        .filter((habit) => (params[0] ? habit.user_id === params[0] : true))
+        .filter((habit) => habit.deleted_at == null)
+        .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at))) as T[];
+    }
+
+    if (sql.includes('FROM habit_checkins')) {
+      if (sql.includes('WHERE checkin_date =')) {
+        return Array.from(habitCheckins.values())
+          .filter((checkin) => checkin.checkin_date === params[0]) as T[];
+      }
+      if (sql.includes('WHERE user_id = ? AND checkin_date = ?')) {
+        return Array.from(habitCheckins.values())
+          .filter((checkin) => checkin.user_id === params[0])
+          .filter((checkin) => checkin.checkin_date === params[1]) as T[];
+      }
+      return Array.from(habitCheckins.values()) as T[];
     }
 
     return [];
@@ -102,6 +183,9 @@ export async function initDatabase() {
   await webDb.execAsync(SCHEMA.sync_mutations);
   await webDb.execAsync(SCHEMA.sync_state);
   await webDb.execAsync(SCHEMA.tasks);
+  await webDb.execAsync(SCHEMA.focus_sessions);
+  await webDb.execAsync(SCHEMA.habits);
+  await webDb.execAsync(SCHEMA.habit_checkins);
   console.log('Web preview database initialized');
   return webDb;
 }

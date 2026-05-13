@@ -14,6 +14,9 @@ export async function initDatabase() {
   await db.execAsync(SCHEMA.sync_mutations);
   await db.execAsync(SCHEMA.sync_state);
   await db.execAsync(SCHEMA.tasks);
+  await db.execAsync(SCHEMA.focus_sessions);
+  await db.execAsync(SCHEMA.habits);
+  await db.execAsync(SCHEMA.habit_checkins);
 
   console.log('Database initialized');
   return db;

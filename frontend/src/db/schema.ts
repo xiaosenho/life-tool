@@ -25,5 +25,49 @@ export const SCHEMA = {
       completed INTEGER DEFAULT 0,
       updated_at TEXT DEFAULT CURRENT_TIMESTAMP
     );
+  `,
+  focus_sessions: `
+    CREATE TABLE IF NOT EXISTS focus_sessions (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      mode TEXT NOT NULL,
+      target_seconds INTEGER NOT NULL,
+      actual_seconds INTEGER NOT NULL,
+      status TEXT NOT NULL,
+      started_at TEXT NOT NULL,
+      ended_at TEXT,
+      note TEXT,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+    );
+  `,
+  habits: `
+    CREATE TABLE IF NOT EXISTS habits (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      description TEXT,
+      frequency_type TEXT NOT NULL,
+      frequency_days TEXT,
+      target_count INTEGER NOT NULL,
+      color TEXT,
+      icon TEXT,
+      is_archived INTEGER DEFAULT 0,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      deleted_at TEXT
+    );
+  `,
+  habit_checkins: `
+    CREATE TABLE IF NOT EXISTS habit_checkins (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      habit_id TEXT NOT NULL,
+      checkin_date TEXT NOT NULL,
+      count INTEGER NOT NULL,
+      note TEXT,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+    );
   `
 };
