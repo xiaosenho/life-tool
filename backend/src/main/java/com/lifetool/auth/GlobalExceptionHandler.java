@@ -7,6 +7,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import com.lifetool.common.ApiResponse;
+import com.lifetool.focus.FocusException;
 import com.lifetool.friends.FriendException;
 import com.lifetool.leaderboards.LeaderboardException;
 import com.lifetool.media.MediaException;
@@ -50,6 +51,14 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(LeaderboardException.class)
     public ResponseEntity<ApiResponse<Void>> handleLeaderboard(LeaderboardException ex) {
+        HttpStatus status = switch (ex.getCode()) {
+            default -> HttpStatus.BAD_REQUEST;
+        };
+        return ResponseEntity.status(status).body(ApiResponse.fail(ex.getCode(), ex.getMessage()));
+    }
+
+    @ExceptionHandler(FocusException.class)
+    public ResponseEntity<ApiResponse<Void>> handleFocus(FocusException ex) {
         HttpStatus status = switch (ex.getCode()) {
             default -> HttpStatus.BAD_REQUEST;
         };
