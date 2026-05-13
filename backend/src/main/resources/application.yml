@@ -4,3 +4,8 @@ spring:
 
 server:
   port: 8080
+
+jwt:
+  secret: Y2hhbmdlLXRoaXMtaW4tcHJvZHVjdGlvbi10by1hLXJlYWwtc2VjcmV0LWtleS10aGF0LWlzLWF0LWxlYXN0LTI1Ni1iaXRz
+  access-ttl-ms: 900000
+  refresh-ttl-ms: 604800000
