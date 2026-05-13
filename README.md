@@ -20,6 +20,7 @@
 4. [docs/API.md](docs/API.md)
 5. [docs/TASKS.md](docs/TASKS.md)
 6. [docs/AGENT_CLI.md](docs/AGENT_CLI.md)
+7. [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) — 本地开发环境部署
 
 ## 推荐 Agent 分工
 
@@ -45,4 +46,6 @@
 - 已建立多 Agent 项目结构。
 - 已建立基础文档。
 - 已记录本地 Claude / Gemini / DeepSeek CLI 调度规范。
-- 尚未初始化后端和前端工程代码。
+- 已初始化后端和前端工程代码。
+- 已提供本地 Docker 基础设施（PostgreSQL + Redis）。
+- 部署方式见 [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)。
