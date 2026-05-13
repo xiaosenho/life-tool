@@ -1,0 +1,37 @@
+backend/src/main/java/com/lifetool/friends/FriendStore.java
+  ce1dbbe0b3a494fc 1-31,40-69
+backend/src/main/java/com/lifetool/friends/FriendRequest.java
+  ce1dbbe0b3a494fc 1-37
+backend/src/main/java/com/lifetool/friends/FriendService.java
+  ce1dbbe0b3a494fc 1-30,33-85
+backend/src/main/java/com/lifetool/auth/GlobalExceptionHandler.java
+  ce1dbbe0b3a494fc 10,39-49
+backend/src/main/java/com/lifetool/friends/FriendException.java
+  ce1dbbe0b3a494fc 1-13
+backend/src/test/java/com/lifetool/friends/FriendControllerTest.java
+  ce1dbbe0b3a494fc 1-129,149-207
+backend/src/main/java/com/lifetool/friends/FriendController.java
+  ce1dbbe0b3a494fc 1-76
+backend/src/main/java/com/lifetool/friends/Friendship.java
+  ce1dbbe0b3a494fc 1-24
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.14",
+  "base_commit_sha": "5db974e3d1b067deddd78cbd5f6be65c07ad57f3",
+  "prompts": {
+    "ce1dbbe0b3a494fc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4c5eeba0-2adf-4419-8fd8-3c27d05692cb",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "zhouxiaojie <i_zhouxiaojie@cvte.com>",
+      "messages": [],
+      "total_additions": 1038,
+      "total_deletions": 0,
+      "accepted_lines": 494,
+      "overriden_lines": 2
+    }
+  }
+}
