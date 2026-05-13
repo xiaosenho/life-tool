@@ -291,16 +291,71 @@ DELETE /api/media/assets/{id}
 }
 ```
 
-响应：
+响应（201）：
 
 ```json
 {
   "id": "uuid",
+  "objectKey": "users/user_uuid/media/asset_uuid.jpg",
+  "contentType": "image/jpeg",
   "purpose": "meal_photo",
+  "fileSize": 512000,
+  "width": 1280,
+  "height": 960,
   "status": "uploaded",
   "createdAt": "2026-05-13T12:00:00Z"
 }
 ```
+
+### GET /api/media/assets/{id}
+
+响应（200）：
+
+```json
+{
+  "id": "uuid",
+  "objectKey": "users/user_uuid/media/asset_uuid.jpg",
+  "contentType": "image/jpeg",
+  "purpose": "meal_photo",
+  "fileSize": 512000,
+  "width": 1280,
+  "height": 960,
+  "status": "uploaded",
+  "createdAt": "2026-05-13T12:00:00Z"
+}
+```
+
+备注：只能访问自己的资产，跨用户返回 403。
+
+### DELETE /api/media/assets/{id}
+
+响应（200）：
+
+```json
+{
+  "success": true,
+  "data": null,
+  "error": null
+}
+```
+
+备注：软删除，标记 status 为 deleted。只能删除自己的资产。
+
+### 校验规则
+
+- contentType 仅允许 `image/jpeg`、`image/png`、`image/webp`。
+- purpose 仅允许 `meal_photo`、`event_photo`、`avatar`。
+- fileSize 默认最大 10MB（通过 `MEDIA_MAX_IMAGE_BYTES` 配置）。
+
+### 环境变量
+
+| 变量 | 说明 | 默认值 |
+| --- | --- | --- |
+| COS_REGION | COS 地域 | ap-guangzhou |
+| COS_BUCKET | COS 存储桶 | life-tool-media |
+| COS_PUBLIC_BASE_URL | COS 公网访问地址，留空则返回 mock URL | 空 |
+| COS_UPLOAD_TOKEN_TTL_SECONDS | 上传授权有效期（秒） | 300 |
+| MEDIA_MAX_IMAGE_BYTES | 最大图片大小（字节） | 10485760 |
 
 ## 9. AI
 

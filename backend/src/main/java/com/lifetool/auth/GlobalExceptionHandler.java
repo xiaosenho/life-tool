@@ -7,6 +7,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import com.lifetool.common.ApiResponse;
+import com.lifetool.media.MediaException;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -17,6 +18,18 @@ public class GlobalExceptionHandler {
             case "UNAUTHORIZED" -> HttpStatus.UNAUTHORIZED;
             case "CONFLICT" -> HttpStatus.CONFLICT;
             case "NOT_FOUND" -> HttpStatus.NOT_FOUND;
+            default -> HttpStatus.BAD_REQUEST;
+        };
+        return ResponseEntity.status(status).body(ApiResponse.fail(ex.getCode(), ex.getMessage()));
+    }
+
+    @ExceptionHandler(MediaException.class)
+    public ResponseEntity<ApiResponse<Void>> handleMedia(MediaException ex) {
+        HttpStatus status = switch (ex.getCode()) {
+            case "NOT_FOUND" -> HttpStatus.NOT_FOUND;
+            case "FORBIDDEN" -> HttpStatus.FORBIDDEN;
+            case "FILE_TOO_LARGE" -> HttpStatus.PAYLOAD_TOO_LARGE;
+            case "UNSUPPORTED_MEDIA_TYPE" -> HttpStatus.UNSUPPORTED_MEDIA_TYPE;
             default -> HttpStatus.BAD_REQUEST;
         };
         return ResponseEntity.status(status).body(ApiResponse.fail(ex.getCode(), ex.getMessage()));
