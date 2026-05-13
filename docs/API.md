@@ -234,7 +234,207 @@ GET /api/leaderboards/streaks
 }
 ```
 
-## 8. Media
+## 8. Focus Preferences
+
+专注偏好用于保存用户默认专注时长。单次专注记录仍通过同步模型中的 `focus_session` 上传。
+
+```text
+GET   /api/focus/preferences
+PATCH /api/focus/preferences
+```
+
+### GET /api/focus/preferences
+
+响应：
+
+```json
+{
+  "defaultFocusMinutes": 25,
+  "shortBreakMinutes": 5,
+  "longBreakMinutes": 15,
+  "autoStartBreak": false,
+  "updatedAt": "2026-05-13T12:00:00Z"
+}
+```
+
+### PATCH /api/focus/preferences
+
+请求：
+
+```json
+{
+  "defaultFocusMinutes": 45,
+  "shortBreakMinutes": 5,
+  "longBreakMinutes": 15,
+  "autoStartBreak": false
+}
+```
+
+校验规则：
+
+- `defaultFocusMinutes` 范围：1 到 180。
+- `shortBreakMinutes`、`longBreakMinutes` 范围：0 到 60。
+- 客户端可离线保存偏好，联网后通过同步队列或该接口上传。
+
+## 9. Ledger
+
+```text
+GET    /api/ledger/transactions?month=2026-05
+POST   /api/ledger/transactions
+PATCH  /api/ledger/transactions/{id}
+DELETE /api/ledger/transactions/{id}
+GET    /api/ledger/summary?month=2026-05
+GET    /api/ledger/budgets?month=2026-05
+PUT    /api/ledger/budgets/{month}
+```
+
+### POST /api/ledger/transactions
+
+请求：
+
+```json
+{
+  "type": "expense",
+  "amount": 36.5,
+  "currency": "CNY",
+  "category": "餐饮",
+  "account": "微信",
+  "occurredAt": "2026-05-13T12:00:00Z",
+  "note": "午餐",
+  "mediaAssetId": "uuid"
+}
+```
+
+响应（201）：
+
+```json
+{
+  "id": "uuid",
+  "type": "expense",
+  "amount": 36.5,
+  "currency": "CNY",
+  "category": "餐饮",
+  "account": "微信",
+  "occurredAt": "2026-05-13T12:00:00Z",
+  "note": "午餐",
+  "mediaAssetId": "uuid",
+  "createdAt": "2026-05-13T12:00:00Z"
+}
+```
+
+流水类型：
+
+```text
+income
+expense
+transfer
+```
+
+### GET /api/ledger/summary
+
+响应：
+
+```json
+{
+  "month": "2026-05",
+  "income": 12000,
+  "expense": 3200.5,
+  "balance": 8799.5,
+  "budget": 5000,
+  "categoryExpenses": [
+    {
+      "category": "餐饮",
+      "amount": 980.5
+    }
+  ]
+}
+```
+
+### PUT /api/ledger/budgets/{month}
+
+请求：
+
+```json
+{
+  "amount": 5000,
+  "currency": "CNY",
+  "category": null
+}
+```
+
+说明：
+
+- `category` 为 `null` 表示整月总预算。
+- 指定 `category` 表示分类预算。
+- 记账数据默认私密，不进入好友汇总。
+
+## 10. Anniversaries And Events
+
+```text
+GET    /api/events?from=2026-05-01&to=2026-06-30
+POST   /api/events
+PATCH  /api/events/{id}
+DELETE /api/events/{id}
+GET    /api/events/upcoming?days=30
+```
+
+### POST /api/events
+
+请求：
+
+```json
+{
+  "type": "anniversary",
+  "title": "结婚纪念日",
+  "eventDate": "2026-10-01",
+  "repeatRule": "yearly",
+  "remindDaysBefore": [30, 7, 1],
+  "note": "提前准备礼物",
+  "mediaAssetId": "uuid"
+}
+```
+
+响应（201）：
+
+```json
+{
+  "id": "uuid",
+  "type": "anniversary",
+  "title": "结婚纪念日",
+  "eventDate": "2026-10-01",
+  "repeatRule": "yearly",
+  "remindDaysBefore": [30, 7, 1],
+  "daysUntil": 141,
+  "nextOccurrenceDate": "2026-10-01",
+  "note": "提前准备礼物",
+  "mediaAssetId": "uuid"
+}
+```
+
+事件类型：
+
+```text
+anniversary
+birthday
+important_day
+todo_reminder
+```
+
+重复规则：
+
+```text
+none
+yearly
+monthly
+weekly
+```
+
+说明：
+
+- 纪念日和重要事件默认私密。
+- 客户端负责本地通知调度，服务端保存提醒规则用于多设备恢复。
+
+## 11. Media
 
 ```text
 POST /api/media/upload-token
@@ -357,7 +557,7 @@ DELETE /api/media/assets/{id}
 | COS_UPLOAD_TOKEN_TTL_SECONDS | 上传授权有效期（秒） | 300 |
 | MEDIA_MAX_IMAGE_BYTES | 最大图片大小（字节） | 10485760 |
 
-## 9. AI
+## 12. AI
 
 ```text
 POST /api/ai/food-recognition/jobs
@@ -436,7 +636,7 @@ GET  /api/ai/chat/sessions/{id}/messages
 }
 ```
 
-## 10. 错误码
+## 13. 错误码
 
 | code | 含义 |
 | --- | --- |

@@ -365,3 +365,163 @@ blocked
   - 同步版本模型支持游标拉取和实体版本管理。
   - docs/DATABASE.md 文档完整，可指导后端开发。
 - 风险等级：低
+
+## Phase 3：记录、提醒与体验补全
+
+### TASK-FE-106：实现好友与排行榜前端页面
+
+- 状态：todo
+- 推荐负责人：Gemini
+- 影响文件：
+  - `frontend/src/services/friendService.ts`
+  - `frontend/src/services/leaderboardService.ts`
+  - `frontend/app/(tabs)/friends.tsx`
+- 描述：
+  - 实现好友搜索与添加（通过邮箱）。
+  - 实现好友请求列表（收到/发出）与接受/拒绝操作。
+  - 实现好友列表展示与删除好友。
+  - 实现排行榜页面：今日/本周专注时长、习惯完成率、连续打卡天数。
+  - 对接后端 `/api/friends/*` 和 `/api/leaderboards/*`。
+- 验收标准：
+  - 可通过邮箱搜索并发送好友请求。
+  - 可查看待处理的好友请求并接受/拒绝。
+  - 好友列表可展示并支持删除。
+  - 排行榜展示好友排名数据。
+  - 未登录、空列表、接口失败、加载中均有中文状态。
+  - `npm run typecheck` 通过。
+- 风险等级：中
+
+### TASK-BE-107：实现专注偏好接口
+
+- 状态：todo
+- 推荐负责人：Claude
+- 影响文件：
+  - `backend/src/main/**/focus/**`
+  - `docs/API.md`
+- 描述：
+  - 实现用户专注偏好接口：默认专注时长、短休息、长休息、是否自动开始休息。
+  - 校验默认专注时长范围为 1 到 180 分钟。
+  - 偏好只属于当前用户，不能跨用户访问。
+- 验收标准：
+  - `GET /api/focus/preferences` 返回当前用户偏好，首次访问返回默认值。
+  - `PATCH /api/focus/preferences` 可更新偏好。
+  - 非法时长返回 400。
+  - `mvn test` 通过。
+- 风险等级：中
+
+### TASK-FE-107：实现可设置专注时长
+
+- 状态：todo
+- 推荐负责人：Gemini
+- 影响文件：
+  - `frontend/app/(tabs)/focus.tsx`
+  - `frontend/src/services/focusService.ts`
+  - `frontend/src/db/schema.ts`
+- 描述：
+  - 在专注页增加时长设置入口。
+  - 支持 15/25/45/60 分钟预设和 1 到 180 分钟自定义。
+  - 保存默认专注时长，本地可用并进入同步队列。
+  - 开始专注前可以临时调整本次时长。
+- 验收标准：
+  - 用户可以修改默认专注时长。
+  - 用户可以用自定义时长完成一次专注。
+  - 今日统计按实际完成时长计算。
+  - `npm run typecheck` 通过。
+- 风险等级：中
+
+### TASK-BE-108：实现记账接口与统计
+
+- 状态：todo
+- 推荐负责人：Claude
+- 影响文件：
+  - `backend/src/main/**/ledger/**`
+  - `docs/API.md`
+- 描述：
+  - 实现收入、支出、转账流水 CRUD。
+  - 实现月度收支汇总和分类支出统计。
+  - 实现月度预算接口。
+  - 支持关联媒体凭证 `mediaAssetId`。
+- 验收标准：
+  - 用户可以创建、修改、删除自己的记账流水。
+  - A 用户不能读取或修改 B 用户流水。
+  - 月度汇总返回收入、支出、结余、预算和分类支出。
+  - `mvn test` 通过。
+- 风险等级：高
+
+### TASK-FE-108：实现记账页面与本地同步
+
+- 状态：todo
+- 推荐负责人：Gemini
+- 影响文件：
+  - `frontend/app/(tabs)/records.tsx`
+  - `frontend/src/services/ledgerService.ts`
+  - `frontend/src/db/schema.ts`
+- 描述：
+  - Records 页增加记账入口。
+  - 支持新增收入/支出、选择分类、账户、日期、备注和图片凭证。
+  - 展示当月收入、支出、结余和预算进度。
+  - 离线写入本地 SQLite，并进入同步队列。
+- 验收标准：
+  - 用户可以新增一笔支出。
+  - 用户可以看到当月支出汇总。
+  - 用户可以设置月度预算。
+  - 数据写入本地并进入同步队列。
+  - `npm run typecheck` 通过。
+- 风险等级：高
+
+### TASK-BE-109：实现纪念日与重要事件接口
+
+- 状态：todo
+- 推荐负责人：Claude
+- 影响文件：
+  - `backend/src/main/**/events/**`
+  - `docs/API.md`
+- 描述：
+  - 实现纪念日、生日、重要日期、待办提醒 CRUD。
+  - 支持重复规则和提前提醒天数。
+  - 支持查询即将到来的事件。
+  - 支持关联媒体图片。
+- 验收标准：
+  - 用户可以创建、修改、删除自己的纪念日。
+  - A 用户不能读取或修改 B 用户事件。
+  - 即将到来的事件返回倒数天数和下一次发生日期。
+  - `mvn test` 通过。
+- 风险等级：中
+
+### TASK-FE-109：实现纪念日页面与提醒
+
+- 状态：todo
+- 推荐负责人：Gemini
+- 影响文件：
+  - `frontend/app/(tabs)/records.tsx`
+  - `frontend/src/services/eventService.ts`
+  - `frontend/src/db/schema.ts`
+- 描述：
+  - Records 页增加纪念日入口。
+  - 支持创建纪念日、生日、重要日期和提醒。
+  - 展示倒数天数、周年信息和最近即将到来的事件。
+  - 使用本地通知调度提醒，服务端保存规则用于多设备恢复。
+- 验收标准：
+  - 用户可以创建一个纪念日。
+  - 用户可以看到倒数天数。
+  - 用户可以设置提前提醒。
+  - 数据写入本地并进入同步队列。
+  - `npm run typecheck` 通过。
+- 风险等级：中
+
+### TASK-DB-002：补充专注偏好、预算和纪念日 DDL
+
+- 状态：todo
+- 推荐负责人：DeepSeek
+- 影响文件：
+  - `backend/src/main/resources/db/migration/**`
+  - `docs/DATABASE.md`
+- 描述：
+  - 检查现有 DDL 是否足够表达专注偏好、月度预算和纪念日重复提醒。
+  - 如不足，新增迁移脚本而不是修改已经发布的 `V1__init_schema.sql`。
+  - 更新数据库文档说明表关系和索引。
+- 验收标准：
+  - 新增迁移可在已有数据库上执行。
+  - 不破坏现有表和索引。
+  - `docs/DATABASE.md` 能指导后端实现。
+- 风险等级：中
