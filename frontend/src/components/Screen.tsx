@@ -1,22 +1,39 @@
 import type { PropsWithChildren } from "react";
-import { ScrollView, StyleSheet, Text, View } from "react-native";
+import { ScrollView, StyleSheet, Text, View, ViewStyle } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { colors } from "@/theme/colors";
 
 type ScreenProps = PropsWithChildren<{
-  title: string;
+  title?: string;
+  style?: ViewStyle;
+  contentContainerStyle?: ViewStyle;
+  scrollable?: boolean;
 }>;
 
-export function Screen({ children, title }: ScreenProps) {
-  return (
-    <SafeAreaView style={styles.safeArea}>
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+export function Screen({ children, title, style, contentContainerStyle, scrollable = true }: ScreenProps) {
+  const content = (
+    <>
+      {title && (
         <View style={styles.header}>
           <Text style={styles.title}>{title}</Text>
         </View>
-        {children}
-      </ScrollView>
+      )}
+      {children}
+    </>
+  );
+
+  return (
+    <SafeAreaView style={[styles.safeArea, style]}>
+      {scrollable ? (
+        <ScrollView contentContainerStyle={[styles.scrollContent, contentContainerStyle]}>
+          {content}
+        </ScrollView>
+      ) : (
+        <View style={[styles.scrollContent, contentContainerStyle, { flex: 1 }]}>
+          {content}
+        </View>
+      )}
     </SafeAreaView>
   );
 }
