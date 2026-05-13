@@ -9,6 +9,8 @@ const focusSessions = new Map<string, Row>();
 const focusPreferences = new Map<string, Row>();
 const habits = new Map<string, Row>();
 const habitCheckins = new Map<string, Row>();
+const ledgerTransactions = new Map<string, Row>();
+const ledgerBudgets = new Map<string, Row>();
 let mutationIdSeq = 1;
 
 const webDb = {
@@ -138,6 +140,74 @@ const webDb = {
       return undefined;
     }
 
+    if (sql.includes('INSERT INTO ledger_transactions')) {
+      ledgerTransactions.set(params[0], {
+        id: params[0],
+        user_id: params[1],
+        type: params[2],
+        amount: params[3],
+        currency: params[4],
+        category: params[5],
+        account: params[6],
+        occurred_at: params[7],
+        note: params[8],
+        media_asset_id: params[9],
+        created_at: params[10] || new Date().toISOString(),
+        updated_at: params[11] || new Date().toISOString(),
+        deleted_at: params[12],
+      });
+      return undefined;
+    }
+
+    if (sql.includes('INSERT INTO ledger_budgets')) {
+      ledgerBudgets.set(params[0], {
+        id: params[0],
+        user_id: params[1],
+        month: params[2],
+        amount: params[3],
+        currency: params[4],
+        category: params[5],
+        created_at: params[6] || new Date().toISOString(),
+        updated_at: params[7] || new Date().toISOString(),
+      });
+      return undefined;
+    }
+
+    if (sql.includes('UPDATE ledger_transactions SET')) {
+      const txn = ledgerTransactions.get(params[params.length - 1]);
+      if (txn) {
+        if (sql.includes('deleted_at')) {
+          txn.deleted_at = params[0];
+          txn.updated_at = params[1];
+        } else {
+          txn.type = params[0];
+          txn.amount = params[1];
+          txn.currency = params[2];
+          txn.category = params[3];
+          txn.account = params[4];
+          txn.occurred_at = params[5];
+          txn.note = params[6];
+          txn.media_asset_id = params[7];
+          txn.updated_at = params[8];
+        }
+      }
+      return undefined;
+    }
+
+    if (sql.includes('INSERT OR REPLACE INTO ledger_budgets')) {
+      ledgerBudgets.set(params[0], {
+        id: params[0],
+        user_id: params[1],
+        month: params[2],
+        amount: params[3],
+        currency: params[4],
+        category: params[5],
+        created_at: params[6] || new Date().toISOString(),
+        updated_at: params[7] || new Date().toISOString(),
+      });
+      return undefined;
+    }
+
     return undefined;
   },
 
@@ -181,6 +251,23 @@ const webDb = {
       return Array.from(habitCheckins.values()) as T[];
     }
 
+    if (sql.includes('FROM ledger_transactions')) {
+      let rows = Array.from(ledgerTransactions.values());
+      if (sql.includes('WHERE user_id = ? AND occurred_at LIKE ?')) {
+        rows = rows.filter((t) => t.user_id === params[0] && String(t.occurred_at).startsWith(String(params[1]).replace('%', '')));
+      }
+      rows = rows.filter((t) => t.deleted_at == null);
+      return rows.sort((a, b) => String(b.occurred_at).localeCompare(String(a.occurred_at))) as T[];
+    }
+
+    if (sql.includes('FROM ledger_budgets')) {
+      let rows = Array.from(ledgerBudgets.values());
+      if (sql.includes('WHERE user_id = ? AND month = ?')) {
+        rows = rows.filter((b) => b.user_id === params[0] && b.month === params[1]);
+      }
+      return rows as T[];
+    }
+
     return [];
   },
 
@@ -195,6 +282,14 @@ const webDb = {
       return preference == null ? null : (preference as T);
     }
 
+    if (sql.includes('FROM ledger_transactions')) {
+      const transaction = ledgerTransactions.get(params[0]);
+      if (!transaction || transaction.user_id !== params[1] || transaction.deleted_at != null) {
+        return null;
+      }
+      return transaction as T;
+    }
+
     return null;
   },
 };
@@ -207,6 +302,8 @@ export async function initDatabase() {
   await webDb.execAsync(SCHEMA.focus_preferences);
   await webDb.execAsync(SCHEMA.habits);
   await webDb.execAsync(SCHEMA.habit_checkins);
+  await webDb.execAsync(SCHEMA.ledger_transactions);
+  await webDb.execAsync(SCHEMA.ledger_budgets);
   console.log('Web preview database initialized');
   return webDb;
 }

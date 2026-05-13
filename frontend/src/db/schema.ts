@@ -81,5 +81,34 @@ export const SCHEMA = {
       created_at TEXT DEFAULT CURRENT_TIMESTAMP,
       updated_at TEXT DEFAULT CURRENT_TIMESTAMP
     );
+  `,
+  ledger_transactions: `
+    CREATE TABLE IF NOT EXISTS ledger_transactions (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      type TEXT NOT NULL,
+      amount REAL NOT NULL,
+      currency TEXT NOT NULL DEFAULT 'CNY',
+      category TEXT,
+      account TEXT,
+      occurred_at TEXT NOT NULL,
+      note TEXT,
+      media_asset_id TEXT,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      deleted_at TEXT
+    );
+  `,
+  ledger_budgets: `
+    CREATE TABLE IF NOT EXISTS ledger_budgets (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      month TEXT NOT NULL,
+      amount REAL NOT NULL,
+      currency TEXT NOT NULL DEFAULT 'CNY',
+      category TEXT,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+    );
   `
 };
