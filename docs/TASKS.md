@@ -10,6 +10,27 @@ done
 blocked
 ```
 
+### TASK-INFRA-001：提供本地 Docker 基础设施与部署文档
+
+- 状态：done
+- 推荐负责人：DeepSeek
+- 影响文件：
+  - `docker-compose.yml`
+  - `backend/.env.example`
+  - `docs/DEPLOYMENT.md`
+  - `README.md`
+  - `docs/TASKS.md`
+- 描述：
+  - 提供 PostgreSQL 16 + Redis 7 的 docker-compose 配置。
+  - 提供后端本地环境变量示例文件。
+  - 编写本地部署文档，包含启动、停止、清理、端口映射、默认账号。
+  - 更新 README 指向部署文档。
+- 验收标准：
+  - `docker compose up -d` 可正常启动 PostgreSQL 和 Redis。
+  - `backend/.env.example` 中的配置与 docker-compose 一致。
+  - `docs/DEPLOYMENT.md` 包含完整的本地开发流程。
+- 风险等级：低
+
 ## Phase 0：项目初始化
 
 ### TASK-DOC-001：建立项目基础文档
