@@ -168,7 +168,7 @@ blocked
 
 ### TASK-BE-102：实现同步 API
 
-- 状态：todo
+- 状态：review
 - 推荐负责人：Claude
 - 影响文件：
   - `backend/src/main/**/sync/**`
