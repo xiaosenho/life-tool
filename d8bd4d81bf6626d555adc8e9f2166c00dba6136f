@@ -1,0 +1,29 @@
+backend/src/main/java/com/lifetool/ledger/LedgerBudgetStore.java
+  359f6e9595599ada 1-45
+backend/src/main/java/com/lifetool/ledger/LedgerBudget.java
+  359f6e9595599ada 1-3,5-7,9-17,19-23,25-29,38-95
+backend/src/main/java/com/lifetool/ledger/LedgerTransactionStore.java
+  359f6e9595599ada 1-63
+backend/src/main/java/com/lifetool/ledger/LedgerTransaction.java
+  359f6e9595599ada 1-132
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.14",
+  "base_commit_sha": "d8bd4d81bf6626d555adc8e9f2166c00dba6136f",
+  "prompts": {
+    "359f6e9595599ada": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "92fc8389-18dd-4390-b05b-8cde3ab72605",
+        "model": "glm-5"
+      },
+      "human_author": "zhouxiaojie <i_zhouxiaojie@cvte.com>",
+      "messages": [],
+      "total_additions": 323,
+      "total_deletions": 0,
+      "accepted_lines": 323,
+      "overriden_lines": 0
+    }
+  }
+}
