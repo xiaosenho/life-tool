@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { Stack, useRouter, useSegments } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useAuthStore } from "@/store/authStore";
+import { initDatabase } from "@/db/database";
 
 export default function RootLayout() {
   const { isAuthenticated, isLoading, setLoading } = useAuthStore();
@@ -9,6 +10,9 @@ export default function RootLayout() {
   const router = useRouter();
 
   useEffect(() => {
+    // Initialize database
+    initDatabase().catch(console.error);
+
     // Simulate initial auth check
     setTimeout(() => {
       setLoading(false);

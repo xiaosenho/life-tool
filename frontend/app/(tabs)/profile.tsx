@@ -1,12 +1,43 @@
-import { View, TouchableOpacity, Text, StyleSheet } from "react-native";
+import { useState, useEffect } from "react";
+import { View, TouchableOpacity, Text, StyleSheet, ActivityIndicator, Alert } from "react-native";
 import { MetricCard } from "@/components/MetricCard";
 import { Screen } from "@/components/Screen";
 import { useAuthStore } from "@/store/authStore";
 import { colors } from "@/theme/colors";
 import { authService } from "@/services/authService";
+import { syncService } from "@/services/syncService";
+import { syncStateRepository } from "@/db/syncStateRepository";
 
 export default function ProfileScreen() {
   const { user, clearAuth } = useAuthStore();
+  const [lastSync, setLastSync] = useState<string | null>(null);
+  const [isSyncing, setIsSyncing] = useState(false);
+
+  useEffect(() => {
+    loadSyncStatus();
+  }, []);
+
+  const loadSyncStatus = async () => {
+    const time = await syncStateRepository.getValue('last_sync_time');
+    setLastSync(time ? new Date(time).toLocaleString() : '从未同步');
+  };
+
+  const handleSync = async () => {
+    setIsSyncing(true);
+    try {
+      const success = await syncService.runSync();
+      if (success) {
+        Alert.alert("成功", "数据同步完成");
+        await loadSyncStatus();
+      } else {
+        Alert.alert("错误", "同步失败，请稍后再试");
+      }
+    } catch (error) {
+      Alert.alert("错误", "同步过程发生异常");
+    } finally {
+      setIsSyncing(false);
+    }
+  };
 
   const handleLogout = async () => {
     try {
@@ -32,6 +63,24 @@ export default function ProfileScreen() {
         />
         <MetricCard label="隐私" value="默认私密" accent="green" />
 
+        <View style={styles.syncSection}>
+          <View style={styles.syncInfo}>
+            <Text style={styles.syncLabel}>上次同步：</Text>
+            <Text style={styles.syncValue}>{lastSync}</Text>
+          </View>
+          <TouchableOpacity
+            style={[styles.syncButton, isSyncing && styles.disabledButton]}
+            onPress={handleSync}
+            disabled={isSyncing}
+          >
+            {isSyncing ? (
+              <ActivityIndicator size="small" color={colors.accent} />
+            ) : (
+              <Text style={styles.syncButtonText}>立即同步</Text>
+            )}
+          </TouchableOpacity>
+        </View>
+
         <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
           <Text style={styles.logoutText}>退出登录</Text>
         </TouchableOpacity>
@@ -41,6 +90,42 @@ export default function ProfileScreen() {
 }
 
 const styles = StyleSheet.create({
+  syncSection: {
+    backgroundColor: colors.surface,
+    borderRadius: 12,
+    padding: 16,
+    marginTop: 12,
+  },
+  syncInfo: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  syncLabel: {
+    fontSize: 14,
+    color: colors.muted,
+  },
+  syncValue: {
+    fontSize: 14,
+    color: colors.text,
+    fontWeight: '500',
+  },
+  syncButton: {
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.accent,
+    borderRadius: 8,
+    padding: 10,
+    alignItems: 'center',
+  },
+  disabledButton: {
+    opacity: 0.5,
+  },
+  syncButtonText: {
+    color: colors.accent,
+    fontSize: 14,
+    fontWeight: '600',
+  },
   logoutButton: {
     marginTop: 24,
     backgroundColor: colors.surface,
