@@ -7,6 +7,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import com.lifetool.common.ApiResponse;
+import com.lifetool.friends.FriendException;
 import com.lifetool.media.MediaException;
 
 @RestControllerAdvice
@@ -30,6 +31,17 @@ public class GlobalExceptionHandler {
             case "FORBIDDEN" -> HttpStatus.FORBIDDEN;
             case "FILE_TOO_LARGE" -> HttpStatus.PAYLOAD_TOO_LARGE;
             case "UNSUPPORTED_MEDIA_TYPE" -> HttpStatus.UNSUPPORTED_MEDIA_TYPE;
+            default -> HttpStatus.BAD_REQUEST;
+        };
+        return ResponseEntity.status(status).body(ApiResponse.fail(ex.getCode(), ex.getMessage()));
+    }
+
+    @ExceptionHandler(FriendException.class)
+    public ResponseEntity<ApiResponse<Void>> handleFriend(FriendException ex) {
+        HttpStatus status = switch (ex.getCode()) {
+            case "NOT_FOUND" -> HttpStatus.NOT_FOUND;
+            case "FORBIDDEN" -> HttpStatus.FORBIDDEN;
+            case "CONFLICT" -> HttpStatus.CONFLICT;
             default -> HttpStatus.BAD_REQUEST;
         };
         return ResponseEntity.status(status).body(ApiResponse.fail(ex.getCode(), ex.getMessage()));
