@@ -1,0 +1,65 @@
+backend/src/main/java/com/lifetool/leaderboards/dto/LeaderboardEntryDto.java
+  e375d1ca23d8ee91 1-10
+backend/src/main/java/com/lifetool/leaderboards/LeaderboardException.java
+  e375d1ca23d8ee91 1-15
+backend/src/main/java/com/lifetool/leaderboards/LeaderboardService.java
+  e375d1ca23d8ee91 1-51
+backend/src/main/java/com/lifetool/auth/GlobalExceptionHandler.java
+  2ad0bcc58be6e851 1-9,13-27,59-67
+  8b92ee23b3105787 12,28-34
+  e375d1ca23d8ee91 11,35-45,51-58
+backend/src/main/java/com/lifetool/leaderboards/LeaderboardStatsStore.java
+  e375d1ca23d8ee91 1-54
+backend/src/main/java/com/lifetool/leaderboards/LeaderboardController.java
+  e375d1ca23d8ee91 1-53
+backend/src/main/java/com/lifetool/leaderboards/dto/LeaderboardResponse.java
+  e375d1ca23d8ee91 1-10
+backend/src/test/java/com/lifetool/leaderboards/LeaderboardControllerTest.java
+  e375d1ca23d8ee91 1-135
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.14",
+  "base_commit_sha": "c05474ddd9995aca4a7c95db0190bc0e533cba4b",
+  "prompts": {
+    "2ad0bcc58be6e851": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1bda689e-2b53-4a5e-b59e-2ee3cbdf2a12",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "zhouxiaojie <i_zhouxiaojie@cvte.com>",
+      "messages": [],
+      "total_additions": 683,
+      "total_deletions": 3,
+      "accepted_lines": 33,
+      "overriden_lines": 0
+    },
+    "8b92ee23b3105787": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "db168053-c915-4cc6-9650-d3db205d5f46",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "zhouxiaojie <i_zhouxiaojie@cvte.com>",
+      "messages": [],
+      "total_additions": 702,
+      "total_deletions": 1,
+      "accepted_lines": 8,
+      "overriden_lines": 0
+    },
+    "e375d1ca23d8ee91": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_1df423289ffe1rNatjZwUv1qt6",
+        "model": "deepseek/deepseek-chat"
+      },
+      "human_author": "zhouxiaojie <i_zhouxiaojie@cvte.com>",
+      "messages": [],
+      "total_additions": 337,
+      "total_deletions": 0,
+      "accepted_lines": 348,
+      "overriden_lines": 0
+    }
+  }
+}
