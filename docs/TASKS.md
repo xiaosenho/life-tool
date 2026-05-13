@@ -471,7 +471,7 @@ blocked
 
 ### TASK-BE-109：实现纪念日与重要事件接口
 
-- 状态：todo
+- 状态：done
 - 推荐负责人：Claude
 - 影响文件：
   - `backend/src/main/**/events/**`
@@ -490,7 +490,7 @@ blocked
 
 ### TASK-FE-109：实现纪念日页面与提醒
 
-- 状态：todo
+- 状态：done
 - 推荐负责人：Gemini
 - 影响文件：
   - `frontend/app/(tabs)/records.tsx`
