@@ -8,6 +8,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import com.lifetool.common.ApiResponse;
 import com.lifetool.friends.FriendException;
+import com.lifetool.leaderboards.LeaderboardException;
 import com.lifetool.media.MediaException;
 
 @RestControllerAdvice
@@ -42,6 +43,14 @@ public class GlobalExceptionHandler {
             case "NOT_FOUND" -> HttpStatus.NOT_FOUND;
             case "FORBIDDEN" -> HttpStatus.FORBIDDEN;
             case "CONFLICT" -> HttpStatus.CONFLICT;
+            default -> HttpStatus.BAD_REQUEST;
+        };
+        return ResponseEntity.status(status).body(ApiResponse.fail(ex.getCode(), ex.getMessage()));
+    }
+
+    @ExceptionHandler(LeaderboardException.class)
+    public ResponseEntity<ApiResponse<Void>> handleLeaderboard(LeaderboardException ex) {
+        HttpStatus status = switch (ex.getCode()) {
             default -> HttpStatus.BAD_REQUEST;
         };
         return ResponseEntity.status(status).body(ApiResponse.fail(ex.getCode(), ex.getMessage()));
