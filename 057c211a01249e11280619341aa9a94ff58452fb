@@ -1,0 +1,29 @@
+README.md
+  49eedd9c3a5b7ea2 54
+docs/TASKS.md
+  49eedd9c3a5b7ea2 223
+backend/.env.example
+  49eedd9c3a5b7ea2 36-41,44-47,50-54
+docs/DEPLOYMENT.md
+  49eedd9c3a5b7ea2 320-332,334-399,402-405,409-416,418-423,425-426,428-464
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.14",
+  "base_commit_sha": "057c211a01249e11280619341aa9a94ff58452fb",
+  "prompts": {
+    "49eedd9c3a5b7ea2": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_1df6da69affe15pVipGHgUMf3f",
+        "model": "deepseek/deepseek-chat"
+      },
+      "human_author": "zhouxiaojie <i_zhouxiaojie@cvte.com>",
+      "messages": [],
+      "total_additions": 165,
+      "total_deletions": 1,
+      "accepted_lines": 153,
+      "overriden_lines": 13
+    }
+  }
+}
