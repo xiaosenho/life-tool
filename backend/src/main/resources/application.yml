@@ -9,12 +9,3 @@ jwt:
   secret: Y2hhbmdlLXRoaXMtaW4tcHJvZHVjdGlvbi10by1hLXJlYWwtc2VjcmV0LWtleS10aGF0LWlzLWF0LWxlYXN0LTI1Ni1iaXRz
   access-ttl-ms: 900000
   refresh-ttl-ms: 604800000
-
-ai:
-  mock-enabled: false
-  doubao:
-    api-key: "cc6233d1-0886-4750-970a-cead2f04c3e1"
-    base-url: https://ark.cn-beijing.volces.com/api/v3
-    vision-model: doubao-seed-2-0-mini-260428
-    chat-model: doubao-seed-2-0-mini-260428
-    max-tokens: 2048

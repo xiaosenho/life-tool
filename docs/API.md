@@ -234,207 +234,7 @@ GET /api/leaderboards/streaks
 }
 ```
 
-## 8. Focus Preferences
-
-专注偏好用于保存用户默认专注时长。单次专注记录仍通过同步模型中的 `focus_session` 上传。
-
-```text
-GET   /api/focus/preferences
-PATCH /api/focus/preferences
-```
-
-### GET /api/focus/preferences
-
-响应：
-
-```json
-{
-  "defaultFocusMinutes": 25,
-  "shortBreakMinutes": 5,
-  "longBreakMinutes": 15,
-  "autoStartBreak": false,
-  "updatedAt": "2026-05-13T12:00:00Z"
-}
-```
-
-### PATCH /api/focus/preferences
-
-请求：
-
-```json
-{
-  "defaultFocusMinutes": 45,
-  "shortBreakMinutes": 5,
-  "longBreakMinutes": 15,
-  "autoStartBreak": false
-}
-```
-
-校验规则：
-
-- `defaultFocusMinutes` 范围：1 到 180。
-- `shortBreakMinutes`、`longBreakMinutes` 范围：0 到 60。
-- 客户端可离线保存偏好，联网后通过同步队列或该接口上传。
-
-## 9. Ledger
-
-```text
-GET    /api/ledger/transactions?month=2026-05
-POST   /api/ledger/transactions
-PATCH  /api/ledger/transactions/{id}
-DELETE /api/ledger/transactions/{id}
-GET    /api/ledger/summary?month=2026-05
-GET    /api/ledger/budgets?month=2026-05
-PUT    /api/ledger/budgets/{month}
-```
-
-### POST /api/ledger/transactions
-
-请求：
-
-```json
-{
-  "type": "expense",
-  "amount": 36.5,
-  "currency": "CNY",
-  "category": "餐饮",
-  "account": "微信",
-  "occurredAt": "2026-05-13T12:00:00Z",
-  "note": "午餐",
-  "mediaAssetId": "uuid"
-}
-```
-
-响应（201）：
-
-```json
-{
-  "id": "uuid",
-  "type": "expense",
-  "amount": 36.5,
-  "currency": "CNY",
-  "category": "餐饮",
-  "account": "微信",
-  "occurredAt": "2026-05-13T12:00:00Z",
-  "note": "午餐",
-  "mediaAssetId": "uuid",
-  "createdAt": "2026-05-13T12:00:00Z"
-}
-```
-
-流水类型：
-
-```text
-income
-expense
-transfer
-```
-
-### GET /api/ledger/summary
-
-响应：
-
-```json
-{
-  "month": "2026-05",
-  "income": 12000,
-  "expense": 3200.5,
-  "balance": 8799.5,
-  "budget": 5000,
-  "categoryExpenses": [
-    {
-      "category": "餐饮",
-      "amount": 980.5
-    }
-  ]
-}
-```
-
-### PUT /api/ledger/budgets/{month}
-
-请求：
-
-```json
-{
-  "amount": 5000,
-  "currency": "CNY",
-  "category": null
-}
-```
-
-说明：
-
-- `category` 为 `null` 表示整月总预算。
-- 指定 `category` 表示分类预算。
-- 记账数据默认私密，不进入好友汇总。
-
-## 10. Anniversaries And Events
-
-```text
-GET    /api/events?from=2026-05-01&to=2026-06-30
-POST   /api/events
-PATCH  /api/events/{id}
-DELETE /api/events/{id}
-GET    /api/events/upcoming?days=30
-```
-
-### POST /api/events
-
-请求：
-
-```json
-{
-  "type": "anniversary",
-  "title": "结婚纪念日",
-  "eventDate": "2026-10-01",
-  "repeatRule": "yearly",
-  "remindDaysBefore": [30, 7, 1],
-  "note": "提前准备礼物",
-  "mediaAssetId": "uuid"
-}
-```
-
-响应（201）：
-
-```json
-{
-  "id": "uuid",
-  "type": "anniversary",
-  "title": "结婚纪念日",
-  "eventDate": "2026-10-01",
-  "repeatRule": "yearly",
-  "remindDaysBefore": [30, 7, 1],
-  "daysUntil": 141,
-  "nextOccurrenceDate": "2026-10-01",
-  "note": "提前准备礼物",
-  "mediaAssetId": "uuid"
-}
-```
-
-事件类型：
-
-```text
-anniversary
-birthday
-important_day
-todo_reminder
-```
-
-重复规则：
-
-```text
-none
-yearly
-monthly
-weekly
-```
-
-说明：
-
-- 纪念日和重要事件默认私密。
-- 客户端负责本地通知调度，服务端保存提醒规则用于多设备恢复。
-
-## 11. Media
+## 8. Media
 
 ```text
 POST /api/media/upload-token
@@ -553,35 +353,19 @@ DELETE /api/media/assets/{id}
 | --- | --- | --- |
 | COS_REGION | COS 地域 | ap-guangzhou |
 | COS_BUCKET | COS 存储桶 | life-tool-media |
-| COS_SECRET_ID | 腾讯云子账号 SecretId | 空 |
-| COS_SECRET_KEY | 腾讯云子账号 SecretKey | 空 |
 | COS_PUBLIC_BASE_URL | COS 公网访问地址，留空则返回 mock URL | 空 |
 | COS_UPLOAD_TOKEN_TTL_SECONDS | 上传授权有效期（秒） | 300 |
 | MEDIA_MAX_IMAGE_BYTES | 最大图片大小（字节） | 10485760 |
 
-## 12. AI
-
-AI 能力基于**豆包（Doubao）**大模型，通过火山引擎 Ark API 调用。支持图片识别（饮食热量）、生活建议、多轮对话。
-
-默认启用 Mock 模式（`ai.mock-enabled=true`），无需 API Key 即可开发测试。生产环境需配置以下环境变量：
-
-```text
-AI_DOUBAO_API_KEY=your-ark-api-key
-AI_DOUBAO_BASE_URL=https://ark.cn-beijing.volces.com/api/v3
-AI_DOUBAO_VISION_MODEL=doubao-1-5-vision-pro-32k
-AI_DOUBAO_CHAT_MODEL=doubao-1-5-pro-256k
-AI_MOCK_ENABLED=false
-```
+## 9. AI
 
 ```text
 POST /api/ai/food-recognition/jobs
 GET  /api/ai/food-recognition/jobs/{id}
 POST /api/ai/life-advice
 POST /api/ai/chat/sessions
-GET  /api/ai/chat/sessions
 POST /api/ai/chat/sessions/{id}/messages
 GET  /api/ai/chat/sessions/{id}/messages
-DELETE /api/ai/chat/sessions/{id}
 ```
 
 ### POST /api/ai/food-recognition/jobs
@@ -590,11 +374,13 @@ DELETE /api/ai/chat/sessions/{id}
 
 ```json
 {
-  "mediaAssetId": "uuid"
+  "mediaAssetId": "uuid",
+  "mealType": "lunch",
+  "occurredAt": "2026-05-13T12:00:00Z"
 }
 ```
 
-响应（201）：
+响应：
 
 ```json
 {
@@ -626,8 +412,6 @@ DELETE /api/ai/chat/sessions/{id}
 }
 ```
 
-识别完成后 status 为 `succeeded` 或 `failed`。
-
 ### POST /api/ai/life-advice
 
 请求：
@@ -652,87 +436,7 @@ DELETE /api/ai/chat/sessions/{id}
 }
 ```
 
-### POST /api/ai/chat/sessions
-
-请求：
-
-```json
-{
-  "title": "生活咨询"
-}
-```
-
-响应（201）：
-
-```json
-{
-  "id": "uuid",
-  "userId": "uuid",
-  "title": "生活咨询",
-  "createdAt": "2026-05-13T12:00:00Z",
-  "updatedAt": "2026-05-13T12:00:00Z"
-}
-```
-
-### GET /api/ai/chat/sessions
-
-响应：
-
-```json
-[
-  {
-    "id": "uuid",
-    "userId": "uuid",
-    "title": "生活咨询",
-    "createdAt": "2026-05-13T12:00:00Z",
-    "updatedAt": "2026-05-13T12:00:00Z"
-  }
-]
-```
-
-### POST /api/ai/chat/sessions/{id}/messages
-
-请求：
-
-```json
-{
-  "content": "我今天感觉有点累，有什么建议吗？"
-}
-```
-
-响应：
-
-```json
-{
-  "id": "uuid",
-  "sessionId": "uuid",
-  "role": "assistant",
-  "content": "建议你适当休息，可以尝试...",
-  "createdAt": "2026-05-13T12:00:00Z"
-}
-```
-
-### GET /api/ai/chat/sessions/{id}/messages
-
-响应：
-
-```json
-[
-  {
-    "id": "uuid",
-    "sessionId": "uuid",
-    "role": "user",
-    "content": "我今天感觉有点累",
-    "createdAt": "2026-05-13T12:00:00Z"
-  }
-]
-```
-
-### DELETE /api/ai/chat/sessions/{id}
-
-删除对话及其所有消息。
-
-## 13. 错误码
+## 10. 错误码
 
 | code | 含义 |
 | --- | --- |
