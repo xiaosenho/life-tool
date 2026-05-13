@@ -431,7 +431,7 @@ blocked
 
 ### TASK-BE-108：实现记账接口与统计
 
-- 状态：todo
+- 状态：done
 - 推荐负责人：Claude
 - 影响文件：
   - `backend/src/main/**/ledger/**`
@@ -450,7 +450,7 @@ blocked
 
 ### TASK-FE-108：实现记账页面与本地同步
 
-- 状态：todo
+- 状态：done
 - 推荐负责人：Gemini
 - 影响文件：
   - `frontend/app/(tabs)/records.tsx`
