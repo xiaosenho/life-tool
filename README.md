@@ -48,4 +48,7 @@
 - 已记录本地 Claude / Gemini / DeepSeek CLI 调度规范。
 - 已初始化后端和前端工程代码。
 - 已提供本地 Docker 基础设施（PostgreSQL + Redis）。
+- 已支持阿里云 ECS 生产部署，含安全组配置、Docker 安装、反向代理、备份、日志管理。
+- docker-compose.yml 中 PostgreSQL/Redis 端口绑定 127.0.0.1，默认不对公网开放。
+- 敏感配置（数据库密码、JWT 密钥）通过 .env 文件注入，不硬编码在 compose 中。
 - 部署方式见 [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)。
