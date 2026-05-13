@@ -51,4 +51,5 @@
 - 已支持阿里云 ECS 生产部署，含安全组配置、Docker 安装、反向代理、备份、日志管理。
 - docker-compose.yml 中 PostgreSQL/Redis 端口绑定 127.0.0.1，默认不对公网开放。
 - 敏感配置（数据库密码、JWT 密钥）通过 .env 文件注入，不硬编码在 compose 中。
+- COS（腾讯云对象存储）配置说明见 [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md#腾讯云-cos-媒体存储配置)。
 - 部署方式见 [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)。

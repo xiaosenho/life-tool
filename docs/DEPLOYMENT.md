@@ -317,6 +317,151 @@ docker compose ps
 curl http://localhost:8080/api/health
 ```
 
+---
+
+# 腾讯云 COS 媒体存储配置
+
+本应用使用腾讯云 COS（Cloud Object Storage）作为媒体存储后端，主要用于存储用户上传的饮食图片。
+
+## 1. 创建 COS Bucket
+
+1. 登录 [腾讯云 COS 控制台](https://console.cloud.tencent.com/cos5)。
+2. 点击「创建存储桶」，配置如下：
+
+| 配置项 | 推荐值 |
+| --- | --- |
+| 名称 | `lifetool-media-{环境}`，如 `lifetool-media-prod`。腾讯云实际 bucket 会带 APPID 后缀，例如 `lifetool-media-prod-1234567890` |
+| 所属地域 | 选择距离用户最近的区域，如 `ap-guangzhou`（华南）、`ap-shanghai`（华东） |
+| 访问权限 | **私有读写**（私有读 + 私有写） |
+| 版本控制 | 建议关闭（减少存储成本） |
+
+3. 创建完成后，记录 Bucket 名称和所在区域。
+
+## 2. 配置 CORS
+
+出于安全考虑，必须为 Bucket 配置跨域访问规则，允许移动端客户端直传：
+
+进入 Bucket → 安全管理 → 跨域访问 CORS 设置 → 添加规则：
+
+```json
+[
+  {
+    "AllowedOrigin": ["*"],
+    "AllowedMethod": ["PUT", "POST", "HEAD"],
+    "AllowedHeader": ["*"],
+    "ExposeHeader": ["ETag", "x-cos-request-id"],
+    "MaxAgeSeconds": 3600
+  }
+]
+```
+
+> 注意：`AllowedOrigin` 设为 `*` 是因为移动端 App 没有固定域名来源。如果后续有固定 Web 端域名，可以替换为具体域名。
+
+## 3. 创建最小权限子账号
+
+不要使用主账号密钥，必须创建子账号并授予最小权限。
+
+1. 进入 [腾讯云访问管理（CAM）](https://console.cloud.tencent.com/cam)。
+2. 创建用户 → 新建自定义权限策略 → 选择 JSON 方式：
+
+```json
+{
+  "version": "2.0",
+  "statement": [
+    {
+      "effect": "allow",
+      "action": [
+        "cos:PutObject",
+        "cos:GetObject",
+        "cos:HeadObject",
+        "cos:DeleteObject",
+        "cos:PostObject"
+      ],
+      "resource": [
+        "qcs::cos:ap-guangzhou:uid/12345678:lifetool-media-prod-12345678/*"
+      ]
+    }
+  ]
+}
+```
+
+> `resource` 中的 `ap-guangzhou` 替换为你的 Bucket 地域，`12345678` 替换为你的腾讯云 APPID（可在「账号信息」中查看），`lifetool-media-prod-12345678` 为 Bucket 完整域名（含 appid）。
+
+3. 将该策略关联到新建的子账号。
+4. 生成子账号的 **SecretId** 和 **SecretKey**，由后端持有。
+
+## 4. 环境变量配置
+
+在 `backend/.env` 添加以下配置：
+
+```bash
+# COS 地域，与 Bucket 创建时选择的地域一致
+COS_REGION=ap-guangzhou
+# Bucket 完整名称，通常包含 APPID 后缀
+COS_BUCKET=lifetool-media-prod-1234567890
+# 子账号 SecretId
+COS_SECRET_ID=your-secret-id
+# 子账号 SecretKey
+COS_SECRET_KEY=your-secret-key
+# CDN 加速域名或 COS 源站域名，后端据此生成对象地址
+# 私有 bucket 不应直接公网读，后续可改为后端签发短有效期下载 URL
+COS_PUBLIC_BASE_URL=https://lifetool-media-prod-1234567890.cos.ap-guangzhou.myqcloud.com
+# 上传授权临时令牌有效期（秒），建议 300（5 分钟）
+COS_UPLOAD_TOKEN_TTL_SECONDS=300
+# 单张图片最大字节数（默认 10MB）
+MEDIA_MAX_IMAGE_BYTES=10485760
+```
+
+## 5. 在阿里云 ECS 上注入 COS 配置
+
+在阿里云 ECS 服务器上，COS 配置直接追加到已有的 `backend/.env` 文件中：
+
+```bash
+cat >> /opt/lifetool/backend/.env << 'EOF'
+
+# COS
+COS_REGION=ap-guangzhou
+COS_BUCKET=lifetool-media-prod-1234567890
+COS_SECRET_ID=<子账号 SecretId>
+COS_SECRET_KEY=<子账号 SecretKey>
+COS_PUBLIC_BASE_URL=https://lifetool-media-prod-1234567890.cos.ap-guangzhou.myqcloud.com
+COS_UPLOAD_TOKEN_TTL_SECONDS=300
+MEDIA_MAX_IMAGE_BYTES=10485760
+EOF
+chmod 600 /opt/lifetool/backend/.env
+```
+
+然后重新启动后端使配置生效：
+
+```bash
+sudo systemctl restart lifetool-backend
+# 或如果后端直接运行在 Maven 进程中：
+cd /opt/lifetool/backend && pkill -f "spring-boot:run" && set -a && source .env && set +a && nohup mvn spring-boot:run > /tmp/lifetool.log 2>&1 &
+```
+
+## 6. 安全注意事项
+
+| 项目 | 建议 |
+| --- | --- |
+| 密钥管理 | COS_SECRET_ID / COS_SECRET_KEY 是敏感凭据，**必须**通过 `.env` 文件注入，**不得**硬编码在代码或提交到 Git |
+| 子账号隔离 | 生产环境和开发环境使用不同的 Bucket 和不同的子账号密钥 |
+| 客户端授权 | **客户端不得持有长期密钥**。客户端通过 `POST /api/media/upload-token` 获取临时、短有效期、绑定当前登录用户的上传授权（STS 临时密钥或预签名 URL） |
+| 上传限制 | 后端签发上传授权时验证文件类型和大小，只允许 `image/jpeg`、`image/png`、`image/webp`，默认不超过 10MB |
+| 最小权限 | CAM 策略只允许对指定 Bucket 下的文件进行 Put、Get、Head、Delete、Post 操作，不允许 ListAllMyBuckets 等管理操作 |
+| HTTPS | COS 默认支持 HTTPS，与 CDN 配合时确保回源和访问链路均为 HTTPS |
+| 对象生命周期 | 建议配置存储桶生命周期规则，自动清理未确认的临时文件或多天前的无效碎片 |
+| 日志审计 | 开启 COS 日志记录或通过云审计追踪密钥调用记录 |
+
+## 7. 当前支持的文件类型和限制
+
+| 项 | 值 |
+| --- | --- |
+| 允许的 MIME 类型 | `image/jpeg`、`image/png`、`image/webp` |
+| 单文件大小上限 | 10 MB（可通过 `MEDIA_MAX_IMAGE_BYTES` 调整） |
+| 上传授权有效期 | 300 秒（5 分钟，可通过 `COS_UPLOAD_TOKEN_TTL_SECONDS` 调整） |
+
+> 客户端上传流程：客户端调用 `POST /api/media/upload-token` 获取短有效期上传凭证 → 客户端直传 COS → 上传完成后调用 `POST /api/media/assets` 创建媒体资产记录 → 后端记录文件元数据并关联当前用户。
+
 ## 8. 安全注意事项
 
 | 项目 | 建议 |

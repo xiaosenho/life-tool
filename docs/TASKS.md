@@ -220,7 +220,7 @@ blocked
 
 ### TASK-INFRA-003：配置腾讯云 COS 媒体存储
 
-- 状态：todo
+- 状态：review
 - 推荐负责人：DeepSeek
 - 影响文件：
   - `docs/DEPLOYMENT.md`
