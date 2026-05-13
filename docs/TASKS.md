@@ -211,7 +211,7 @@ blocked
 
 ### TASK-BE-103：实现好友与排行榜
 
-- 状态：todo
+- 状态：done
 - 推荐负责人：Claude
 - 影响文件：
   - `backend/src/main/**/friends/**`
@@ -223,7 +223,7 @@ blocked
 
 ### TASK-FE-103：实现专注和习惯 MVP
 
-- 状态：todo
+- 状态：done
 - 推荐负责人：Gemini
 - 影响文件：
   - `frontend/**/focus/**`
