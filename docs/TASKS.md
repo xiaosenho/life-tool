@@ -157,7 +157,7 @@ blocked
 
 ### TASK-FE-102：实现本地 SQLite 与同步队列
 
-- 状态：todo
+- 状态：review
 - 推荐负责人：Gemini
 - 影响文件：
   - `frontend/**/db/**`

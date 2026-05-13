@@ -1,4 +1,5 @@
 import { API_BASE_URL } from "@/constants/config";
+import { useAuthStore } from "@/store/authStore";
 
 export interface ApiResponse<T> {
   success: boolean;
@@ -15,9 +16,12 @@ export const apiClient = {
     options: RequestInit = {}
   ): Promise<ApiResponse<T>> {
     const url = `${API_BASE_URL}${endpoint}`;
+
+    const token = useAuthStore.getState().token;
     
     const headers = {
       "Content-Type": "application/json",
+      ...(token ? { "Authorization": `Bearer ${token}` } : {}),
       ...(options.headers || {}),
     };
 
