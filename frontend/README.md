@@ -1,18 +1,24 @@
 # Frontend
 
-移动端 App 目录。
+LifeTool 手机端 App，基于 Expo、React Native、TypeScript 和 Expo Router。
 
-推荐技术栈：
+## 当前能力
 
-- React Native
-- Expo
-- TypeScript
-- expo-router
-- expo-sqlite
-- Zustand
-- TanStack Query
+- 五个底部 Tab：今日、专注、记录、好友、我的。
+- 基础移动端布局和指标卡片。
+- TypeScript 检查脚本。
 
-职责：
+## 本地命令
+
+```bash
+npm install
+npm run typecheck
+npm run start
+```
+
+## 模块边界
+
+前端职责：
 
 - 手机端主要交互体验
 - 本地 SQLite 数据存储

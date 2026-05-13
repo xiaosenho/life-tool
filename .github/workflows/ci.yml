@@ -53,9 +53,9 @@ jobs:
       - name: Check frontend
         run: |
           if [ -f "package.json" ]; then
-            pnpm install --frozen-lockfile
-            pnpm lint
-            pnpm build
+            npm ci
+            npm run lint
+            npm run build
           else
             echo "frontend/package.json not found, skip frontend checks."
           fi

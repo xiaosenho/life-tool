@@ -1,0 +1,27 @@
+{
+  "expo": {
+    "name": "LifeTool",
+    "slug": "life-tool",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "scheme": "lifetool",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "plugins": [
+      "expo-router"
+    ],
+    "ios": {
+      "supportsTablet": false
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#0F172A"
+      },
+      "edgeToEdgeEnabled": true
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "single"
+    }
+  }
+}

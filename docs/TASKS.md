@@ -51,7 +51,7 @@ blocked
 
 ### TASK-BE-001：初始化 Spring Boot 后端工程
 
-- 状态：todo
+- 状态：done
 - 推荐负责人：Claude
 - 影响文件：
   - `backend/**`
@@ -67,7 +67,7 @@ blocked
 
 ### TASK-FE-001：初始化 Expo 移动端工程
 
-- 状态：todo
+- 状态：done
 - 推荐负责人：Gemini
 - 影响文件：
   - `frontend/**`
@@ -83,7 +83,7 @@ blocked
 
 ### TASK-CI-001：完善 CI 工作流
 
-- 状态：todo
+- 状态：done
 - 推荐负责人：Codex
 - 影响文件：
   - `.github/workflows/ci.yml`

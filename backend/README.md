@@ -1,16 +1,24 @@
 # Backend
 
-服务端目录。
+LifeTool 服务端，基于 Java 21、Spring Boot 和 Maven。
 
-推荐技术栈：
+## 当前能力
 
-- Java
-- Spring Boot
-- PostgreSQL
-- Redis
-- Maven
+- `GET /api/health`：健康检查接口。
+- 基础 Web MVC 测试。
 
-职责：
+## 本地命令
+
+```bash
+mvn test
+mvn spring-boot:run
+```
+
+本工程使用 `backend/.mvn/settings.xml` 覆盖全局 Maven settings，避免本项目依赖解析默认走公司私有仓库。
+
+## 模块边界
+
+服务端职责：
 
 - 用户认证与授权
 - 数据同步 API
