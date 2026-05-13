@@ -1,0 +1,43 @@
+frontend/package.json
+  bd0f60861f9a95fa 23-24
+frontend/app/(auth)/_layout.tsx
+  bd0f60861f9a95fa 1-5
+frontend/app/(auth)/login.tsx
+  bd0f60861f9a95fa 1-185
+frontend/src/store/authStore.ts
+  bd0f60861f9a95fa 1-22
+frontend/app/(tabs)/profile.tsx
+  bd0f60861f9a95fa 1,4-6,9-19,23-32,35-37,42-58
+frontend/app/(auth)/register.tsx
+  bd0f60861f9a95fa 1-190
+frontend/app/_layout.tsx
+  bd0f60861f9a95fa 1-2,4,7-31,34-37
+frontend/src/services/authService.ts
+  bd0f60861f9a95fa 1-99
+frontend/src/services/apiClient.ts
+  bd0f60861f9a95fa 1-83
+frontend/src/theme/colors.ts
+  bd0f60861f9a95fa 7-8
+frontend/app/(tabs)/index.tsx
+  bd0f60861f9a95fa 4,7-8,14-18
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.14",
+  "base_commit_sha": "a0a20ac4403cd14ce05b27b21902eef2c4a77acd",
+  "prompts": {
+    "bd0f60861f9a95fa": {
+      "agent_id": {
+        "tool": "gemini",
+        "id": "d224dbdd-4047-47c5-a87b-3353c0576a62",
+        "model": "unknown"
+      },
+      "human_author": "zhouxiaojie <i_zhouxiaojie@cvte.com>",
+      "messages": [],
+      "total_additions": 674,
+      "total_deletions": 9,
+      "accepted_lines": 673,
+      "overriden_lines": 0
+    }
+  }
+}
