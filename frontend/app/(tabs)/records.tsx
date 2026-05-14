@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
   StyleSheet,
   Text,
@@ -8,6 +9,7 @@ import {
   View,
 } from "react-native";
 import { useRouter } from "expo-router";
+import { useFocusEffect } from "@react-navigation/core";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 
 import { MetricCard } from "@/components/MetricCard";
@@ -23,7 +25,10 @@ import {
   EventType,
   RepeatRule,
 } from "@/services/eventService";
+import { MealSummary, mealService } from "@/services/mealService";
 import { colors } from "@/theme/colors";
+import { DateInput } from "@/components/DateInput";
+import { DayChipSelector } from "@/components/DayChipSelector";
 
 const CATEGORIES = ["餐饮", "交通", "购物", "住房", "娱乐", "医疗", "工资", "其他"];
 const EVENT_TYPES: { value: EventType; label: string }[] = [
@@ -67,9 +72,11 @@ export default function RecordsScreen() {
   const [eventTitle, setEventTitle] = useState("");
   const [eventDate, setEventDate] = useState(today());
   const [repeatRule, setRepeatRule] = useState<RepeatRule>("yearly");
-  const [remindDays, setRemindDays] = useState("7,1");
+  const [remindDays, setRemindDays] = useState<number[]>([7, 1]);
   const [eventNote, setEventNote] = useState("");
   const [upcomingEvents, setUpcomingEvents] = useState<AnniversaryEvent[]>([]);
+  const [dietSummary, setDietSummary] = useState<MealSummary | null>(null);
+  const [dietLoading, setDietLoading] = useState(false);
   const [summary, setSummary] = useState({
     income: 0,
     expense: 0,
@@ -82,6 +89,26 @@ export default function RecordsScreen() {
     if (summary.budget <= 0) return 0;
     return Math.min(summary.expense / summary.budget, 1);
   }, [summary.budget, summary.expense]);
+
+  const loadDiet = useCallback(async () => {
+    setDietLoading(true);
+    try {
+      const res = await mealService.getSummary();
+      if (res.success && res.data) {
+        setDietSummary(res.data);
+      }
+    } catch (error) {
+      console.warn("加载饮食数据失败", error);
+    } finally {
+      setDietLoading(false);
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      void loadDiet();
+    }, [loadDiet])
+  );
 
   useEffect(() => {
     loadLedger();
@@ -170,14 +197,6 @@ export default function RecordsScreen() {
     }
   };
 
-  const parseReminders = () => {
-    if (!remindDays.trim()) return [];
-    return remindDays
-      .split(",")
-      .map((item) => Number(item.trim()))
-      .filter((item) => Number.isFinite(item));
-  };
-
   const submitEvent = async () => {
     if (!eventTitle.trim()) {
       Alert.alert("提示", "请输入事件标题。");
@@ -194,7 +213,7 @@ export default function RecordsScreen() {
         title: eventTitle,
         eventDate,
         repeatRule,
-        remindDaysBefore: parseReminders(),
+        remindDaysBefore: remindDays,
         note: eventNote.trim() || null,
       });
       setEventTitle("");
@@ -218,7 +237,17 @@ export default function RecordsScreen() {
   return (
     <Screen title="记录">
       <View style={styles.section}>
-        <MetricCard label="饮食" value="0 千卡" accent="green" />
+        <MetricCard
+          label="饮食"
+          value={
+            dietLoading
+              ? "加载中..."
+              : dietSummary
+                ? `${dietSummary.todayTotalCalories ?? 0} 千卡`
+                : "0 千卡"
+          }
+          accent="green"
+        />
 
         <TouchableOpacity
           style={styles.uploadCard}
@@ -317,13 +346,9 @@ export default function RecordsScreen() {
               placeholder="账户"
               placeholderTextColor={colors.muted}
             />
-            <TextInput
-              style={[styles.input, styles.halfInput]}
-              value={occurredDate}
-              onChangeText={setOccurredDate}
-              placeholder="日期"
-              placeholderTextColor={colors.muted}
-            />
+            <View style={styles.halfInput}>
+              <DateInput value={occurredDate} onChange={setOccurredDate} />
+            </View>
           </View>
           <TextInput
             style={styles.input}
@@ -415,22 +440,10 @@ export default function RecordsScreen() {
             placeholder="标题"
             placeholderTextColor={colors.muted}
           />
-          <View style={styles.twoColumns}>
-            <TextInput
-              style={[styles.input, styles.halfInput]}
-              value={eventDate}
-              onChangeText={setEventDate}
-              placeholder="日期"
-              placeholderTextColor={colors.muted}
-            />
-            <TextInput
-              style={[styles.input, styles.halfInput]}
-              value={remindDays}
-              onChangeText={setRemindDays}
-              placeholder="提醒天数"
-              placeholderTextColor={colors.muted}
-            />
-          </View>
+          <DateInput value={eventDate} onChange={setEventDate} />
+
+          <DayChipSelector selected={remindDays} onChange={setRemindDays} />
+
           <View style={styles.categoryGrid}>
             {REPEAT_RULES.map((item) => (
               <TouchableOpacity
