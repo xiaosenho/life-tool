@@ -106,6 +106,7 @@ public class GlobalExceptionHandler {
         HttpStatus status = switch (ex.getCode()) {
             case "NOT_FOUND" -> HttpStatus.NOT_FOUND;
             case "FORBIDDEN" -> HttpStatus.FORBIDDEN;
+            case "AI_RECOGNITION_FAILED" -> HttpStatus.BAD_GATEWAY;
             default -> HttpStatus.BAD_REQUEST;
         };
         return ResponseEntity.status(status).body(ApiResponse.fail(ex.getCode(), ex.getMessage()));

@@ -36,16 +36,6 @@ public class JdbcSyncStore implements SyncStore {
         this.username = username;
         this.password = password;
         this.objectMapper = objectMapper;
-        ensureEntityIdIsText();
-    }
-
-    private void ensureEntityIdIsText() {
-        try (Connection conn = getConnection();
-             var stmt = conn.createStatement()) {
-            stmt.execute("ALTER TABLE sync_mutations ALTER COLUMN entity_id TYPE text");
-        } catch (SQLException ignored) {
-            // Column may already be text
-        }
     }
 
     @Override

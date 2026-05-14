@@ -26,13 +26,17 @@ public class FocusSessionService {
         if (!VALID_MODES.contains(mode)) {
             throw new FocusException("VALIDATION_ERROR", "Invalid mode: " + mode);
         }
+        int targetMinutes = request.targetMinutes();
+        if (targetMinutes < 1 || targetMinutes > 180) {
+            throw new FocusException("VALIDATION_ERROR", "targetMinutes must be between 1 and 180");
+        }
 
         FocusSession session = new FocusSession();
         session.setUserId(userId);
         session.setMode(mode);
-        session.setTargetSeconds(Math.max(0, request.targetMinutes()) * 60);
+        session.setTargetSeconds(targetMinutes * 60);
         session.setActualSeconds(0);
-        session.setStatus("completed");
+        session.setStatus("running");
         session.setStartedAt(Instant.now());
         session.setNote(blankToNull(request.note()));
 

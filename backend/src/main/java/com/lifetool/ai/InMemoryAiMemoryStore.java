@@ -22,7 +22,11 @@ public class InMemoryAiMemoryStore implements AiMemoryStore {
 
     @Override
     public Optional<AiMemoryItem> findById(String id) {
-        return Optional.ofNullable(memoriesById.get(id));
+        AiMemoryItem memory = memoriesById.get(id);
+        if (memory == null || memory.getDeletedAt() != null) {
+            return Optional.empty();
+        }
+        return Optional.of(memory);
     }
 
     @Override

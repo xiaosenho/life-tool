@@ -9,9 +9,15 @@ export interface UploadTokenResponse {
 
 export interface AssetResponse {
   id: string;
+  objectKey: string;
+  contentType: string;
   purpose: string;
+  fileSize: number;
+  width?: number;
+  height?: number;
   status: string;
   createdAt: string;
+  readUrl?: string;
 }
 
 export interface MediaAssetMetadata {

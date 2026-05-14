@@ -9,10 +9,12 @@ import { colors } from "@/theme/colors";
 import { authService } from "@/services/authService";
 import { syncService } from "@/services/syncService";
 import { syncStateRepository } from "@/db/syncStateRepository";
+import { syncMutationRepository } from "@/db/syncMutationRepository";
 
 export default function ProfileScreen() {
   const { user, clearAuth } = useAuthStore();
   const [lastSync, setLastSync] = useState<string | null>(null);
+  const [pendingCount, setPendingCount] = useState(0);
   const [isSyncing, setIsSyncing] = useState(false);
 
   useEffect(() => {
@@ -20,8 +22,12 @@ export default function ProfileScreen() {
   }, []);
 
   const loadSyncStatus = async () => {
-    const time = await syncStateRepository.getValue('last_sync_time');
+    const [time, pending] = await Promise.all([
+      syncStateRepository.getValue('last_sync_time'),
+      syncMutationRepository.getPendingCount(),
+    ]);
     setLastSync(time ? new Date(time).toLocaleString() : '从未同步');
+    setPendingCount(pending);
   };
 
   const handleSync = async () => {
@@ -32,10 +38,12 @@ export default function ProfileScreen() {
         Alert.alert("成功", "数据同步完成");
         await loadSyncStatus();
       } else {
-        Alert.alert("错误", "同步失败，请稍后再试");
+        await loadSyncStatus();
+        Alert.alert("同步失败", "当前可能没有网络或服务器不可用。离线记录会保留在本地，请恢复网络后再次点击立即同步。");
       }
     } catch (error) {
-      Alert.alert("错误", "同步过程发生异常");
+      await loadSyncStatus();
+      Alert.alert("同步失败", "同步过程发生异常。离线记录会保留在本地，请恢复网络后手动同步。");
     } finally {
       setIsSyncing(false);
     }
@@ -81,6 +89,17 @@ export default function ProfileScreen() {
             <Text style={styles.syncLabel}>上次同步：</Text>
             <Text style={styles.syncValue}>{lastSync}</Text>
           </View>
+          <View style={styles.syncInfo}>
+            <Text style={styles.syncLabel}>待同步：</Text>
+            <Text style={[styles.syncValue, pendingCount > 0 && styles.pendingValue]}>
+              {pendingCount} 条
+            </Text>
+          </View>
+          {pendingCount > 0 && (
+            <Text style={styles.offlineHint}>
+              有离线记录尚未上传。恢复网络后请点击立即同步。
+            </Text>
+          )}
           <TouchableOpacity
             style={[styles.syncButton, isSyncing && styles.disabledButton]}
             onPress={handleSync}
@@ -165,6 +184,15 @@ const styles = StyleSheet.create({
   },
   disabledButton: {
     opacity: 0.5,
+  },
+  offlineHint: {
+    color: colors.muted,
+    fontSize: 12,
+    lineHeight: 18,
+    marginBottom: 12,
+  },
+  pendingValue: {
+    color: colors.error,
   },
   syncButtonText: {
     color: colors.accent,

@@ -3,7 +3,13 @@ import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Alert 
 import { Screen } from "@/components/Screen";
 import { colors } from "@/theme/colors";
 import { focusService } from "@/services/focusService";
-import { habitService, Habit, HabitCheckin } from "@/services/habitService";
+import {
+  habitService,
+  Habit,
+  HabitCheckin,
+  serverCheckinToLocal,
+  serverHabitToLocal,
+} from "@/services/habitService";
 import { useAuthStore } from "@/store/authStore";
 import { useFocusEffect } from "expo-router";
 
@@ -13,13 +19,54 @@ export default function TodayScreen() {
   const [habits, setHabits] = useState<Habit[]>([]);
   const [checkins, setCheckins] = useState<HabitCheckin[]>([]);
   const [newHabitName, setNewHabitName] = useState("");
+  const [offlineNotice, setOfflineNotice] = useState<string | null>(null);
+
+  const todayKey = () => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  };
 
   const loadData = useCallback(async () => {
     if (!isAuthenticated) return;
     try {
-      const stats = await focusService.getTodayStats();
-      const allHabits = await habitService.getHabits();
-      const todayCheckins = await habitService.getTodayCheckins();
+      let stats;
+      let usingLocalFocus = false;
+      try {
+        stats = await focusService.getTodayStatsFromServer();
+      } catch {
+        usingLocalFocus = true;
+        stats = await focusService.getTodayStats();
+      }
+
+      let allHabits: Habit[];
+      let todayCheckins: HabitCheckin[];
+      let usingLocalHabits = false;
+      try {
+        const habitsRes = await habitService.getHabitsFromServer();
+        if (!habitsRes.success || !habitsRes.data) {
+          throw new Error(habitsRes.error?.message || "获取习惯失败");
+        }
+        const date = todayKey();
+        allHabits = habitsRes.data.map(serverHabitToLocal);
+        const checkinResults = await Promise.all(
+          habitsRes.data.map((habit) => habitService.getCheckinsFromServer(habit.id, date, date))
+        );
+        todayCheckins = checkinResults.flatMap((res) => (
+          res.success && res.data ? res.data.map(serverCheckinToLocal) : []
+        ));
+      } catch {
+        usingLocalHabits = true;
+        allHabits = await habitService.getHabits();
+        todayCheckins = await habitService.getTodayCheckins();
+      }
+      if (usingLocalHabits) {
+        setOfflineNotice("当前无法连接服务器，已显示本地习惯和打卡记录。恢复网络后请到“我的”页手动同步。");
+      } else if (usingLocalFocus) {
+        setOfflineNotice("当前无法连接服务器，已显示本地专注统计。恢复网络后请到“我的”页手动同步。");
+      } else {
+        setOfflineNotice(null);
+      }
+
       setFocusStats(stats);
       setHabits(allHabits);
       setCheckins(todayCheckins);
@@ -37,19 +84,40 @@ export default function TodayScreen() {
   const handleCreateHabit = async () => {
     if (!newHabitName.trim()) return;
     try {
-      await habitService.createHabit({
+      const payload = {
         name: newHabitName.trim(),
         description: null,
-        frequency_type: "daily",
-        frequency_days: null,
-        target_count: 1,
+        frequencyType: "daily",
+        frequencyDays: null,
+        targetCount: 1,
         color: colors.accent,
         icon: "star",
-      });
+      };
+      const response = await habitService.createHabitOnServer(payload);
+      if (!response.success) {
+        throw new Error(response.error?.message || "创建习惯失败");
+      }
+      setOfflineNotice(null);
       setNewHabitName("");
       loadData();
     } catch (error) {
-      Alert.alert("错误", "创建习惯失败");
+      try {
+        await habitService.createHabit({
+          name: newHabitName.trim(),
+          description: null,
+          frequency_type: "daily",
+          frequency_days: null,
+          target_count: 1,
+          color: colors.accent,
+          icon: "star",
+        });
+        setNewHabitName("");
+        setOfflineNotice("当前无法连接服务器，新习惯已保存到本地。恢复网络后请到“我的”页手动同步。");
+        Alert.alert("已离线保存", "新习惯已保存到本地。恢复网络后请到“我的”页点击立即同步。");
+        loadData();
+      } catch {
+        Alert.alert("错误", error instanceof Error ? error.message : "创建习惯失败");
+      }
     }
   };
 
@@ -58,10 +126,21 @@ export default function TodayScreen() {
     if (isChecked) return;
 
     try {
-      await habitService.checkin(habitId);
+      const response = await habitService.checkinOnServer(habitId);
+      if (!response.success) {
+        throw new Error(response.error?.message || "打卡失败");
+      }
+      setOfflineNotice(null);
       loadData();
     } catch (error) {
-      Alert.alert("错误", "打卡失败");
+      try {
+        await habitService.checkin(habitId);
+        setOfflineNotice("当前无法连接服务器，本次打卡已保存到本地。恢复网络后请到“我的”页手动同步。");
+        Alert.alert("已离线保存", "本次打卡已保存到本地。恢复网络后请到“我的”页点击立即同步。");
+        loadData();
+      } catch {
+        Alert.alert("错误", error instanceof Error ? error.message : "打卡失败");
+      }
     }
   };
 
@@ -77,6 +156,13 @@ export default function TodayScreen() {
   return (
     <Screen title="今日">
       <ScrollView contentContainerStyle={styles.container}>
+        {offlineNotice && (
+          <View style={styles.offlineBanner}>
+            <Text style={styles.offlineTitle}>离线模式</Text>
+            <Text style={styles.offlineText}>{offlineNotice}</Text>
+          </View>
+        )}
+
         <View style={styles.statsCard}>
           <Text style={styles.cardTitle}>今日概览</Text>
           <View style={styles.statsRow}>
@@ -245,6 +331,25 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     borderWidth: 1,
     borderColor: colors.border,
+  },
+  offlineBanner: {
+    backgroundColor: "#FFF7ED",
+    borderColor: "#FDBA74",
+    borderRadius: 10,
+    borderWidth: 1,
+    marginBottom: 16,
+    padding: 12,
+  },
+  offlineText: {
+    color: "#9A3412",
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  offlineTitle: {
+    color: "#9A3412",
+    fontSize: 14,
+    fontWeight: "700",
+    marginBottom: 4,
   },
   addButton: {
     backgroundColor: colors.accent,

@@ -13,6 +13,7 @@ public class InMemoryLeaderboardStatsStore implements LeaderboardStatsStore {
     private final Map<String, Long> focusTodaySeconds = new ConcurrentHashMap<>();
     private final Map<String, Long> focusWeekSeconds = new ConcurrentHashMap<>();
     private final Map<String, Long> habitsTodayCompletion = new ConcurrentHashMap<>();
+    private final Map<String, Long> habitsTodayTotal = new ConcurrentHashMap<>();
     private final Map<String, Long> streaksDays = new ConcurrentHashMap<>();
 
     @Override
@@ -46,6 +47,12 @@ public class InMemoryLeaderboardStatsStore implements LeaderboardStatsStore {
     }
 
     @Override
+    public void setHabitTodayStats(String userId, long completed, long total) {
+        habitsTodayCompletion.put(userId, completed);
+        habitsTodayTotal.put(userId, total);
+    }
+
+    @Override
     public long getStreaksDays(String userId) {
         return streaksDays.getOrDefault(userId, 0L);
     }
@@ -60,6 +67,7 @@ public class InMemoryLeaderboardStatsStore implements LeaderboardStatsStore {
         focusTodaySeconds.clear();
         focusWeekSeconds.clear();
         habitsTodayCompletion.clear();
+        habitsTodayTotal.clear();
         streaksDays.clear();
     }
 }

@@ -20,6 +20,8 @@ import com.lifetool.ai.dto.FoodRecognitionResponse;
 import com.lifetool.ai.dto.LifeAdviceRequest;
 import com.lifetool.ai.dto.LifeAdviceResponse;
 import com.lifetool.ai.dto.SendAiMessageRequest;
+import com.lifetool.meals.MealLog;
+import com.lifetool.meals.MealService;
 
 @Service
 public class AiService {
@@ -45,15 +47,17 @@ public class AiService {
     private final UserDataTools userDataTools;
     private final AiProperties properties;
     private final AiAssistantClient assistantClient;
+    private final MealService mealService;
 
     public AiService(AiChatStore chatStore, AiMemoryStore memoryStore,
                      UserDataTools userDataTools, AiProperties properties,
-                     AiAssistantClient assistantClient) {
+                     AiAssistantClient assistantClient, MealService mealService) {
         this.chatStore = chatStore;
         this.memoryStore = memoryStore;
         this.userDataTools = userDataTools;
         this.properties = properties;
         this.assistantClient = assistantClient;
+        this.mealService = mealService;
     }
 
     public AiChatSessionResponse createSession(String userId, CreateAiChatSessionRequest request) {
@@ -153,10 +157,11 @@ public class AiService {
             throw new AiException("FORBIDDEN", "Access denied");
         }
         memory.disable();
+        memoryStore.save(memory);
     }
 
     public FoodRecognitionResponse recognizeFood(String userId, FoodRecognitionRequest request) {
-        String systemPrompt = "你是一个专业的营养师。请识别用户上传图片中的食物，估算每种食物的重量、热量（千卡）以及蛋白质/脂肪/碳水化合物含量（克），最后给出总热量估算。";
+        String systemPrompt = "你是一个专业的营养师。请识别用户上传图片中的食物，估算每种食物的重量、热量（千卡）以及蛋白质/脂肪/碳水化合物含量（克），最后必须用“总热量约 N 千卡”给出总热量估算。";
 
         String userText = request.customPrompt() != null && !request.customPrompt().isBlank()
                 ? request.customPrompt()
@@ -166,11 +171,22 @@ public class AiService {
         try {
             UserDataTools.setCurrentUserId(userId);
             response = assistantClient.chatWithImage("food-" + userId, systemPrompt, request.imageUrl(), userText);
+        } catch (RuntimeException ex) {
+            throw new AiException("AI_RECOGNITION_FAILED", "AI 识图失败，请确认图片可以访问或稍后重试");
         } finally {
             UserDataTools.clearCurrentUserId();
         }
 
-        return new FoodRecognitionResponse(response, properties.getDisclaimer());
+        MealLog mealLog = mealService.recordAiRecognition(
+                userId,
+                response,
+                request.mealType(),
+                request.mediaAssetId());
+        return new FoodRecognitionResponse(
+                response,
+                properties.getDisclaimer(),
+                mealLog.getId(),
+                mealLog.getTotalCalories());
     }
 
     private String buildSystemPrompt(boolean useLongTermMemory, String userId) {

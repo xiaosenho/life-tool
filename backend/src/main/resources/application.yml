@@ -6,6 +6,7 @@ spring:
       api-key: ${AI_API_KEY:mock-key}
       base-url: ${AI_BASE_URL:https://api.openai.com}
       chat:
+        completions-path: ${AI_CHAT_COMPLETIONS_PATH:/v1/chat/completions}
         options:
           model: ${AI_CHAT_MODEL:gpt-4o-mini}
 

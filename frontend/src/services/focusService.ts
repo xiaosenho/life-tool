@@ -10,7 +10,7 @@ export interface FocusSession {
   mode: 'pomodoro' | 'countdown' | 'stopwatch';
   target_seconds: number;
   actual_seconds: number;
-  status: 'completed' | 'interrupted' | 'abandoned';
+  status: 'running' | 'completed' | 'interrupted' | 'abandoned';
   started_at: string;
   ended_at: string | null;
   note: string | null;
@@ -34,6 +34,40 @@ export interface FocusPreferenceInput {
   shortBreakMinutes?: number;
   longBreakMinutes?: number;
   autoStartBreak?: boolean;
+}
+
+export interface ServerFocusSession {
+  id: string;
+  userId: string;
+  mode: 'pomodoro' | 'countdown' | 'stopwatch';
+  targetSeconds: number;
+  actualSeconds: number;
+  status: 'running' | 'completed' | 'interrupted' | 'abandoned';
+  startedAt: string;
+  endedAt: string | null;
+  note: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ServerFocusPreference {
+  defaultFocusMinutes: number;
+  shortBreakMinutes: number;
+  longBreakMinutes: number;
+  autoStartBreak: boolean;
+  updatedAt: string;
+}
+
+function localDateKey(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function currentMonthKey() {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 }
 
 const DEFAULT_FOCUS_MINUTES = 25;
@@ -195,24 +229,39 @@ export const focusService = {
     };
   },
 
-  // Direct API methods (call backend)
-  async startSession(mode: string, targetMinutes: number, note?: string) {
-    return apiClient.post<FocusSession>('/focus/sessions', { mode, targetMinutes, note });
+  async getTodayStatsFromServer() {
+    const res = await this.getSessionsFromServer(currentMonthKey());
+    if (!res.success || !res.data) {
+      throw new Error(res.error?.message || '获取专注统计失败');
+    }
+    const today = localDateKey(new Date());
+    const completedSessions = res.data.filter((session) => (
+      session.status === 'completed' && localDateKey(new Date(session.startedAt)) === today
+    ));
+    return {
+      totalSeconds: completedSessions.reduce((sum, session) => sum + session.actualSeconds, 0),
+      sessionCount: completedSessions.length,
+    };
   },
 
-  async endSession(id: string, actualMinutes: number, status: string, note?: string) {
-    return apiClient.patch<FocusSession>(`/focus/sessions/${id}`, { actualMinutes, status, note });
+  // Direct API methods (call backend)
+  async startSession(mode: string, targetMinutes: number, note?: string | null) {
+    return apiClient.post<ServerFocusSession>('/focus/sessions', { mode, targetMinutes, note });
+  },
+
+  async endSession(id: string, actualMinutes: number, status: string, note?: string | null) {
+    return apiClient.patch<ServerFocusSession>(`/focus/sessions/${id}`, { actualMinutes, status, note });
   },
 
   async getSessionsFromServer(month: string) {
-    return apiClient.get<FocusSession[]>(`/focus/sessions?month=${month}`);
+    return apiClient.get<ServerFocusSession[]>(`/focus/sessions?month=${month}`);
   },
 
   async getPreferenceFromServer() {
-    return apiClient.get<FocusPreference>('/focus/preferences');
+    return apiClient.get<ServerFocusPreference>('/focus/preferences');
   },
 
   async savePreferenceToServer(input: FocusPreferenceInput) {
-    return apiClient.patch<FocusPreference>('/focus/preferences', input);
+    return apiClient.patch<ServerFocusPreference>('/focus/preferences', input);
   },
 };

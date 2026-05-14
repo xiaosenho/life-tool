@@ -8,7 +8,7 @@ public class MockAiAssistantClient implements AiAssistantClient {
     @Override
     public String chatWithImage(String conversationId, String systemPrompt, String imageUrl, String userText) {
         return "【Mock】图片识别：" + (userText != null ? userText : "识别食物")
-                + "。这是一个模拟响应，真实环境下会调用 AI 模型进行食物识别和热量估算。";
+                + "。识别到米饭、鸡蛋和青菜，估算总热量约 520 千卡。";
     }
 
     @Override

@@ -22,7 +22,7 @@ public class FocusSession {
         this.mode = "pomodoro";
         this.targetSeconds = 1500;
         this.actualSeconds = 0;
-        this.status = "completed";
+        this.status = "running";
         this.createdAt = Instant.now();
         this.updatedAt = Instant.now();
     }

@@ -34,8 +34,15 @@ public class JdbcAiMemoryStore implements AiMemoryStore {
     @Override
     public AiMemoryItem save(AiMemoryItem memory) {
         String sql = """
-                INSERT INTO ai_memory_items (id, user_id, memory_type, content, source, enabled, created_at, updated_at)
-                VALUES (?::uuid, ?::uuid, ?, ?, ?, ?, ?, ?)
+                INSERT INTO ai_memory_items (id, user_id, memory_type, content, source, enabled, created_at, updated_at, deleted_at)
+                VALUES (?::uuid, ?::uuid, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT (id) DO UPDATE SET
+                  memory_type = EXCLUDED.memory_type,
+                  content = EXCLUDED.content,
+                  source = EXCLUDED.source,
+                  enabled = EXCLUDED.enabled,
+                  deleted_at = EXCLUDED.deleted_at,
+                  updated_at = now()
                 """;
         try (Connection conn = getConnection();
              var stmt = conn.prepareStatement(sql)) {
@@ -48,6 +55,7 @@ public class JdbcAiMemoryStore implements AiMemoryStore {
             Timestamp now = Timestamp.from(memory.getCreatedAt());
             stmt.setTimestamp(7, now);
             stmt.setTimestamp(8, now);
+            stmt.setTimestamp(9, memory.getDeletedAt() != null ? Timestamp.from(memory.getDeletedAt()) : null);
             stmt.executeUpdate();
             return memory;
         } catch (SQLException ex) {
@@ -58,7 +66,7 @@ public class JdbcAiMemoryStore implements AiMemoryStore {
     @Override
     public Optional<AiMemoryItem> findById(String id) {
         String sql = """
-                SELECT id, user_id, memory_type, content, source, enabled
+                SELECT id, user_id, memory_type, content, source, enabled, deleted_at
                 FROM ai_memory_items
                 WHERE id = ?::uuid AND deleted_at IS NULL
                 """;
@@ -77,7 +85,7 @@ public class JdbcAiMemoryStore implements AiMemoryStore {
     @Override
     public List<AiMemoryItem> findEnabledByUserId(String userId) {
         String sql = """
-                SELECT id, user_id, memory_type, content, source, enabled
+                SELECT id, user_id, memory_type, content, source, enabled, deleted_at
                 FROM ai_memory_items
                 WHERE user_id = ?::uuid AND enabled = true AND deleted_at IS NULL
                 ORDER BY created_at DESC
@@ -103,15 +111,20 @@ public class JdbcAiMemoryStore implements AiMemoryStore {
                 rs.getString("memory_type"),
                 rs.getString("content"),
                 rs.getString("source"));
-        setId(memory, rs.getString("id"));
+        setField(memory, "id", rs.getString("id"));
+        setField(memory, "enabled", rs.getBoolean("enabled"));
+        Timestamp deletedAt = rs.getTimestamp("deleted_at");
+        if (deletedAt != null) {
+            setField(memory, "deletedAt", deletedAt.toInstant());
+        }
         return memory;
     }
 
-    private static void setId(AiMemoryItem memory, String id) {
+    private static void setField(AiMemoryItem memory, String fieldName, Object value) {
         try {
-            var field = AiMemoryItem.class.getDeclaredField("id");
+            var field = AiMemoryItem.class.getDeclaredField(fieldName);
             field.setAccessible(true);
-            field.set(memory, id);
+            field.set(memory, value);
         } catch (ReflectiveOperationException ignored) {
         }
     }

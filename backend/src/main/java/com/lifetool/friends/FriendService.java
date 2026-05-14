@@ -55,6 +55,7 @@ public class FriendService {
             store.saveFriendship(new Friendship(request.getFromUserId(), request.getToUserId()));
         } else if ("reject".equals(action)) {
             request.setStatus(FriendRequest.Status.REJECTED);
+            store.saveRequest(request);
         } else {
             throw new FriendException("VALIDATION_ERROR", "Invalid action, must be 'accept' or 'reject'");
         }

@@ -4,6 +4,8 @@ import jakarta.validation.constraints.NotBlank;
 
 public record FoodRecognitionRequest(
         @NotBlank String imageUrl,
-        String customPrompt
+        String customPrompt,
+        String mealType,
+        String mediaAssetId
 ) {
 }

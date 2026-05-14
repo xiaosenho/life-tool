@@ -78,6 +78,7 @@ MVP 不自研底层 AI Provider 框架，优先使用 Spring AI：
 | --- | --- |
 | `spring.ai.model.chat` | Spring AI 当前使用的 chat model 类型 |
 | `spring.ai.openai.base-url` | OpenAI-compatible endpoint，按实际供应商调整 |
+| `spring.ai.openai.chat.completions-path` | Chat Completions 路径，默认 `/v1/chat/completions`；豆包方舟可配置为 `/chat/completions` |
 | `spring.ai.openai.api-key` | 服务端保存，禁止下发客户端 |
 | `spring.ai.openai.chat.options.model` | 对话模型 |
 | `spring.ai.openai.image.options.model` | 图片或多模态模型，按供应商能力调整 |

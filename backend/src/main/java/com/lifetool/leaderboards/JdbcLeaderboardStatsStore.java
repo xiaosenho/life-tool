@@ -153,6 +153,28 @@ public class JdbcLeaderboardStatsStore implements LeaderboardStatsStore {
     }
 
     @Override
+    public void setHabitTodayStats(String userId, long completed, long total) {
+        String sql = """
+                INSERT INTO daily_stats (id, user_id, stat_date, habit_completed_count, habit_total_count, created_at, updated_at)
+                VALUES (?::uuid, ?::uuid, CURRENT_DATE, ?, ?, now(), now())
+                ON CONFLICT (user_id, stat_date) DO UPDATE SET
+                  habit_completed_count = EXCLUDED.habit_completed_count,
+                  habit_total_count = EXCLUDED.habit_total_count,
+                  updated_at = now()
+                """;
+        try (Connection conn = getConnection();
+             var stmt = conn.prepareStatement(sql)) {
+            stmt.setString(1, UUID.randomUUID().toString());
+            stmt.setString(2, userId);
+            stmt.setLong(3, completed);
+            stmt.setLong(4, total);
+            stmt.executeUpdate();
+        } catch (SQLException ex) {
+            throw new IllegalStateException("Failed to set habit today stats", ex);
+        }
+    }
+
+    @Override
     public long getStreaksDays(String userId) {
         String sql = """
                 SELECT COALESCE(habit_streak_days, 0) AS val

@@ -114,9 +114,16 @@ public class MediaService {
         };
     }
 
-    private static AssetResponse toResponse(MediaAsset a) {
+    private AssetResponse toResponse(MediaAsset a) {
         return new AssetResponse(
                 a.getId(), a.getObjectKey(), a.getContentType(), a.getPurpose(),
-                a.getFileSize(), a.getWidth(), a.getHeight(), a.getStatus(), a.getCreatedAt());
+                a.getFileSize(), a.getWidth(), a.getHeight(), a.getStatus(), a.getCreatedAt(),
+                buildReadUrl(a));
+    }
+
+    private String buildReadUrl(MediaAsset asset) {
+        return uploadUrlSigner.generateGetUrl(
+                asset.getObjectKey(),
+                Instant.now().plusSeconds(config.getUploadTokenTtlSeconds()));
     }
 }

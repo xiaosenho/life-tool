@@ -11,6 +11,7 @@ import com.lifetool.habits.dto.CreateHabitRequest;
 import com.lifetool.habits.dto.HabitCheckinResponse;
 import com.lifetool.habits.dto.HabitResponse;
 import com.lifetool.habits.dto.UpdateHabitRequest;
+import com.lifetool.leaderboards.LeaderboardStatsStore;
 
 @Service
 public class HabitService {
@@ -19,10 +20,12 @@ public class HabitService {
 
     private final HabitStore habitStore;
     private final HabitCheckinStore checkinStore;
+    private final LeaderboardStatsStore statsStore;
 
-    public HabitService(HabitStore habitStore, HabitCheckinStore checkinStore) {
+    public HabitService(HabitStore habitStore, HabitCheckinStore checkinStore, LeaderboardStatsStore statsStore) {
         this.habitStore = habitStore;
         this.checkinStore = checkinStore;
+        this.statsStore = statsStore;
     }
 
     public HabitResponse createHabit(String userId, CreateHabitRequest request) {
@@ -43,6 +46,7 @@ public class HabitService {
         habit.setIcon(blankToNull(request.icon()));
 
         habitStore.save(habit);
+        refreshTodayStats(userId);
         return HabitResponse.from(habit);
     }
 
@@ -94,6 +98,7 @@ public class HabitService {
     public void archiveHabit(String userId, String id) {
         Habit habit = findOwnedHabit(userId, id);
         habitStore.deleteById(id);
+        refreshTodayStats(userId);
     }
 
     public HabitCheckinResponse checkin(String userId, String habitId, CreateCheckinRequest request) {
@@ -106,6 +111,7 @@ public class HabitService {
             existing.setNote(request.note() != null ? request.note() : existing.getNote());
             existing.setUpdatedAt(Instant.now());
             checkinStore.save(existing);
+            refreshTodayStats(userId);
             return HabitCheckinResponse.from(existing);
         }
 
@@ -117,6 +123,7 @@ public class HabitService {
         checkin.setNote(blankToNull(request.note()));
 
         checkinStore.save(checkin);
+        refreshTodayStats(userId);
         return HabitCheckinResponse.from(checkin);
     }
 
@@ -140,5 +147,18 @@ public class HabitService {
 
     private static String blankToNull(String value) {
         return value == null || value.isBlank() ? null : value.trim();
+    }
+
+    private void refreshTodayStats(String userId) {
+        LocalDate today = LocalDate.now();
+        long total = habitStore.findByUserId(userId).stream()
+                .filter(h -> !h.isArchived())
+                .count();
+        long completed = checkinStore.findByUserIdAndDate(userId, today).stream()
+                .filter(c -> c.getCount() > 0)
+                .map(HabitCheckin::getHabitId)
+                .distinct()
+                .count();
+        statsStore.setHabitTodayStats(userId, completed, total);
     }
 }

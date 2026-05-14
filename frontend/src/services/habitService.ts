@@ -31,6 +31,63 @@ export interface HabitCheckin {
   updated_at: string;
 }
 
+export interface ServerHabit {
+  id: string;
+  userId: string;
+  name: string;
+  description: string | null;
+  frequencyType: 'daily' | 'weekly' | 'custom';
+  frequencyDays: number[] | null;
+  targetCount: number;
+  color: string | null;
+  icon: string | null;
+  archived: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ServerHabitCheckin {
+  id: string;
+  userId: string;
+  habitId: string;
+  checkinDate: string;
+  count: number;
+  note: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export function serverHabitToLocal(habit: ServerHabit): Habit {
+  return {
+    id: habit.id,
+    user_id: habit.userId,
+    name: habit.name,
+    description: habit.description,
+    frequency_type: habit.frequencyType,
+    frequency_days: habit.frequencyDays,
+    target_count: habit.targetCount,
+    color: habit.color,
+    icon: habit.icon,
+    is_archived: habit.archived,
+    created_at: habit.createdAt,
+    updated_at: habit.updatedAt,
+    deleted_at: null,
+  };
+}
+
+export function serverCheckinToLocal(checkin: ServerHabitCheckin): HabitCheckin {
+  return {
+    id: checkin.id,
+    user_id: checkin.userId,
+    habit_id: checkin.habitId,
+    checkin_date: checkin.checkinDate,
+    count: checkin.count,
+    note: checkin.note,
+    created_at: checkin.createdAt,
+    updated_at: checkin.updatedAt,
+  };
+}
+
 export const habitService = {
   async createHabit(habitData: Omit<Habit, 'id' | 'user_id' | 'is_archived' | 'created_at' | 'updated_at' | 'deleted_at'>) {
     const db = await getDb();
@@ -142,16 +199,24 @@ export const habitService = {
   },
 
   // Direct API methods (call backend)
-  async createHabitOnServer(data: { name: string; frequencyType?: string; targetCount?: number; color?: string }) {
-    return apiClient.post<Habit>('/habits', data);
+  async createHabitOnServer(data: {
+    name: string;
+    description?: string | null;
+    frequencyType?: string;
+    frequencyDays?: number[] | null;
+    targetCount?: number;
+    color?: string | null;
+    icon?: string | null;
+  }) {
+    return apiClient.post<ServerHabit>('/habits', data);
   },
 
   async getHabitsFromServer() {
-    return apiClient.get<Habit[]>('/habits');
+    return apiClient.get<ServerHabit[]>('/habits');
   },
 
   async updateHabitOnServer(id: string, data: { name?: string; targetCount?: number; color?: string; archived?: boolean }) {
-    return apiClient.patch<Habit>(`/habits/${id}`, data);
+    return apiClient.patch<ServerHabit>(`/habits/${id}`, data);
   },
 
   async deleteHabitOnServer(id: string) {
@@ -159,10 +224,14 @@ export const habitService = {
   },
 
   async checkinOnServer(habitId: string, count: number = 1, note?: string) {
-    return apiClient.post<HabitCheckin>(`/habits/${habitId}/checkins`, { count, note });
+    return apiClient.post<ServerHabitCheckin>(`/habits/${habitId}/checkins`, { count, note });
   },
 
-  async getCheckinsFromServer(habitId: string) {
-    return apiClient.get<HabitCheckin[]>(`/habits/${habitId}/checkins`);
+  async getCheckinsFromServer(habitId: string, from?: string, to?: string) {
+    const query = new URLSearchParams();
+    if (from) query.set('from', from);
+    if (to) query.set('to', to);
+    const suffix = query.toString() ? `?${query.toString()}` : '';
+    return apiClient.get<ServerHabitCheckin[]>(`/habits/${habitId}/checkins${suffix}`);
   },
 };

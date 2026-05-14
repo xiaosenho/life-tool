@@ -2,6 +2,7 @@ package com.lifetool.ai;
 
 import java.time.YearMonth;
 import java.time.ZoneOffset;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -12,21 +13,34 @@ import org.springframework.stereotype.Component;
 import com.lifetool.events.EventStore;
 import com.lifetool.focus.FocusPreference;
 import com.lifetool.focus.FocusPreferenceStore;
+import com.lifetool.habits.Habit;
+import com.lifetool.habits.HabitCheckin;
+import com.lifetool.habits.HabitCheckinStore;
+import com.lifetool.habits.HabitStore;
 import com.lifetool.ledger.LedgerService;
 import com.lifetool.ledger.dto.LedgerSummaryResponse;
+import com.lifetool.meals.MealService;
+import com.lifetool.meals.MealSummary;
 
 @Component
 public class UserDataTools {
     private final FocusPreferenceStore focusPreferenceStore;
     private final LedgerService ledgerService;
     private final EventStore eventStore;
+    private final HabitStore habitStore;
+    private final HabitCheckinStore habitCheckinStore;
+    private final MealService mealService;
 
     private static final ThreadLocal<String> CURRENT_USER_ID = new ThreadLocal<>();
 
-    public UserDataTools(FocusPreferenceStore focusPreferenceStore, LedgerService ledgerService, EventStore eventStore) {
+    public UserDataTools(FocusPreferenceStore focusPreferenceStore, LedgerService ledgerService, EventStore eventStore,
+                         HabitStore habitStore, HabitCheckinStore habitCheckinStore, MealService mealService) {
         this.focusPreferenceStore = focusPreferenceStore;
         this.ledgerService = ledgerService;
         this.eventStore = eventStore;
+        this.habitStore = habitStore;
+        this.habitCheckinStore = habitCheckinStore;
+        this.mealService = mealService;
     }
 
     public static void setCurrentUserId(String userId) {
@@ -133,11 +147,51 @@ public class UserDataTools {
     }
 
     Map<String, Object> getHabitSummary(String userId) {
-        return summaryOnly("habit", "习惯模块暂未接入统计服务，本次仅返回占位汇总。");
+        List<Habit> habits = habitStore.findByUserId(userId).stream()
+                .filter(h -> !h.isArchived())
+                .toList();
+        List<HabitCheckin> todayCheckins = habitCheckinStore.findByUserIdAndDate(
+                userId, java.time.LocalDate.now());
+        long completedToday = todayCheckins.stream()
+                .filter(c -> c.getCount() > 0)
+                .map(HabitCheckin::getHabitId)
+                .distinct()
+                .count();
+        double completionRate = habits.isEmpty() ? 0 : completedToday * 1.0 / habits.size();
+
+        List<Map<String, Object>> recent = todayCheckins.stream()
+                .sorted(Comparator.comparing(HabitCheckin::getUpdatedAt).reversed())
+                .limit(5)
+                .map(c -> {
+                    Map<String, Object> item = new LinkedHashMap<>();
+                    item.put("habitId", c.getHabitId());
+                    item.put("count", c.getCount());
+                    item.put("note", c.getNote());
+                    return item;
+                })
+                .toList();
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("domain", "habit");
+        result.put("activeHabitCount", habits.size());
+        result.put("completedToday", completedToday);
+        result.put("completionRate", completionRate);
+        result.put("todayCheckins", recent);
+        result.put("summary", "已读取今日习惯完成情况。");
+        return result;
     }
 
     Map<String, Object> getDietSummary(String userId) {
-        return summaryOnly("diet", "饮食模块暂未接入统计服务，本次仅返回占位汇总。");
+        MealSummary summary = mealService.getSummary(userId);
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("domain", "diet");
+        result.put("todayTotalCalories", summary.todayTotalCalories());
+        result.put("todayMealCount", summary.todayMealCount());
+        result.put("last7DaysTotalCalories", summary.last7DaysTotalCalories());
+        result.put("last7DaysMealCount", summary.last7DaysMealCount());
+        result.put("recentMeals", summary.recentMeals());
+        result.put("summary", "已读取真实饮食记录与近 7 日热量汇总。");
+        return result;
     }
 
     Map<String, Object> getUserProfileContext(String userId) {

@@ -19,7 +19,7 @@ class AiAssistantClientTest {
         List<AiAssistantClient.ToolResult> toolResults = List.of(
                 new AiAssistantClient.ToolResult("get_focus_summary", Map.of("domain", "focus")));
 
-        String reply = mock.chat("系统提示词", history, toolResults);
+        String reply = mock.chat("test-conversation", "系统提示词", history, toolResults);
 
         assertNotNull(reply);
         assertTrue(reply.contains("收到：帮我看看专注数据"));
@@ -33,7 +33,7 @@ class AiAssistantClientTest {
         List<AiAssistantClient.ChatEntry> history = List.of(
                 new AiAssistantClient.ChatEntry("user", "你好"));
 
-        String reply = mock.chat("系统提示词", history, List.of());
+        String reply = mock.chat("test-conversation", "系统提示词", history, List.of());
 
         assertTrue(reply.contains("本次没有读取额外数据"));
     }
@@ -44,10 +44,10 @@ class AiAssistantClientTest {
         List<AiAssistantClient.ChatEntry> history = List.of(
                 new AiAssistantClient.ChatEntry("user", "你好"));
 
-        String withMemory = mock.chat("已启用长期记忆。", history, List.of());
+        String withMemory = mock.chat("test-conversation", "已启用长期记忆。", history, List.of());
         assertTrue(withMemory.contains("已启用长期记忆"));
 
-        String withoutMemory = mock.chat("普通提示词", history, List.of());
+        String withoutMemory = mock.chat("test-conversation", "普通提示词", history, List.of());
         assertTrue(withoutMemory.contains("本次未使用长期记忆"));
     }
 

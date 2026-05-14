@@ -34,7 +34,6 @@ public class FlywayMigrationRunner implements ApplicationRunner {
         Flyway.configure()
                 .dataSource(datasourceUrl, datasourceUsername, datasourcePassword)
                 .locations("classpath:db/migration")
-                .baselineOnMigrate(true)
                 .load()
                 .migrate();
     }

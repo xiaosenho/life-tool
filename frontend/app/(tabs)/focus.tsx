@@ -23,6 +23,8 @@ export default function FocusScreen() {
   const [isActive, setIsActive] = useState(false);
   const [todayStats, setTodayStats] = useState({ totalSeconds: 0, sessionCount: 0 });
   const [startedAt, setStartedAt] = useState<string | null>(null);
+  const [serverSessionId, setServerSessionId] = useState<string | null>(null);
+  const [offlineNotice, setOfflineNotice] = useState<string | null>(null);
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -67,8 +69,15 @@ export default function FocusScreen() {
   };
 
   const loadTodayStats = async () => {
-    const stats = await focusService.getTodayStats();
-    setTodayStats(stats);
+    try {
+      const stats = await focusService.getTodayStatsFromServer();
+      setTodayStats(stats);
+      setOfflineNotice(null);
+      return;
+    } catch {}
+    const localStats = await focusService.getTodayStats();
+    setTodayStats(localStats);
+    setOfflineNotice("当前无法连接服务器，已显示本地专注记录。恢复网络后请到“我的”页手动同步。");
   };
 
   const selectMinutes = (minutes: number) => {
@@ -90,19 +99,43 @@ export default function FocusScreen() {
 
   const saveDefaultMinutes = async () => {
     try {
-      await focusService.savePreferenceToServer({
+      const response = await focusService.savePreferenceToServer({
         defaultFocusMinutes: targetMinutes,
       });
+      if (!response.success) {
+        throw new Error(response.error?.message || "保存默认时长失败");
+      }
       setDefaultMinutes(targetMinutes);
+      setOfflineNotice(null);
       Alert.alert("已保存", "下次进入专注页会使用这个默认时长。");
     } catch (error) {
-      Alert.alert("保存失败", error instanceof Error ? error.message : "请稍后重试。");
+      try {
+        await focusService.savePreference({
+          defaultFocusMinutes: targetMinutes,
+        });
+        setDefaultMinutes(targetMinutes);
+        setOfflineNotice("当前无法连接服务器，默认时长已保存到本地。恢复网络后请到“我的”页手动同步。");
+        Alert.alert("已离线保存", "当前可能没有网络，默认时长已保存到本地。恢复网络后请到“我的”页点击立即同步。");
+      } catch {
+        Alert.alert("保存失败", error instanceof Error ? error.message : "请稍后重试。");
+      }
     }
   };
 
-  const toggleTimer = () => {
+  const toggleTimer = async () => {
     if (!isActive && !startedAt) {
-      setStartedAt(new Date().toISOString());
+      const now = new Date().toISOString();
+      setStartedAt(now);
+      setIsActive(true);
+      try {
+        const response = await focusService.startSession("pomodoro", targetMinutes, null);
+        if (response.success && response.data) {
+          setServerSessionId(response.data.id);
+        }
+      } catch {
+        setServerSessionId(null);
+      }
+      return;
     }
     setIsActive(!isActive);
   };
@@ -111,6 +144,7 @@ export default function FocusScreen() {
     setIsActive(false);
     setTimeLeft(targetMinutes * 60);
     setStartedAt(null);
+    setServerSessionId(null);
   };
 
   const handleComplete = async () => {
@@ -123,14 +157,32 @@ export default function FocusScreen() {
       return;
     }
 
+    let savedToServer = false;
+    const actualMinutes = Math.max(1, Math.round(actualSeconds / 60));
+
     try {
-      // Direct API call
-      await focusService.startSession("pomodoro", targetMinutes, null);
+      let sessionId = serverSessionId;
+      if (!sessionId) {
+        const startRes = await focusService.startSession("pomodoro", targetMinutes, null);
+        sessionId = startRes.success && startRes.data ? startRes.data.id : null;
+      }
+      if (sessionId) {
+        const endRes = await focusService.endSession(sessionId, actualMinutes, "completed", null);
+        savedToServer = endRes.success;
+      }
     } catch {
-      // Fallback to local
+      savedToServer = false;
     }
 
     try {
+      if (savedToServer) {
+        setOfflineNotice(null);
+        Alert.alert("好样的！", timeLeft === 0 ? "你完成了一次专注！" : "专注已保存到服务器。");
+        loadTodayStats();
+        resetTimer();
+        return;
+      }
+
       await focusService.saveSession({
         mode: "pomodoro",
         target_seconds: targetSeconds,
@@ -140,7 +192,8 @@ export default function FocusScreen() {
         ended_at: new Date().toISOString(),
         note: null,
       });
-      Alert.alert("好样的！", timeLeft === 0 ? "你完成了一次专注！" : "专注已保存。");
+      setOfflineNotice("当前无法连接服务器，本次专注已保存到本地。恢复网络后请到“我的”页手动同步。");
+      Alert.alert("已离线保存", "本次专注已保存到本地。恢复网络后请到“我的”页点击立即同步。");
       loadTodayStats();
       resetTimer();
     } catch (error) {
@@ -164,6 +217,13 @@ export default function FocusScreen() {
   return (
     <Screen title="专注">
       <ScrollView contentContainerStyle={styles.container}>
+        {offlineNotice && (
+          <View style={styles.offlineBanner}>
+            <Text style={styles.offlineTitle}>离线模式</Text>
+            <Text style={styles.offlineText}>{offlineNotice}</Text>
+          </View>
+        )}
+
         <View style={styles.statsRow}>
           <View style={styles.statBox}>
             <Text style={styles.statLabel}>今日专注</Text>
@@ -440,6 +500,26 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     flexWrap: "wrap",
     gap: 15,
+  },
+  offlineBanner: {
+    backgroundColor: "#FFF7ED",
+    borderColor: "#FDBA74",
+    borderRadius: 10,
+    borderWidth: 1,
+    marginBottom: 16,
+    padding: 12,
+    width: "100%",
+  },
+  offlineText: {
+    color: "#9A3412",
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  offlineTitle: {
+    color: "#9A3412",
+    fontSize: 14,
+    fontWeight: "700",
+    marginBottom: 4,
   },
   button: {
     paddingHorizontal: 30,

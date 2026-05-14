@@ -175,6 +175,38 @@ class AiControllerTest {
                 .andExpect(status().isUnauthorized());
     }
 
+    @Test
+    void foodRecognitionCreatesTodayMealLog() throws Exception {
+        mockMvc.perform(post("/api/ai/food-recognition")
+                        .header("Authorization", "Bearer " + tokenA)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "imageUrl": "https://example.com/meal.jpg",
+                                  "mealType": "lunch"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.result").isString())
+                .andExpect(jsonPath("$.data.mealLogId").isString())
+                .andExpect(jsonPath("$.data.totalCalories").value(520));
+
+        String sessionId = createSession(tokenA);
+        mockMvc.perform(post("/api/ai/chat/sessions/{id}/messages", sessionId)
+                        .header("Authorization", "Bearer " + tokenA)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "content": "看看我今天饮食",
+                                  "enabledTools": ["diet"]
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.toolCalls.length()").value(1))
+                .andExpect(jsonPath("$.data.toolCalls[0].toolName").value("get_diet_summary"))
+                .andExpect(jsonPath("$.data.toolCalls[0].status").value("succeeded"));
+    }
+
     private String createSession(String token) throws Exception {
         MvcResult result = mockMvc.perform(post("/api/ai/chat/sessions")
                         .header("Authorization", "Bearer " + token)
