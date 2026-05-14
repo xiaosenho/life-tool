@@ -7,7 +7,8 @@ LifeTool 的 AI 能力不应只是几个孤立接口，而应形成统一框架�
 - 支持图片识别、生活建议、多轮对话。
 - 支持会话记忆和长期用户偏好记忆。
 - 支持 function calling，让 AI 可以按权限调用用户数据查询工具。
-- 支持多 AI Provider 切换，避免业务代码绑定某一家模型服务。
+- 基于 Spring AI 接入模型、工具调用、Advisor 和 Chat Memory，避免重复造底层框架。
+- 支持多模型供应商切换，避免业务代码绑定某一家模型服务。
 - 所有 AI 行为可审计、可追踪、可降级。
 
 ## 2. 核心原则
@@ -30,16 +31,15 @@ ai/
 ├── orchestrator/
 │   ├── AiOrchestrator
 │   ├── ContextAssembler
-│   ├── ToolCallLoop
 │   └── SafetyGuard
-├── provider/
-│   ├── AiProvider
-│   ├── OpenAiCompatibleProvider
-│   └── MockAiProvider
+├── springai/
+│   ├── SpringAiChatClientFactory
+│   ├── SpringAiAdvisorConfig
+│   ├── SpringAiToolConfig
+│   └── MockAiModelConfig
 ├── tools/
 │   ├── AiTool
 │   ├── ToolRegistry
-│   ├── ToolExecutor
 │   └── UserDataTools
 ├── memory/
 │   ├── MemoryService
@@ -52,36 +52,44 @@ ai/
     └── AiMemoryRepository
 ```
 
-## 4. AI Provider 抽象
+## 4. Spring AI 技术选型
 
-业务层只依赖 `AiProvider` 接口：
+MVP 不自研底层 AI Provider 框架，优先使用 Spring AI：
 
-```text
-AiProvider.chat(request) -> AiModelResponse
-AiProvider.vision(request) -> AiModelResponse
-AiProvider.embedding(request) -> EmbeddingResponse (后续可选)
-```
+| 能力 | Spring AI 组件 | LifeTool 负责 |
+| --- | --- | --- |
+| 对话调用 | `ChatClient` / `ChatModel` | 会话 API、用户鉴权、业务提示词 |
+| Function Calling | `@Tool` / `ToolCallback` / `ToolCallAdvisor` | 工具白名单、用户数据隔离、结果审计 |
+| 会话记忆 | `ChatMemory` / `MessageChatMemoryAdvisor` | 完整聊天记录、会话摘要、长期记忆管理 |
+| 上下文增强 | Advisor API | 注入用户隐私配置、长期记忆、业务边界 |
+| 结构化输出 | `entity(...)` / structured output | 饮食识别结果 DTO、校验和待确认流程 |
+| 多供应商 | Spring AI model starter | 环境配置、模型选择和降级策略 |
 
-Provider 实现要求：
+业务代码不直接散落调用模型，而是通过 `AiOrchestrator` 统一编排：
 
-- 支持 OpenAI-compatible Chat Completions / Responses 风格的 function calling。
-- 支持多模态图片输入，用于饮食识别。
-- 支持超时、重试、错误码归一。
-- 支持 token usage 记录。
-- 本地和测试环境必须提供 `MockAiProvider`，不依赖真实外部模型。
+- `AiOrchestrator` 组装系统提示词、用户上下文、长期记忆和可用工具。
+- Spring AI `ChatClient` 负责模型调用、Advisor 链和工具调用循环。
+- LifeTool 自己持久化完整聊天记录、工具调用审计和长期记忆。
+- 本地和测试环境使用 `MockAiModelConfig` 或 Spring Bean 替身，不依赖真实外部模型。
 
 建议配置项：
 
 | 配置 | 说明 |
 | --- | --- |
-| `AI_PROVIDER` | `mock` / `openai_compatible` / 其他供应商适配器 |
-| `AI_BASE_URL` | OpenAI-compatible endpoint |
-| `AI_API_KEY` | 服务端保存，禁止下发客户端 |
-| `AI_CHAT_MODEL` | 对话模型 |
-| `AI_VISION_MODEL` | 图片识别模型 |
-| `AI_EMBEDDING_MODEL` | 记忆检索向量模型，后续可选 |
-| `AI_TIMEOUT_SECONDS` | 单次模型请求超时 |
-| `AI_MAX_TOOL_ROUNDS` | 单次对话最大工具调用轮数，建议 3 |
+| `spring.ai.model.chat` | Spring AI 当前使用的 chat model 类型 |
+| `spring.ai.openai.base-url` | OpenAI-compatible endpoint，按实际供应商调整 |
+| `spring.ai.openai.api-key` | 服务端保存，禁止下发客户端 |
+| `spring.ai.openai.chat.options.model` | 对话模型 |
+| `spring.ai.openai.image.options.model` | 图片或多模态模型，按供应商能力调整 |
+| `lifetool.ai.mock-enabled` | 本地和测试环境是否启用 mock 模型 |
+| `lifetool.ai.max-tool-rounds` | 单次对话最大工具调用轮数，建议 3 |
+| `lifetool.ai.memory.enabled` | 是否启用长期记忆 |
+
+参考官方能力：
+
+- Spring AI Chat Memory: https://docs.spring.io/spring-ai/reference/api/chat-memory.html
+- Spring AI Tool Calling: https://docs.spring.io/spring-ai/reference/api/tools.html
+- Spring AI Advisors API: https://docs.spring.io/spring-ai/reference/api/advisors.html
 
 ## 5. Function Calling 工具体系
 
@@ -90,8 +98,9 @@ Provider 实现要求：
 ```text
 用户消息
   -> ContextAssembler 组装系统提示词、近期消息、记忆摘要
-  -> AiProvider 返回 tool_calls
-  -> ToolExecutor 校验工具名和参数
+  -> Spring AI ChatClient + Advisor 链
+  -> Spring AI ToolCallAdvisor 解析 tool calls
+  -> @Tool / ToolCallback 调用 LifeTool 工具
   -> 业务 Service 查询当前用户数据
   -> 工具结果写入 ai_tool_calls
   -> 再次调用模型生成最终回答
@@ -104,11 +113,11 @@ Provider 实现要求：
 
 - `name`：工具名，稳定不随意改。
 - `description`：给模型看的用途说明。
-- `input_schema`：JSON Schema。
+- `input_schema`：由 Spring AI 根据方法参数或 `ToolCallback` 生成，并由后端再次校验关键字段。
 - `scope`：可访问的数据域，如 `focus`、`habit`、`diet`。
 - `max_result_items`：最大返回条数。
 - `sensitivity`：`summary_only` / `detail_allowed`。
-- `executor`：后端执行器。
+- `executor`：Spring Bean 方法或显式 `ToolCallback`。
 
 ### 5.3 MVP 工具清单
 
@@ -133,6 +142,8 @@ Provider 实现要求：
 | 会话摘要 | 当前会话持续更新 | `ai_session_summaries` | 压缩长对话，减少 token |
 | 长期记忆 | 跨会话 | `ai_memory_items` | 记录用户明确偏好、目标、限制条件 |
 | 工具结果缓存 | 单次 run | `ai_tool_calls` | 审计与复盘，不直接长期记忆 |
+
+Spring AI `ChatMemory` 只负责给模型恢复必要上下文，不替代产品侧完整聊天记录。完整历史、删除能力、审计字段仍由 LifeTool 的业务表维护。
 
 ### 6.2 长期记忆类型
 
@@ -180,7 +191,7 @@ Provider 实现要求：
 mediaAssetId
   -> 校验媒体归属和 purpose = meal_photo
   -> 读取图片可访问 URL 或短期下载 URL
-  -> AiProvider.vision
+  -> Spring AI 多模态模型调用
   -> 结构化输出 FoodRecognitionResult
   -> 保存 ai_analysis_jobs
   -> 客户端展示待确认结果
@@ -219,19 +230,20 @@ mediaAssetId
 
 仅服务端内部使用：
 
-- Tool Registry。
-- Tool Executor。
-- Provider Adapter。
+- Spring AI `ChatClient`。
+- Spring AI Advisor 链。
+- Spring AI Tool Callback。
 - Prompt Template。
+- LifeTool Tool Registry。
 
 客户端不直接请求 function calling 工具，工具调用由 AI Orchestrator 在服务端完成。
 
 ## 11. 实施路线
 
 1. `TASK-DB-003`：补充 AI memory、tool call、agent run 表。
-2. `TASK-BE-106`：实现 AI Provider Gateway、Orchestrator、Tool Registry、Memory Service。
+2. `TASK-BE-106`：接入 Spring AI，配置 `ChatClient`、Chat Memory、Advisor 链、Tool Calling 和 Mock 模型。
 3. `TASK-BE-110`：实现只读用户数据查询工具。
-4. `TASK-BE-105`：将饮食图片识别接入 AI Provider。
+4. `TASK-BE-105`：将饮食图片识别接入 Spring AI 多模态能力。
 5. `TASK-FE-105`：实现 AI 对话、建议、记忆管理页面。
 6. 后续：接入向量检索、周期性周报/月报、主动提醒。
 

@@ -12,7 +12,8 @@ Backend API
   +-- PostgreSQL
   +-- Redis
   +-- Tencent Cloud COS
-  +-- AI Provider
+  +-- Spring AI
+      +-- AI Provider
   +-- Push Notification Provider
 ```
 
@@ -34,6 +35,7 @@ Backend API
 - Spring Boot
 - Spring Security
 - Spring Data JPA
+- Spring AI
 - PostgreSQL
 - Redis
 - Maven
@@ -145,9 +147,9 @@ VO          视图对象
 
 ## 9. AI 对话与生活建议
 
-AI 对话基于统一 AI Framework 实现，详细设计见 `docs/AI_FRAMEWORK.md`。
+AI 对话基于 Spring AI + LifeTool 业务编排层实现，详细设计见 `docs/AI_FRAMEWORK.md`。
 
-后端提供 `AiOrchestrator`，负责会话上下文、长期记忆、function calling、工具执行和安全约束。模型不直接访问数据库，只能通过后端注册的工具读取当前用户授权范围内的数据。
+后端提供 `AiOrchestrator`，负责会话上下文、长期记忆、function calling、工具执行和安全约束。底层模型调用、Advisor 链、Chat Memory 和 Tool Calling 优先使用 Spring AI；模型不直接访问数据库，只能通过后端注册的工具读取当前用户授权范围内的数据。
 
 上下文来源：
 
@@ -161,9 +163,11 @@ AI 对话基于统一 AI Framework 实现，详细设计见 `docs/AI_FRAMEWORK.m
 
 核心组件：
 
-- `AiProvider`：封装模型供应商，支持 OpenAI-compatible function calling 和视觉模型。
+- Spring AI `ChatClient` / `ChatModel`：封装模型调用、结构化输出和多供应商适配。
+- Spring AI Advisor / Chat Memory：处理会话上下文、记忆注入和工具调用链路。
+- `AiOrchestrator`：组装业务上下文、用户权限、提示词和输出边界。
 - `ToolRegistry`：注册可供模型调用的工具。
-- `ToolExecutor`：校验工具参数并调用业务 Service。
+- Spring AI `@Tool` / `ToolCallback`：暴露只读业务工具。
 - `MemoryService`：管理会话摘要和长期记忆。
 - `SafetyGuard`：控制隐私、敏感信息和输出边界。
 

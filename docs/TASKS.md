@@ -313,18 +313,22 @@ blocked
 - 推荐负责人：Claude
 - 影响文件：
   - `backend/src/main/**/ai/**`
+  - `backend/pom.xml`
+  - `backend/src/main/resources/application*.yml`
   - `backend/src/main/**/stats/**`
   - `docs/AI_FRAMEWORK.md`
 - 描述：
-  - 实现 `AiProvider`、`AiOrchestrator`、`ToolRegistry`、`ToolExecutor`、`MemoryService`。
-  - 支持 OpenAI-compatible function calling provider 和本地 `MockAiProvider`。
+  - 接入 Spring AI，配置 `ChatClient` / `ChatModel`、Advisor、Chat Memory、Tool Calling。
+  - 实现 `AiOrchestrator`、`ToolRegistry`、`MemoryService`、`SafetyGuard`。
+  - 支持 OpenAI-compatible 模型供应商配置和本地 mock 模型 Bean。
   - 实现 AI 对话 session、message、session summary、长期记忆管理。
   - 模型只能通过后端注册工具访问当前用户数据。
 - 验收标准：
   - 可创建会话并完成一次多轮对话。
-  - AI 可触发至少一个只读工具调用，并记录 `ai_tool_calls`。
+  - AI 可通过 Spring AI tool calling 触发至少一个只读工具调用，并记录 `ai_tool_calls`。
   - 长期记忆可查看、禁用、删除。
   - AI 只使用当前用户授权数据，返回建议包含免责声明。
+  - 测试环境不依赖真实 AI Key。
   - `mvn test` 通过。
 - 风险等级：高
 
@@ -340,6 +344,7 @@ blocked
   - `backend/src/main/**/events/**`
 - 描述：
   - 实现 `get_focus_summary`、`get_habit_summary`、`get_diet_summary`、`get_ledger_summary`、`get_upcoming_events`、`get_user_profile_context`。
+  - 工具优先使用 Spring AI `@Tool` 或 `ToolCallback` 暴露。
   - 所有工具由服务端注入当前 `userId`。
   - 工具默认返回汇总数据，不返回过量原始明细。
 - 验收标准：
