@@ -19,6 +19,14 @@ public class User {
         this.createdAt = Instant.now();
     }
 
+    public User(String id, String email, String passwordHash, String displayName, Instant createdAt) {
+        this.id = id;
+        this.email = email;
+        this.passwordHash = passwordHash;
+        this.displayName = displayName;
+        this.createdAt = createdAt;
+    }
+
     public String getId() { return id; }
     public String getEmail() { return email; }
     public String getPasswordHash() { return passwordHash; }

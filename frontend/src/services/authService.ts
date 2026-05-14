@@ -12,7 +12,7 @@ export interface AuthResponse {
   user: User;
 }
 
-const MOCK_ENABLED = true;
+const MOCK_ENABLED = process.env.EXPO_PUBLIC_AUTH_MOCK_ENABLED === "true";
 
 export const authService = {
   async login(email: string, password: string): Promise<AuthResponse> {

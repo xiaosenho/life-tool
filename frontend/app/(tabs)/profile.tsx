@@ -1,4 +1,6 @@
 import { useState, useEffect } from "react";
+import { Ionicons } from "@expo/vector-icons";
+import { router } from "expo-router";
 import { View, TouchableOpacity, Text, StyleSheet, ActivityIndicator, Alert } from "react-native";
 import { MetricCard } from "@/components/MetricCard";
 import { Screen } from "@/components/Screen";
@@ -63,6 +65,17 @@ export default function ProfileScreen() {
         />
         <MetricCard label="隐私" value="默认私密" accent="green" />
 
+        <TouchableOpacity style={styles.aiEntry} onPress={() => router.push("/ai")}>
+          <View style={styles.aiIcon}>
+            <Ionicons name="sparkles-outline" size={22} color={colors.accent} />
+          </View>
+          <View style={styles.aiTextBlock}>
+            <Text style={styles.aiTitle}>AI 生活助手</Text>
+            <Text style={styles.aiSubtitle}>建议、对话与长期记忆</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color={colors.muted} />
+        </TouchableOpacity>
+
         <View style={styles.syncSection}>
           <View style={styles.syncInfo}>
             <Text style={styles.syncLabel}>上次同步：</Text>
@@ -90,6 +103,38 @@ export default function ProfileScreen() {
 }
 
 const styles = StyleSheet.create({
+  aiEntry: {
+    alignItems: "center",
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: 12,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 12,
+    padding: 14,
+  },
+  aiIcon: {
+    alignItems: "center",
+    backgroundColor: "#ECFDF5",
+    borderRadius: 10,
+    height: 42,
+    justifyContent: "center",
+    width: 42,
+  },
+  aiSubtitle: {
+    color: colors.muted,
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  aiTextBlock: {
+    flex: 1,
+    gap: 2,
+  },
+  aiTitle: {
+    color: colors.text,
+    fontSize: 16,
+    fontWeight: "700",
+  },
   syncSection: {
     backgroundColor: colors.surface,
     borderRadius: 12,

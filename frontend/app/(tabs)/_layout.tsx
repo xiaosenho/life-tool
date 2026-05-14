@@ -36,8 +36,8 @@ export default function TabLayout() {
       <Tabs.Screen name="index" options={{ title: "今日" }} />
       <Tabs.Screen name="focus" options={{ title: "专注" }} />
       <Tabs.Screen name="records" options={{ title: "记录" }} />
-      <Tabs.Screen name="ai" options={{ title: "AI" }} />
       <Tabs.Screen name="friends" options={{ title: "好友" }} />
+      <Tabs.Screen name="ai" options={{ href: null, title: "AI" }} />
       <Tabs.Screen name="profile" options={{ title: "我的" }} />
     </Tabs>
   );

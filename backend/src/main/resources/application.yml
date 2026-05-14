@@ -18,6 +18,8 @@ jwt:
   refresh-ttl-ms: 604800000
 
 lifetool:
+  database:
+    migration-enabled: ${LIFETOOL_DB_MIGRATION_ENABLED:false}
   ai:
     mock-enabled: ${LIFETOOL_AI_MOCK_ENABLED:true}
     max-tool-rounds: ${LIFETOOL_AI_MAX_TOOL_ROUNDS:3}
