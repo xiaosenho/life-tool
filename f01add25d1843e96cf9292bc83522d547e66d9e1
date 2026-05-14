@@ -1,0 +1,63 @@
+docs/AI_FRAMEWORK.md
+  5e9b1d4ea49c7ab5 1,5,7-12,19,23,25,29-40,43,45,47,49-51,53,57-69,73,77-83,86,88,90-97,99,103,105-109,111,113,115,117-123,125,127,129,131-133,135,137-140,142,145-149,152,154,158-159,161-162,164,168,176-180,182,184,186-191,193,195,199
+docs/PRD.md
+  5e9b1d4ea49c7ab5 36,115-116,143
+frontend/app/(tabs)/records.tsx
+  5e9b1d4ea49c7ab5 11,60,107-111
+docs/ARCHITECTURE.md
+  5e9b1d4ea49c7ab5 6,8,10,12-13,15,18-19,24,28-29,33,35,38-41,45-49,55,57,63-71,78,82-83,88-91,98,103,105-106,108,111-124,127,129,131-133,135-137,139-141,145,147,150,152-157,162-164,168,170,172-178,180,182-187,191,195,201-202,209-212,216,219,223-224,226,246-249,265-266
+README.md
+  5e9b1d4ea49c7ab5 15,24,49-50,56
+docs/API.md
+  5e9b1d4ea49c7ab5 500,519,558-560,567,576,582,585,593-596,600,602-605,693,745,762
+docs/DATABASE.md
+  5e9b1d4ea49c7ab5 98,163-164,191,193-196,355-366
+frontend/package.json
+  5e9b1d4ea49c7ab5 24
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.14",
+  "base_commit_sha": "f01add25d1843e96cf9292bc83522d547e66d9e1",
+  "prompts": {
+    "488af9d9f12201a0": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_1dbb8a1b9ffe6U4MYdfFBU1zwA",
+        "model": "deepseek/deepseek-v4-pro"
+      },
+      "human_author": "zhouxiaojie <i_zhouxiaojie@cvte.com>",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 40,
+      "overriden_lines": 0
+    },
+    "5e9b1d4ea49c7ab5": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_1da79bcd9ffeeLkCkz39KfMBE0",
+        "model": "deepseek/deepseek-v4-pro"
+      },
+      "human_author": "zhouxiaojie <i_zhouxiaojie@cvte.com>",
+      "messages": [],
+      "total_additions": 1417,
+      "total_deletions": 330,
+      "accepted_lines": 1884,
+      "overriden_lines": 1
+    },
+    "b057ae776a59323d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7da1a912-4e74-4976-85ed-09c45916ed01",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "zhouxiaojie <i_zhouxiaojie@cvte.com>",
+      "messages": [],
+      "total_additions": 1,
+      "total_deletions": 1,
+      "accepted_lines": 0,
+      "overriden_lines": 1
+    }
+  }
+}
