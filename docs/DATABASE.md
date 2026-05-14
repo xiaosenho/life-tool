@@ -95,7 +95,7 @@ media_assets 被以下表通过 media_asset_id 引用：
 | habit | habits | 创建/编辑/归档习惯时 |
 | habit_checkin | habit_checkins | 每日打卡时 |
 | privacy_setting | privacy_settings | 修改隐私设置时 |
-| meal_log | meal_logs | 确认饮食记录时 |
+| meal_log | meal_logs | 手动创建或 AI 识别成功写入饮食记录时 |
 | meal_item | meal_items | 随 meal_log 一起同步 |
 | ledger_transaction | ledger_transactions | 创建/编辑记账时 |
 | ledger_budget | ledger_budgets | 创建/编辑月度预算时 |
@@ -160,7 +160,8 @@ media_assets 被以下表通过 media_asset_id 引用：
 1. **V1**：初始化所有表结构（MVP + Phase 2 基础表）。
 2. **V2**：补充专注偏好、月度预算、纪念日与重复提醒（TASK-DB-002）。
 3. **V3**：补充 AI Framework 持久化表（AI 工具调用审计、长期记忆、会话摘要、Agent 运行审计）。
-4. **V3+**：根据实际需求添加字段、索引或调整约束，不在已发布迁移中过度设计。
+4. **V4**：修复运行期约束与部分状态取值，保证当前后端实现可在真实 PostgreSQL 环境落库。
+5. **V5+**：根据实际需求添加字段、索引或调整约束，不在已发布迁移中过度设计。
 
 ### 9.2 常见变更模式
 
@@ -187,11 +188,12 @@ CREATE INDEX idx_meal_logs_note ON meal_logs USING gin (to_tsvector('simple', no
 - `daily_stats` 建议通过定时任务或事件触发计算，避免实时聚合。
 - `daily_stats` 的 `stat_date` 索引在排行榜查询时使用，数据量大后考虑按 date 分区。
 
-## 10. 当前 V1 边界
+## 10. 当前迁移边界
 
-- V1 只提供数据库结构，不代表后端已经切换到 JPA/数据库仓储。
-- 当前后端仍有部分内存仓储实现，后续应按模块逐步迁移到 Repository。
-- `backend/src/main/resources/db/migration/V1__init_schema.sql` 按 Flyway 迁移文件组织，但项目尚未接入 Flyway 依赖；接入时可直接复用该路径。
+- 当前迁移文件位于 `backend/src/main/resources/db/migration`，包括 V1 到 V4。
+- 后端已接入 Flyway 依赖，并通过 `lifetool.database.migration-enabled` 控制是否在启动时自动执行迁移。
+- 当前后端采用 Store 抽象：本地和测试可使用内存 Store，`postgres` profile 使用 PostgreSQL Store。
+- 迁移文件不等同于所有业务都必须同步支持离线；客户端同步范围以实际 service 和 `sync_mutations` 实现为准。
 
 ## 11. V2 已迁移内容
 
@@ -350,3 +352,15 @@ ai_chat_messages (1) ──< ai_tool_calls (每消息可多条工具调用)
 - `ai_tool_calls` 同时依赖 `ai_chat_sessions` 和 `ai_chat_messages` 表。
 - `ai_agent_runs.session_id` 可为 NULL，以支持不绑定会话的运行（如定时分析任务）。
 - `ai_memory_items` 只依赖 `users`，长期记忆跨会话独立存在。
+
+## 13. V4 已迁移内容
+
+V4 对应迁移文件 `V4__fix_runtime_constraints.sql`，用于修复开发过程中真实接口落库暴露出的约束问题。
+
+主要调整：
+
+- 放宽或修正 `friendships.status`，支持当前好友申请流程中的拒绝状态。
+- 修复部分运行时状态字段与后端枚举不一致的问题。
+- 保持向前兼容，不直接修改已发布的 V1/V2/V3 文件。
+
+后续新增约束或字段时继续使用新的版本号迁移，禁止回改已在环境中执行过的 migration。

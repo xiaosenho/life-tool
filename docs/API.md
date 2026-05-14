@@ -497,6 +497,7 @@ DELETE /api/media/assets/{id}
 {
   "id": "uuid",
   "objectKey": "users/user_uuid/media/asset_uuid.jpg",
+  "readUrl": "https://lifetool-media-prod.cos.ap-guangzhou.myqcloud.com/...",
   "contentType": "image/jpeg",
   "purpose": "meal_photo",
   "fileSize": 512000,
@@ -515,6 +516,7 @@ DELETE /api/media/assets/{id}
 {
   "id": "uuid",
   "objectKey": "users/user_uuid/media/asset_uuid.jpg",
+  "readUrl": "https://lifetool-media-prod.cos.ap-guangzhou.myqcloud.com/...",
   "contentType": "image/jpeg",
   "purpose": "meal_photo",
   "fileSize": 512000,
@@ -553,15 +555,16 @@ DELETE /api/media/assets/{id}
 | --- | --- | --- |
 | COS_REGION | COS 地域 | ap-guangzhou |
 | COS_BUCKET | COS 存储桶 | life-tool-media |
-| COS_PUBLIC_BASE_URL | COS 公网访问地址，留空则返回 mock URL | 空 |
+| COS_SECRET_ID | COS 子账号 SecretId | 空 |
+| COS_SECRET_KEY | COS 子账号 SecretKey | 空 |
+| COS_PUBLIC_BASE_URL | 兼容保留字段；当前私有读优先返回后端签发的短有效期 readUrl | 空 |
 | COS_UPLOAD_TOKEN_TTL_SECONDS | 上传授权有效期（秒） | 300 |
 | MEDIA_MAX_IMAGE_BYTES | 最大图片大小（字节） | 10485760 |
 
 ## 12. AI
 
 ```text
-POST /api/ai/food-recognition/jobs
-GET  /api/ai/food-recognition/jobs/{id}
+POST /api/ai/food-recognition
 POST /api/ai/life-advice
 POST /api/ai/chat/sessions
 POST /api/ai/chat/sessions/{id}/messages
@@ -570,15 +573,16 @@ GET  /api/ai/memories
 DELETE /api/ai/memories/{id}
 ```
 
-### POST /api/ai/food-recognition/jobs
+### POST /api/ai/food-recognition
 
 请求：
 
 ```json
 {
+  "imageUrl": "https://signed-read-url.example.com/meal.jpg",
   "mediaAssetId": "uuid",
   "mealType": "lunch",
-  "occurredAt": "2026-05-13T12:00:00Z"
+  "customPrompt": "这是一份午餐，请估算热量。"
 }
 ```
 
@@ -586,33 +590,19 @@ DELETE /api/ai/memories/{id}
 
 ```json
 {
-  "jobId": "uuid",
-  "status": "pending"
+  "result": "图片中可能包含米饭、鸡胸肉和青菜。总热量约 620 千卡。",
+  "disclaimer": "AI 建议仅供参考，不构成医疗或营养诊断。",
+  "mealLogId": "uuid",
+  "totalCalories": 620
 }
 ```
 
-### GET /api/ai/food-recognition/jobs/{id}
+说明：
 
-响应：
-
-```json
-{
-  "jobId": "uuid",
-  "status": "succeeded",
-  "result": {
-    "items": [
-      {
-        "name": "米饭",
-        "estimatedGrams": 150,
-        "estimatedCalories": 174,
-        "confidence": 0.78
-      }
-    ],
-    "totalCalories": 174,
-    "notes": "结果为估算值，请确认后保存。"
-  }
-}
-```
+- 当前接口为同步识别接口，不再使用 `/jobs` 轮询模型。
+- 识别成功后，后端会为当前用户生成一条饮食记录，并返回 `mealLogId`。
+- `totalCalories` 由后端从模型文本中提取；无法可靠提取时返回 0 或后端默认值。
+- 前端识别成功后应刷新今日饮食汇总。
 
 ### POST /api/ai/life-advice
 
@@ -700,7 +690,7 @@ DELETE /api/ai/memories/{id}
 说明：
 
 - 客户端不能直接调用工具，`enabledTools` 只是本次对话允许使用的工具范围。
-- 工具实际执行由后端 `AiOrchestrator` 完成。
+- 工具实际执行由后端 `AiService` 和 `UserDataTools` 完成。
 - 后端必须按当前登录用户注入 `userId`。
 
 ### GET /api/ai/chat/sessions/{id}/messages
@@ -752,7 +742,7 @@ DELETE /api/ai/memories/{id}
 | --- | --- |
 | `get_focus_summary` | 查询当前用户近 N 天专注汇总 |
 | `get_habit_summary` | 查询当前用户习惯完成率和连续打卡 |
-| `get_diet_summary` | 查询当前用户已确认饮食汇总 |
+| `get_diet_summary` | 查询当前用户饮食热量、餐次分布和记录数 |
 | `get_ledger_summary` | 查询当前用户月度收支和预算汇总 |
 | `get_upcoming_events` | 查询当前用户未来纪念日和提醒 |
 | `get_user_profile_context` | 查询当前用户基础偏好和隐私配置 |
@@ -769,5 +759,5 @@ DELETE /api/ai/memories/{id}
 | RATE_LIMITED | 请求过快 |
 | FILE_TOO_LARGE | 文件过大 |
 | UNSUPPORTED_MEDIA_TYPE | 不支持的媒体类型 |
-| AI_JOB_FAILED | AI 任务失败 |
+| AI_RECOGNITION_FAILED | AI 识图失败 |
 | INTERNAL_ERROR | 服务端错误 |

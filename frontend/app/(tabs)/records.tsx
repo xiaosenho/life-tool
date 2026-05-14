@@ -8,8 +8,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { useRouter } from "expo-router";
-import { useFocusEffect } from "@react-navigation/core";
+import { useRouter, usePathname } from "expo-router";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 
 import { MetricCard } from "@/components/MetricCard";
@@ -58,6 +57,7 @@ function formatMoney(value: number) {
 
 export default function RecordsScreen() {
   const router = useRouter();
+  const pathname = usePathname();
   const [month] = useState(currentMonth());
   const [type, setType] = useState<LedgerTransactionType>("expense");
   const [amount, setAmount] = useState("");
@@ -104,11 +104,11 @@ export default function RecordsScreen() {
     }
   }, []);
 
-  useFocusEffect(
-    useCallback(() => {
-      void loadDiet();
-    }, [loadDiet])
-  );
+  useEffect(() => {
+    if (pathname === "/records" || pathname === "/(tabs)/records") {
+      loadDiet();
+    }
+  }, [pathname, loadDiet]);
 
   useEffect(() => {
     loadLedger();
