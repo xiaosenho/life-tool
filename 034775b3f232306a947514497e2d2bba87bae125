@@ -1,0 +1,125 @@
+backend/src/main/java/com/lifetool/focus/FocusSession.java
+  df3f00d1f541eb16 1-62
+backend/src/main/java/com/lifetool/auth/GlobalExceptionHandler.java
+  df3f00d1f541eb16 14,67-68,94-101
+frontend/src/services/habitService.ts
+  488af9d9f12201a0 5,142-167
+backend/src/main/java/com/lifetool/habits/HabitCheckinStore.java
+  df3f00d1f541eb16 1-15
+backend/src/main/java/com/lifetool/habits/HabitController.java
+  df3f00d1f541eb16 1-88
+backend/src/main/java/com/lifetool/focus/InMemoryFocusSessionStore.java
+  df3f00d1f541eb16 1-48
+backend/src/main/java/com/lifetool/focus/dto/CreateFocusSessionRequest.java
+  df3f00d1f541eb16 1-7
+backend/src/main/java/com/lifetool/habits/dto/HabitCheckinResponse.java
+  df3f00d1f541eb16 1-29
+backend/src/main/java/com/lifetool/ai/dto/FoodRecognitionResponse.java
+  38320e13fe6fa371 1-9
+backend/src/main/java/com/lifetool/focus/dto/EndFocusSessionRequest.java
+  df3f00d1f541eb16 1-7
+backend/src/main/java/com/lifetool/ai/SpringAiAssistantClient.java
+  38320e13fe6fa371 3,15-16,35-51
+frontend/app/(tabs)/focus.tsx
+  488af9d9f12201a0 51-61,93,96,127-132
+backend/src/main/java/com/lifetool/habits/InMemoryHabitStore.java
+  df3f00d1f541eb16 1-42
+backend/src/main/java/com/lifetool/focus/FocusSessionStore.java
+  df3f00d1f541eb16 1-14
+backend/src/main/java/com/lifetool/ai/JdbcAiChatStore.java
+  488af9d9f12201a0 158-160
+frontend/src/services/focusService.ts
+  488af9d9f12201a0 5,196-217
+backend/src/main/java/com/lifetool/habits/HabitCheckin.java
+  df3f00d1f541eb16 1-48
+backend/src/main/java/com/lifetool/focus/dto/FocusSessionResponse.java
+  df3f00d1f541eb16 1-34
+backend/src/main/java/com/lifetool/habits/JdbcHabitCheckinStore.java
+  df3f00d1f541eb16 1-149
+frontend/src/services/aiService.ts
+  488af9d9f12201a0 72-75
+backend/src/main/java/com/lifetool/focus/FocusSessionService.java
+  df3f00d1f541eb16 1-91
+backend/src/main/java/com/lifetool/ai/AiAssistantClient.java
+  38320e13fe6fa371 10-11
+backend/src/main/java/com/lifetool/habits/dto/UpdateHabitRequest.java
+  df3f00d1f541eb16 1-12
+backend/src/main/java/com/lifetool/habits/HabitService.java
+  df3f00d1f541eb16 1-144
+backend/src/main/java/com/lifetool/habits/HabitException.java
+  df3f00d1f541eb16 1-15
+backend/src/main/java/com/lifetool/habits/dto/CreateCheckinRequest.java
+  df3f00d1f541eb16 1-6
+backend/src/main/java/com/lifetool/sync/JdbcSyncStore.java
+  488af9d9f12201a0 39-48,56,101
+backend/src/main/java/com/lifetool/habits/dto/CreateHabitRequest.java
+  df3f00d1f541eb16 1-13
+backend/src/main/java/com/lifetool/ai/dto/FoodRecognitionRequest.java
+  38320e13fe6fa371 1-9
+backend/src/main/java/com/lifetool/ai/MockAiAssistantClient.java
+  38320e13fe6fa371 9-14
+backend/src/main/java/com/lifetool/habits/dto/HabitResponse.java
+  df3f00d1f541eb16 1-36
+backend/src/main/java/com/lifetool/ai/AiController.java
+  38320e13fe6fa371 19-20,81-87
+backend/src/main/java/com/lifetool/focus/FocusSessionController.java
+  df3f00d1f541eb16 1-66
+backend/src/main/java/com/lifetool/habits/HabitStore.java
+  df3f00d1f541eb16 1-14
+backend/src/main/java/com/lifetool/focus/JdbcFocusSessionStore.java
+  df3f00d1f541eb16 1-171
+backend/src/main/java/com/lifetool/habits/InMemoryHabitCheckinStore.java
+  df3f00d1f541eb16 1-44
+backend/src/main/java/com/lifetool/habits/Habit.java
+  df3f00d1f541eb16 1-66
+backend/src/main/java/com/lifetool/ai/AiService.java
+  38320e13fe6fa371 18-19,158-175
+backend/src/main/java/com/lifetool/habits/JdbcHabitStore.java
+  df3f00d1f541eb16 1-167
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.14",
+  "base_commit_sha": "034775b3f232306a947514497e2d2bba87bae125",
+  "prompts": {
+    "38320e13fe6fa371": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_1dadf076bffeXnjul26h7s6b4R",
+        "model": "deepseek/deepseek-v4-pro"
+      },
+      "human_author": "zhouxiaojie <i_zhouxiaojie@cvte.com>",
+      "messages": [],
+      "total_additions": 76,
+      "total_deletions": 0,
+      "accepted_lines": 76,
+      "overriden_lines": 0
+    },
+    "488af9d9f12201a0": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_1dbb8a1b9ffe6U4MYdfFBU1zwA",
+        "model": "deepseek/deepseek-v4-pro"
+      },
+      "human_author": "zhouxiaojie <i_zhouxiaojie@cvte.com>",
+      "messages": [],
+      "total_additions": 93,
+      "total_deletions": 10,
+      "accepted_lines": 130,
+      "overriden_lines": 0
+    },
+    "df3f00d1f541eb16": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_1dadfe7e6ffebphapQUPPO5k22",
+        "model": "deepseek/deepseek-v4-pro"
+      },
+      "human_author": "zhouxiaojie <i_zhouxiaojie@cvte.com>",
+      "messages": [],
+      "total_additions": 1401,
+      "total_deletions": 0,
+      "accepted_lines": 1401,
+      "overriden_lines": 0
+    }
+  }
+}
