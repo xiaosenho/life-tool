@@ -17,11 +17,18 @@
       "adaptiveIcon": {
         "backgroundColor": "#0F172A"
       },
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "package": "com.anonymous.lifetool"
     },
     "web": {
       "bundler": "metro",
       "output": "single"
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "33e4890e-9292-4621-9389-4e50136c86a4"
+      }
     }
   }
 }

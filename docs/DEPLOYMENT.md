@@ -56,6 +56,7 @@ cp backend/.env.example backend/.env
 ```bash
 cd backend
 mvn spring-boot:run
+nohup mvn spring-boot:run > app.log 2>&1 &
 ```
 
 后端默认监听 `http://localhost:8080`。
