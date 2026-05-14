@@ -155,6 +155,9 @@ public class JdbcAiChatStore implements AiChatStore {
 
     @Override
     public AiToolCall appendToolCall(AiToolCall toolCall) {
+        if (toolCall.getSessionId() == null) {
+            return toolCall;
+        }
         String sql = """
                 INSERT INTO ai_tool_calls (id, user_id, session_id, message_id, tool_name, arguments, result_summary, status, latency_ms, created_at)
                 VALUES (?::uuid, ?::uuid, ?::uuid, ?::uuid, ?, ?::jsonb, ?::jsonb, ?, ?, ?)

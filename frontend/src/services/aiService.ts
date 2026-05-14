@@ -69,5 +69,9 @@ export const aiService = {
 
   deleteMemory(id: string) {
     return apiClient.delete<void>(`/ai/memories/${id}`);
+  },
+
+  recognizeFood(imageUrl: string, customPrompt?: string) {
+    return apiClient.post<{ result: string; disclaimer: string }>("/ai/food-recognition", { imageUrl, customPrompt });
   }
 };

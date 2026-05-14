@@ -16,6 +16,8 @@ import com.lifetool.ai.dto.AiChatMessagesResponse;
 import com.lifetool.ai.dto.AiChatSessionResponse;
 import com.lifetool.ai.dto.AiMemoriesResponse;
 import com.lifetool.ai.dto.CreateAiChatSessionRequest;
+import com.lifetool.ai.dto.FoodRecognitionRequest;
+import com.lifetool.ai.dto.FoodRecognitionResponse;
 import com.lifetool.ai.dto.LifeAdviceRequest;
 import com.lifetool.ai.dto.LifeAdviceResponse;
 import com.lifetool.ai.dto.SendAiMessageRequest;
@@ -75,5 +77,12 @@ public class AiController {
             @PathVariable String id) {
         aiService.deleteMemory(userId, id);
         return ResponseEntity.ok(ApiResponse.ok(null));
+    }
+
+    @PostMapping("/food-recognition")
+    public ResponseEntity<ApiResponse<FoodRecognitionResponse>> recognizeFood(
+            @AuthenticationPrincipal String userId,
+            @Valid @RequestBody FoodRecognitionRequest request) {
+        return ResponseEntity.ok(ApiResponse.ok(aiService.recognizeFood(userId, request)));
     }
 }

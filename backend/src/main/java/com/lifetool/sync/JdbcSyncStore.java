@@ -36,6 +36,16 @@ public class JdbcSyncStore implements SyncStore {
         this.username = username;
         this.password = password;
         this.objectMapper = objectMapper;
+        ensureEntityIdIsText();
+    }
+
+    private void ensureEntityIdIsText() {
+        try (Connection conn = getConnection();
+             var stmt = conn.createStatement()) {
+            stmt.execute("ALTER TABLE sync_mutations ALTER COLUMN entity_id TYPE text");
+        } catch (SQLException ignored) {
+            // Column may already be text
+        }
     }
 
     @Override
@@ -43,7 +53,7 @@ public class JdbcSyncStore implements SyncStore {
         String sql = """
                 SELECT user_id, entity_type, entity_id, server_version, operation, payload
                 FROM sync_mutations
-                WHERE user_id = ?::uuid AND entity_type = ? AND entity_id = ?::uuid
+                WHERE user_id = ?::uuid AND entity_type = ? AND entity_id = ?
                 ORDER BY server_version DESC
                 LIMIT 1
                 """;
@@ -88,7 +98,7 @@ public class JdbcSyncStore implements SyncStore {
             String payloadStr = payload != null ? payload.toString() : "{}";
             String sql = """
                     INSERT INTO sync_mutations (user_id, entity_type, entity_id, operation, server_version, payload, created_at, updated_at)
-                    VALUES (?::uuid, ?, ?::uuid, ?::text, ?, ?::jsonb, now(), now())
+                    VALUES (?::uuid, ?, ?, ?::text, ?, ?::jsonb, now(), now())
                     """;
             try (var stmt = conn.prepareStatement(sql)) {
                 stmt.setString(1, userId);

@@ -1,0 +1,144 @@
+package com.lifetool.habits;
+
+import java.time.Instant;
+import java.time.LocalDate;
+import java.util.List;
+
+import org.springframework.stereotype.Service;
+
+import com.lifetool.habits.dto.CreateCheckinRequest;
+import com.lifetool.habits.dto.CreateHabitRequest;
+import com.lifetool.habits.dto.HabitCheckinResponse;
+import com.lifetool.habits.dto.HabitResponse;
+import com.lifetool.habits.dto.UpdateHabitRequest;
+
+@Service
+public class HabitService {
+
+    private static final List<String> VALID_FREQUENCY_TYPES = List.of("daily", "weekly", "custom");
+
+    private final HabitStore habitStore;
+    private final HabitCheckinStore checkinStore;
+
+    public HabitService(HabitStore habitStore, HabitCheckinStore checkinStore) {
+        this.habitStore = habitStore;
+        this.checkinStore = checkinStore;
+    }
+
+    public HabitResponse createHabit(String userId, CreateHabitRequest request) {
+        String frequencyType = request.frequencyType() == null || request.frequencyType().isBlank()
+                ? "daily" : request.frequencyType();
+        if (!VALID_FREQUENCY_TYPES.contains(frequencyType)) {
+            throw new HabitException("VALIDATION_ERROR", "Invalid frequencyType: " + frequencyType);
+        }
+
+        Habit habit = new Habit();
+        habit.setUserId(userId);
+        habit.setName(request.name().trim());
+        habit.setDescription(blankToNull(request.description()));
+        habit.setFrequencyType(frequencyType);
+        habit.setFrequencyDays(request.frequencyDays() != null ? request.frequencyDays() : new int[0]);
+        habit.setTargetCount(Math.max(1, request.targetCount()));
+        habit.setColor(blankToNull(request.color()));
+        habit.setIcon(blankToNull(request.icon()));
+
+        habitStore.save(habit);
+        return HabitResponse.from(habit);
+    }
+
+    public List<HabitResponse> listHabits(String userId) {
+        return habitStore.findByUserId(userId).stream()
+                .map(HabitResponse::from)
+                .toList();
+    }
+
+    public HabitResponse updateHabit(String userId, String id, UpdateHabitRequest request) {
+        Habit habit = findOwnedHabit(userId, id);
+
+        if (request.name() != null) {
+            if (request.name().isBlank()) {
+                throw new HabitException("VALIDATION_ERROR", "name is required");
+            }
+            habit.setName(request.name().trim());
+        }
+        if (request.description() != null) {
+            habit.setDescription(blankToNull(request.description()));
+        }
+        if (request.frequencyType() != null) {
+            if (!VALID_FREQUENCY_TYPES.contains(request.frequencyType())) {
+                throw new HabitException("VALIDATION_ERROR", "Invalid frequencyType: " + request.frequencyType());
+            }
+            habit.setFrequencyType(request.frequencyType());
+        }
+        if (request.frequencyDays() != null) {
+            habit.setFrequencyDays(request.frequencyDays());
+        }
+        if (request.targetCount() != null) {
+            habit.setTargetCount(Math.max(1, request.targetCount()));
+        }
+        if (request.color() != null) {
+            habit.setColor(blankToNull(request.color()));
+        }
+        if (request.icon() != null) {
+            habit.setIcon(blankToNull(request.icon()));
+        }
+        if (request.archived() != null) {
+            habit.setArchived(request.archived());
+        }
+
+        habit.setUpdatedAt(Instant.now());
+        habitStore.save(habit);
+        return HabitResponse.from(habit);
+    }
+
+    public void archiveHabit(String userId, String id) {
+        Habit habit = findOwnedHabit(userId, id);
+        habitStore.deleteById(id);
+    }
+
+    public HabitCheckinResponse checkin(String userId, String habitId, CreateCheckinRequest request) {
+        Habit habit = findOwnedHabit(userId, habitId);
+        LocalDate today = LocalDate.now();
+
+        HabitCheckin existing = checkinStore.findByHabitIdAndDate(habitId, today).orElse(null);
+        if (existing != null) {
+            existing.setCount(request.count() > 0 ? request.count() : existing.getCount() + 1);
+            existing.setNote(request.note() != null ? request.note() : existing.getNote());
+            existing.setUpdatedAt(Instant.now());
+            checkinStore.save(existing);
+            return HabitCheckinResponse.from(existing);
+        }
+
+        HabitCheckin checkin = new HabitCheckin();
+        checkin.setUserId(userId);
+        checkin.setHabitId(habitId);
+        checkin.setCheckinDate(today);
+        checkin.setCount(request.count() > 0 ? request.count() : 1);
+        checkin.setNote(blankToNull(request.note()));
+
+        checkinStore.save(checkin);
+        return HabitCheckinResponse.from(checkin);
+    }
+
+    public List<HabitCheckinResponse> listCheckins(String userId, String habitId, LocalDate from, LocalDate to) {
+        findOwnedHabit(userId, habitId);
+        return checkinStore.findByHabitId(habitId).stream()
+                .filter(c -> from == null || !c.getCheckinDate().isBefore(from))
+                .filter(c -> to == null || !c.getCheckinDate().isAfter(to))
+                .map(HabitCheckinResponse::from)
+                .toList();
+    }
+
+    private Habit findOwnedHabit(String userId, String id) {
+        Habit habit = habitStore.findById(id)
+                .orElseThrow(() -> new HabitException("NOT_FOUND", "Habit not found"));
+        if (!habit.getUserId().equals(userId)) {
+            throw new HabitException("FORBIDDEN", "Access denied");
+        }
+        return habit;
+    }
+
+    private static String blankToNull(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
+    }
+}

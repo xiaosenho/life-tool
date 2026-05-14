@@ -6,6 +6,12 @@ import java.util.stream.Collectors;
 public class MockAiAssistantClient implements AiAssistantClient {
 
     @Override
+    public String chatWithImage(String conversationId, String systemPrompt, String imageUrl, String userText) {
+        return "【Mock】图片识别：" + (userText != null ? userText : "识别食物")
+                + "。这是一个模拟响应，真实环境下会调用 AI 模型进行食物识别和热量估算。";
+    }
+
+    @Override
     public String chat(String conversationId, String systemPrompt, List<ChatEntry> history, List<ToolResult> toolResults) {
         String lastUserContent = history.stream()
                 .filter(e -> "user".equals(e.role()))

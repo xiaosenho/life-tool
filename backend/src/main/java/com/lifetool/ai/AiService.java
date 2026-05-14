@@ -15,6 +15,8 @@ import com.lifetool.ai.dto.AiMemoriesResponse;
 import com.lifetool.ai.dto.AiMemoryResponse;
 import com.lifetool.ai.dto.AiToolCallStatusResponse;
 import com.lifetool.ai.dto.CreateAiChatSessionRequest;
+import com.lifetool.ai.dto.FoodRecognitionRequest;
+import com.lifetool.ai.dto.FoodRecognitionResponse;
 import com.lifetool.ai.dto.LifeAdviceRequest;
 import com.lifetool.ai.dto.LifeAdviceResponse;
 import com.lifetool.ai.dto.SendAiMessageRequest;
@@ -151,6 +153,24 @@ public class AiService {
             throw new AiException("FORBIDDEN", "Access denied");
         }
         memory.disable();
+    }
+
+    public FoodRecognitionResponse recognizeFood(String userId, FoodRecognitionRequest request) {
+        String systemPrompt = "你是一个专业的营养师。请识别用户上传图片中的食物，估算每种食物的重量、热量（千卡）以及蛋白质/脂肪/碳水化合物含量（克），最后给出总热量估算。";
+
+        String userText = request.customPrompt() != null && !request.customPrompt().isBlank()
+                ? request.customPrompt()
+                : "请识别图片中的食物并估算热量";
+
+        String response;
+        try {
+            UserDataTools.setCurrentUserId(userId);
+            response = assistantClient.chatWithImage("food-" + userId, systemPrompt, request.imageUrl(), userText);
+        } finally {
+            UserDataTools.clearCurrentUserId();
+        }
+
+        return new FoodRecognitionResponse(response, properties.getDisclaimer());
     }
 
     private String buildSystemPrompt(boolean useLongTermMemory, String userId) {

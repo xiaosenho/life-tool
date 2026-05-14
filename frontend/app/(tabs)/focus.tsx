@@ -48,6 +48,17 @@ export default function FocusScreen() {
   }, [isActive, timeLeft]);
 
   const loadPreference = async () => {
+    try {
+      const res = await focusService.getPreferenceFromServer();
+      if (res.success && res.data) {
+        const mins = (res.data as any).defaultFocusMinutes || 25;
+        setDefaultMinutes(mins);
+        setTargetMinutes(mins);
+        setCustomMinutes(String(mins));
+        setTimeLeft(mins * 60);
+        return;
+      }
+    } catch {}
     const preference = await focusService.getPreference();
     setDefaultMinutes(preference.default_focus_minutes);
     setTargetMinutes(preference.default_focus_minutes);
@@ -79,10 +90,10 @@ export default function FocusScreen() {
 
   const saveDefaultMinutes = async () => {
     try {
-      const preference = await focusService.savePreference({
+      await focusService.savePreferenceToServer({
         defaultFocusMinutes: targetMinutes,
       });
-      setDefaultMinutes(preference.default_focus_minutes);
+      setDefaultMinutes(targetMinutes);
       Alert.alert("已保存", "下次进入专注页会使用这个默认时长。");
     } catch (error) {
       Alert.alert("保存失败", error instanceof Error ? error.message : "请稍后重试。");
@@ -110,6 +121,13 @@ export default function FocusScreen() {
       Alert.alert("提示", "专注时间太短，将不会记录。");
       resetTimer();
       return;
+    }
+
+    try {
+      // Direct API call
+      await focusService.startSession("pomodoro", targetMinutes, null);
+    } catch {
+      // Fallback to local
     }
 
     try {

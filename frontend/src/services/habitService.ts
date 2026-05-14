@@ -2,6 +2,7 @@ import { getDb } from '@/db/database';
 import { syncService } from './syncService';
 import { createLocalId } from '@/utils/id';
 import { useAuthStore } from '@/store/authStore';
+import { apiClient } from './apiClient';
 
 export interface Habit {
   id: string;
@@ -138,5 +139,30 @@ export const habitService = {
       [userId, today]
     );
     return rows as HabitCheckin[];
-  }
+  },
+
+  // Direct API methods (call backend)
+  async createHabitOnServer(data: { name: string; frequencyType?: string; targetCount?: number; color?: string }) {
+    return apiClient.post<Habit>('/habits', data);
+  },
+
+  async getHabitsFromServer() {
+    return apiClient.get<Habit[]>('/habits');
+  },
+
+  async updateHabitOnServer(id: string, data: { name?: string; targetCount?: number; color?: string; archived?: boolean }) {
+    return apiClient.patch<Habit>(`/habits/${id}`, data);
+  },
+
+  async deleteHabitOnServer(id: string) {
+    return apiClient.delete<void>(`/habits/${id}`);
+  },
+
+  async checkinOnServer(habitId: string, count: number = 1, note?: string) {
+    return apiClient.post<HabitCheckin>(`/habits/${habitId}/checkins`, { count, note });
+  },
+
+  async getCheckinsFromServer(habitId: string) {
+    return apiClient.get<HabitCheckin[]>(`/habits/${habitId}/checkins`);
+  },
 };

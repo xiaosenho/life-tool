@@ -2,6 +2,7 @@ import { getDb } from '@/db/database';
 import { syncService } from './syncService';
 import { createLocalId } from '@/utils/id';
 import { useAuthStore } from '@/store/authStore';
+import { apiClient } from './apiClient';
 
 export interface FocusSession {
   id: string;
@@ -192,5 +193,26 @@ export const focusService = {
       totalSeconds,
       sessionCount: rows.length,
     };
-  }
+  },
+
+  // Direct API methods (call backend)
+  async startSession(mode: string, targetMinutes: number, note?: string) {
+    return apiClient.post<FocusSession>('/focus/sessions', { mode, targetMinutes, note });
+  },
+
+  async endSession(id: string, actualMinutes: number, status: string, note?: string) {
+    return apiClient.patch<FocusSession>(`/focus/sessions/${id}`, { actualMinutes, status, note });
+  },
+
+  async getSessionsFromServer(month: string) {
+    return apiClient.get<FocusSession[]>(`/focus/sessions?month=${month}`);
+  },
+
+  async getPreferenceFromServer() {
+    return apiClient.get<FocusPreference>('/focus/preferences');
+  },
+
+  async savePreferenceToServer(input: FocusPreferenceInput) {
+    return apiClient.patch<FocusPreference>('/focus/preferences', input);
+  },
 };
