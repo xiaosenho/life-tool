@@ -29,7 +29,7 @@ public class SpringAiAssistantClient implements AiAssistantClient {
     }
 
     @Override
-    public String chat(String systemPrompt, List<ChatEntry> history, List<ToolResult> toolResults) {
+    public String chat(String conversationId, String systemPrompt, List<ChatEntry> history, List<ToolResult> toolResults) {
         StringBuilder fullSystem = new StringBuilder();
         if (systemPrompt != null && !systemPrompt.isBlank()) {
             fullSystem.append(systemPrompt);
@@ -53,6 +53,10 @@ public class SpringAiAssistantClient implements AiAssistantClient {
         }
 
         Prompt prompt = new Prompt(messages);
-        return chatClient.prompt(prompt).tools(userDataTools).call().content();
+        return chatClient.prompt(prompt)
+                .tools(userDataTools)
+                .advisors(a -> a.param("chat_memory_conversation_id", conversationId))
+                .call()
+                .content();
     }
 }

@@ -6,7 +6,7 @@ import java.util.stream.Collectors;
 public class MockAiAssistantClient implements AiAssistantClient {
 
     @Override
-    public String chat(String systemPrompt, List<ChatEntry> history, List<ToolResult> toolResults) {
+    public String chat(String conversationId, String systemPrompt, List<ChatEntry> history, List<ToolResult> toolResults) {
         String lastUserContent = history.stream()
                 .filter(e -> "user".equals(e.role()))
                 .reduce((a, b) -> b)

@@ -1,52 +1,21 @@
 package com.lifetool.ai;
 
-import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.ConcurrentHashMap;
 
-import org.springframework.stereotype.Repository;
+public interface AiChatStore {
 
-@Repository
-public class AiChatStore {
-    private final Map<String, AiChatSession> sessionsById = new ConcurrentHashMap<>();
-    private final Map<String, List<AiChatMessage>> messagesBySessionId = new ConcurrentHashMap<>();
-    private final Map<String, List<AiToolCall>> toolCallsByMessageId = new ConcurrentHashMap<>();
+    AiChatSession saveSession(AiChatSession session);
 
-    public AiChatSession saveSession(AiChatSession session) {
-        sessionsById.put(session.getId(), session);
-        return session;
-    }
+    Optional<AiChatSession> findSession(String id);
 
-    public Optional<AiChatSession> findSession(String id) {
-        return Optional.ofNullable(sessionsById.get(id));
-    }
+    AiChatMessage appendMessage(AiChatMessage message);
 
-    public AiChatMessage appendMessage(AiChatMessage message) {
-        messagesBySessionId.computeIfAbsent(message.getSessionId(), key -> new ArrayList<>()).add(message);
-        return message;
-    }
+    int nextSeq(String sessionId);
 
-    public int nextSeq(String sessionId) {
-        return messagesBySessionId.getOrDefault(sessionId, List.of()).size() + 1;
-    }
+    List<AiChatMessage> listMessages(String sessionId);
 
-    public List<AiChatMessage> listMessages(String sessionId) {
-        return messagesBySessionId.getOrDefault(sessionId, List.of()).stream()
-                .sorted(Comparator.comparingInt(AiChatMessage::getSeq))
-                .toList();
-    }
+    AiToolCall appendToolCall(AiToolCall toolCall);
 
-    public AiToolCall appendToolCall(AiToolCall toolCall) {
-        toolCallsByMessageId.computeIfAbsent(toolCall.getMessageId(), key -> new ArrayList<>()).add(toolCall);
-        return toolCall;
-    }
-
-    public List<AiToolCall> listToolCalls(String messageId) {
-        return toolCallsByMessageId.getOrDefault(messageId, List.of()).stream()
-                .sorted(Comparator.comparing(AiToolCall::getCreatedAt))
-                .toList();
-    }
+    List<AiToolCall> listToolCalls(String messageId);
 }

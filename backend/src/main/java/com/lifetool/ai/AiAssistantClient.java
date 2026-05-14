@@ -5,7 +5,7 @@ import java.util.Map;
 
 public interface AiAssistantClient {
 
-    String chat(String systemPrompt, List<ChatEntry> history, List<ToolResult> toolResults);
+    String chat(String conversationId, String systemPrompt, List<ChatEntry> history, List<ToolResult> toolResults);
 
     record ChatEntry(String role, String content) {}
 

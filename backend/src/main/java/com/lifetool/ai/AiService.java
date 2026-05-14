@@ -82,7 +82,7 @@ public class AiService {
         String assistantContent;
         try {
             UserDataTools.setCurrentUserId(userId);
-            assistantContent = assistantClient.chat(systemPrompt, history, toolResults);
+            assistantContent = assistantClient.chat(sessionId, systemPrompt, history, toolResults);
         } finally {
             UserDataTools.clearCurrentUserId();
         }
@@ -112,13 +112,29 @@ public class AiService {
 
     public LifeAdviceResponse getLifeAdvice(String userId, LifeAdviceRequest request) {
         List<AiToolCall> toolCalls = executeTools(userId, null, "life-advice", request == null ? null : request.topics());
+
+        String systemPrompt = buildSystemPrompt(true, userId);
+        String userQuery = "请根据我的近期生活数据，给我一些综合生活建议和分析。";
+
+        List<AiAssistantClient.ChatEntry> history = List.of(
+                new AiAssistantClient.ChatEntry("user", userQuery));
+        List<AiAssistantClient.ToolResult> toolResults = toolCalls.stream()
+                .map(tc -> new AiAssistantClient.ToolResult(tc.getToolName(), tc.getResultSummary()))
+                .toList();
+
+        String advice;
+        try {
+            UserDataTools.setCurrentUserId(userId);
+            advice = assistantClient.chat("life-advice-" + userId, systemPrompt, history, toolResults);
+        } finally {
+            UserDataTools.clearCurrentUserId();
+        }
+
+        List<String> suggestions = List.of(advice);
         List<String> domains = toolCalls.stream().map(AiToolCall::getToolName).toList();
         return new LifeAdviceResponse(
                 "已结合你的近期生活数据生成建议，当前可用数据域：" + String.join("、", domains) + "。",
-                List.of(
-                        "先固定一个每天最容易完成的专注时段，降低开始成本。",
-                        "饮食、记账和纪念日记录保持轻量补充，AI 才能逐步给出更贴近你的建议。",
-                        "涉及健康、财务或重要决策时，把 AI 建议当作参考，不替代专业判断。"),
+                suggestions,
                 properties.getDisclaimer());
     }
 
