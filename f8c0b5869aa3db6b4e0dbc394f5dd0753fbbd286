@@ -1,0 +1,118 @@
+backend/src/main/java/com/lifetool/ledger/InMemoryLedgerBudgetStore.java
+  0dd76fa67f157a86 1-50
+backend/src/main/java/com/lifetool/events/InMemoryEventStore.java
+  0dd76fa67f157a86 1-35
+backend/src/main/java/com/lifetool/users/JdbcUserRepository.java
+  488af9d9f12201a0 1-119
+backend/src/main/java/com/lifetool/users/UserRepository.java
+  488af9d9f12201a0 5-6,8,10,12
+backend/src/main/java/com/lifetool/focus/InMemoryFocusPreferenceStore.java
+  d941019aa9db248e 1-26
+backend/src/main/java/com/lifetool/media/InMemoryMediaAssetStore.java
+  d941019aa9db248e 1-26
+backend/src/main/java/com/lifetool/media/MediaAssetStore.java
+  d941019aa9db248e 5-6,8
+backend/src/main/java/com/lifetool/sync/InMemorySyncStore.java
+  d941019aa9db248e 1-62
+backend/src/main/java/com/lifetool/ledger/LedgerTransactionStore.java
+  0dd76fa67f157a86 6-7,9,11,13,15
+backend/src/main/java/com/lifetool/events/JdbcEventStore.java
+  0dd76fa67f157a86 1-161
+backend/src/main/java/com/lifetool/leaderboards/InMemoryLeaderboardStatsStore.java
+  d941019aa9db248e 1-65
+backend/src/main/java/com/lifetool/friends/InMemoryFriendStore.java
+  d941019aa9db248e 1-80
+backend/src/main/java/com/lifetool/users/User.java
+  488af9d9f12201a0 22-29
+frontend/src/services/leaderboardService.ts
+  488af9d9f12201a0 1-29
+backend/src/main/java/com/lifetool/focus/FocusPreferenceStore.java
+  d941019aa9db248e 5-6,8
+backend/src/main/java/com/lifetool/users/InMemoryUserRepository.java
+  488af9d9f12201a0 1-38
+backend/src/main/java/com/lifetool/media/JdbcMediaAssetStore.java
+  d941019aa9db248e 1-107
+backend/src/main/java/com/lifetool/sync/JdbcSyncStore.java
+  d941019aa9db248e 1-178
+backend/src/main/java/com/lifetool/infra/InfraHealthService.java
+  488af9d9f12201a0 1-100
+backend/src/main/java/com/lifetool/ledger/JdbcLedgerTransactionStore.java
+  0dd76fa67f157a86 1-176
+backend/src/main/java/com/lifetool/ledger/JdbcLedgerBudgetStore.java
+  0dd76fa67f157a86 1-139
+backend/src/main/java/com/lifetool/infra/FlywayMigrationRunner.java
+  488af9d9f12201a0 37
+backend/src/main/java/com/lifetool/ledger/LedgerBudgetStore.java
+  0dd76fa67f157a86 6-7,9,11
+frontend/src/services/authService.ts
+  488af9d9f12201a0 15
+backend/src/main/java/com/lifetool/friends/JdbcFriendStore.java
+  488af9d9f12201a0 140,215
+  d941019aa9db248e 1-139,141-214,216-310
+backend/src/main/java/com/lifetool/infra/InfraController.java
+  488af9d9f12201a0 1-24
+backend/src/main/java/com/lifetool/ledger/InMemoryLedgerTransactionStore.java
+  0dd76fa67f157a86 1-70
+backend/src/main/java/com/lifetool/leaderboards/LeaderboardStatsStore.java
+  d941019aa9db248e 3-4,6,8,10,12,14,16,18,20
+backend/src/main/java/com/lifetool/sync/SyncStore.java
+  d941019aa9db248e 6,8-9,11-12,14,16
+backend/src/main/java/com/lifetool/leaderboards/JdbcLeaderboardStatsStore.java
+  d941019aa9db248e 1-210
+backend/src/main/java/com/lifetool/auth/SecurityConfig.java
+  488af9d9f12201a0 18-20,44,64-77
+backend/src/main/java/com/lifetool/friends/FriendStore.java
+  d941019aa9db248e 6-7,9,11,13,15,17,19,21,23
+frontend/src/services/friendService.ts
+  488af9d9f12201a0 1-44
+backend/src/main/java/com/lifetool/focus/JdbcFocusPreferenceStore.java
+  d941019aa9db248e 1-91
+backend/src/main/java/com/lifetool/events/EventStore.java
+  0dd76fa67f157a86 6-7,9,11
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.14",
+  "base_commit_sha": "f8c0b5869aa3db6b4e0dbc394f5dd0753fbbd286",
+  "prompts": {
+    "0dd76fa67f157a86": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_1db1db42effeHV33AX2The0Z1w",
+        "model": "deepseek/deepseek-v4-pro"
+      },
+      "human_author": "zhouxiaojie <i_zhouxiaojie@cvte.com>",
+      "messages": [],
+      "total_additions": 645,
+      "total_deletions": 112,
+      "accepted_lines": 645,
+      "overriden_lines": 0
+    },
+    "488af9d9f12201a0": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_1dbb8a1b9ffe6U4MYdfFBU1zwA",
+        "model": "deepseek/deepseek-v4-pro"
+      },
+      "human_author": "zhouxiaojie <i_zhouxiaojie@cvte.com>",
+      "messages": [],
+      "total_additions": 392,
+      "total_deletions": 25,
+      "accepted_lines": 392,
+      "overriden_lines": 0
+    },
+    "d941019aa9db248e": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_1db1cbe96ffegToUR1hn8EW3ZO",
+        "model": "deepseek/deepseek-v4-pro"
+      },
+      "human_author": "zhouxiaojie <i_zhouxiaojie@cvte.com>",
+      "messages": [],
+      "total_additions": 1203,
+      "total_deletions": 191,
+      "accepted_lines": 1203,
+      "overriden_lines": 0
+    }
+  }
+}
