@@ -1,6 +1,13 @@
 spring:
   application:
     name: life-tool-api
+  ai:
+    openai:
+      api-key: ${AI_API_KEY:mock-key}
+      base-url: ${AI_BASE_URL:https://api.openai.com}
+      chat:
+        options:
+          model: ${AI_CHAT_MODEL:gpt-4o-mini}
 
 server:
   port: 8080
@@ -9,3 +16,9 @@ jwt:
   secret: Y2hhbmdlLXRoaXMtaW4tcHJvZHVjdGlvbi10by1hLXJlYWwtc2VjcmV0LWtleS10aGF0LWlzLWF0LWxlYXN0LTI1Ni1iaXRz
   access-ttl-ms: 900000
   refresh-ttl-ms: 604800000
+
+lifetool:
+  ai:
+    mock-enabled: ${LIFETOOL_AI_MOCK_ENABLED:true}
+    max-tool-rounds: ${LIFETOOL_AI_MAX_TOOL_ROUNDS:3}
+    disclaimer: AI 建议仅供参考，不构成医疗、营养、财务或法律结论。

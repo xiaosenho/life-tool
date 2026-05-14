@@ -159,7 +159,8 @@ media_assets 被以下表通过 media_asset_id 引用：
 
 1. **V1**：初始化所有表结构（MVP + Phase 2 基础表）。
 2. **V2**：补充专注偏好、月度预算、纪念日与重复提醒（TASK-DB-002）。
-3. **V3+**：根据实际需求添加字段、索引或调整约束，不在 V1/V2 中过度设计。
+3. **V3**：补充 AI Framework 持久化表（AI 工具调用审计、长期记忆、会话摘要、Agent 运行审计）。
+4. **V3+**：根据实际需求添加字段、索引或调整约束，不在已发布迁移中过度设计。
 
 ### 9.2 常见变更模式
 
@@ -252,64 +253,100 @@ users (1) ──< anniversary_events       (每用户可多个纪念日)
 media_assets (1) ──< anniversary_events (通过 media_asset_id)
 ```
 
-## 12. AI Framework 后续表
+## 12. V3 已迁移内容
 
-下一次数据库迁移建议新增或扩展以下表，以支持会话记忆和 function calling。
+V3 新增 `ai_tool_calls`、`ai_memory_items`、`ai_session_summaries`、`ai_agent_runs` 四张表，对应迁移文件 `V3__add_ai_framework_tables.sql`。
 
-### 12.1 `ai_tool_calls`
+### 12.1 AI 工具调用审计 (`ai_tool_calls`)
 
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| `id` | uuid | 主键 |
-| `user_id` | uuid | 当前用户 |
-| `session_id` | uuid | AI 会话 |
-| `message_id` | uuid | 触发工具调用的消息 |
-| `tool_name` | text | 工具名 |
-| `arguments` | jsonb | 工具参数，禁止包含客户端传入 userId |
-| `result_summary` | jsonb | 工具结果摘要，不保存过量原始明细 |
-| `status` | text | pending / succeeded / failed |
-| `latency_ms` | int | 执行耗时 |
-| `created_at` | timestamptz | 创建时间 |
+| 字段 | 类型 | 约束 | 说明 |
+|------|------|------|------|
+| `id` | uuid | 主键 | |
+| `user_id` | uuid | FK → users, NOT NULL | 当前用户 |
+| `session_id` | uuid | FK → ai_chat_sessions, NOT NULL | AI 会话 |
+| `message_id` | uuid | FK → ai_chat_messages, NOT NULL | 触发工具调用的消息 |
+| `tool_name` | text | NOT NULL | 工具名，如 get_focus_summary |
+| `arguments` | jsonb | NOT NULL, DEFAULT '{}' | 工具参数，禁止包含客户端传入 userId |
+| `result_summary` | jsonb | NULL | 工具结果摘要，不保存过量原始明细 |
+| `status` | text | CHECK, NOT NULL, DEFAULT 'pending' | pending / succeeded / failed |
+| `latency_ms` | int | CHECK >= 0, NULL | 执行耗时（毫秒） |
+| `created_at` | timestamptz | NOT NULL | 创建时间 |
 
-### 12.2 `ai_memory_items`
+- 索引：
+  - `idx_ai_tool_calls_user_session` — `(user_id, session_id)` 按会话查询工具调用。
+  - `idx_ai_tool_calls_user_message` — `(user_id, message_id)` 按消息查询工具调用。
+  - `idx_ai_tool_calls_user_status` — `(user_id, status)` 按状态过滤。
+- 同步 entity_type：不需要同步（服务端审计用途）。
 
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| `id` | uuid | 主键 |
-| `user_id` | uuid | 当前用户 |
-| `memory_type` | text | preference / goal / constraint / health_note / routine |
-| `content` | text | 记忆内容 |
-| `source` | text | user_confirmed / assistant_suggested / system_extracted |
-| `confidence` | numeric(4,3) | 置信度 |
-| `enabled` | boolean | 是否启用 |
-| `created_at` | timestamptz | 创建时间 |
-| `updated_at` | timestamptz | 更新时间 |
-| `deleted_at` | timestamptz | 软删除 |
+### 12.2 AI 长期记忆 (`ai_memory_items`)
 
-### 12.3 `ai_session_summaries`
+| 字段 | 类型 | 约束 | 说明 |
+|------|------|------|------|
+| `id` | uuid | 主键 | |
+| `user_id` | uuid | FK → users, NOT NULL | 当前用户 |
+| `memory_type` | text | CHECK, NOT NULL | preference / goal / constraint / health_note / routine |
+| `content` | text | NOT NULL | 记忆内容 |
+| `source` | text | CHECK, NOT NULL, DEFAULT 'assistant_suggested' | user_confirmed / assistant_suggested / system_extracted |
+| `confidence` | numeric(4,3) | CHECK 0.000~1.000, NULL | 置信度 |
+| `enabled` | boolean | NOT NULL, DEFAULT true | 是否启用 |
+| `created_at` | timestamptz | NOT NULL | 创建时间 |
+| `updated_at` | timestamptz | NOT NULL | 更新时间 |
+| `deleted_at` | timestamptz | NULL | 软删除 |
 
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| `id` | uuid | 主键 |
-| `session_id` | uuid | AI 会话 |
-| `user_id` | uuid | 当前用户 |
-| `summary` | text | 当前会话压缩摘要 |
-| `message_count` | int | 摘要覆盖的消息数 |
-| `created_at` | timestamptz | 创建时间 |
-| `updated_at` | timestamptz | 更新时间 |
+- 索引：
+  - `idx_ai_memory_items_user_type` — `(user_id, memory_type)` 按类型筛选。
+  - `idx_ai_memory_items_user_enabled` — `(user_id, enabled)` 按启用状态筛选。
+- `updated_at` 触发器：`trg_ai_memory_items_updated_at`。
 
-### 12.4 `ai_agent_runs`
+### 12.3 AI 会话摘要 (`ai_session_summaries`)
 
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| `id` | uuid | 主键 |
-| `user_id` | uuid | 当前用户 |
-| `session_id` | uuid | AI 会话，可为空 |
-| `provider` | text | AI Provider |
-| `model` | text | 模型名 |
-| `input_tokens` | int | 输入 token |
-| `output_tokens` | int | 输出 token |
-| `tool_rounds` | int | 工具调用轮数 |
-| `status` | text | succeeded / failed |
-| `error_code` | text | 错误码 |
-| `created_at` | timestamptz | 创建时间 |
+| 字段 | 类型 | 约束 | 说明 |
+|------|------|------|------|
+| `id` | uuid | 主键 | |
+| `session_id` | uuid | FK → ai_chat_sessions, NOT NULL, UNIQUE | AI 会话，每会话一条 |
+| `user_id` | uuid | FK → users, NOT NULL | 当前用户 |
+| `summary` | text | NOT NULL | 当前会话压缩摘要 |
+| `message_count` | int | CHECK >= 0, NOT NULL, DEFAULT 0 | 摘要覆盖的消息数 |
+| `created_at` | timestamptz | NOT NULL | 创建时间 |
+| `updated_at` | timestamptz | NOT NULL | 更新时间 |
+
+- 唯一约束：`uq_ai_session_summaries_session` — `(session_id)`，每个会话最多一条当前摘要。
+- 索引：`idx_ai_session_summaries_user` — `(user_id)` 支持用户侧查询。
+- `updated_at` 触发器：`trg_ai_session_summaries_updated_at`。
+
+### 12.4 AI Agent 运行审计 (`ai_agent_runs`)
+
+| 字段 | 类型 | 约束 | 说明 |
+|------|------|------|------|
+| `id` | uuid | 主键 | |
+| `user_id` | uuid | FK → users, NOT NULL | 当前用户 |
+| `session_id` | uuid | FK → ai_chat_sessions, ON DELETE SET NULL, NULL | AI 会话，可为空（独立 run） |
+| `provider` | text | NOT NULL | AI Provider，如 openai / mock |
+| `model` | text | NOT NULL | 模型名，如 gpt-4o |
+| `input_tokens` | int | CHECK >= 0, NOT NULL, DEFAULT 0 | 输入 token |
+| `output_tokens` | int | CHECK >= 0, NOT NULL, DEFAULT 0 | 输出 token |
+| `tool_rounds` | int | CHECK >= 0, NOT NULL, DEFAULT 0 | 工具调用轮数 |
+| `status` | text | CHECK, NOT NULL, DEFAULT 'succeeded' | succeeded / failed |
+| `error_code` | text | NULL | 错误码，失败时记录 |
+| `created_at` | timestamptz | NOT NULL | 创建时间 |
+
+- 索引：
+  - `idx_ai_agent_runs_user_session` — `(user_id, session_id)` 按会话查询。
+  - `idx_ai_agent_runs_user_status` — `(user_id, status)` 按状态过滤。
+  - `idx_ai_agent_runs_user_time` — `(user_id, created_at)` 按时间范围查询。
+
+### 12.5 V3 表关系
+
+```
+users (1) ──< ai_tool_calls
+users (1) ──< ai_memory_items
+users (1) ──< ai_session_summaries
+users (1) ──< ai_agent_runs
+ai_chat_sessions (1) ──< ai_session_summaries (每会话一条)
+ai_chat_sessions (1) ──< ai_agent_runs (可多条)
+ai_chat_messages (1) ──< ai_tool_calls (每消息可多条工具调用)
+```
+
+- `ai_tool_calls` 同时依赖 `ai_chat_sessions` 和 `ai_chat_messages` 表。
+- `ai_agent_runs.session_id` 可为 NULL，以支持不绑定会话的运行（如定时分析任务）。
+- `ai_memory_items` 只依赖 `users`，长期记忆跨会话独立存在。

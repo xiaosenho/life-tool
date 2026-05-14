@@ -273,7 +273,7 @@ blocked
 
 ### TASK-BE-105：实现 AI 饮食图片识别任务
 
-- 状态：todo
+- 状态：in_progress
 - 推荐负责人：Claude
 - 影响文件：
   - `backend/src/main/**/ai/**`
@@ -309,7 +309,7 @@ blocked
 
 ### TASK-BE-106：实现 AI 框架、会话记忆与 Function Calling
 
-- 状态：todo
+- 状态：in_progress
 - 推荐负责人：Claude
 - 影响文件：
   - `backend/src/main/**/ai/**`
@@ -334,7 +334,7 @@ blocked
 
 ### TASK-BE-110：实现 AI 用户数据查询工具集
 
-- 状态：todo
+- 状态：in_progress
 - 推荐负责人：Claude
 - 影响文件：
   - `backend/src/main/**/ai/tools/**`
@@ -355,7 +355,7 @@ blocked
 
 ### TASK-DB-003：补充 AI Framework 持久化 DDL
 
-- 状态：todo
+- 状态：done
 - 推荐负责人：DeepSeek
 - 影响文件：
   - `backend/src/main/resources/db/migration/**`
@@ -371,7 +371,7 @@ blocked
 
 ### TASK-FE-105：实现 AI 建议与对话页面
 
-- 状态：todo
+- 状态：in_progress
 - 推荐负责人：Gemini
 - 影响文件：
   - `frontend/**/ai/**`
