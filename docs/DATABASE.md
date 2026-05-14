@@ -25,7 +25,7 @@
 | 饮食 | `meal_logs`, `meal_items` | 饮食记录与食物条目 | Phase 2 |
 | 记账 | `ledger_transactions`, `ledger_budgets` | 收支流水记录 + 月度预算 | Phase 2 + V2 |
 | 重要事件 | `event_logs`, `anniversary_events` | 重要日期事件记录 + 纪念日重复提醒 | Phase 2 + V2 |
-| AI | `ai_analysis_jobs`, `ai_chat_sessions`, `ai_chat_messages` | AI 分析任务与对话 | Phase 2 |
+| AI | `ai_analysis_jobs`, `ai_chat_sessions`, `ai_chat_messages`, `ai_tool_calls`, `ai_memory_items`, `ai_session_summaries`, `ai_agent_runs` | AI 分析任务、对话、工具调用与记忆 | Phase 2 + AI Framework |
 
 ## 3. 关键关系
 
@@ -47,6 +47,10 @@ users (1) ──< anniversary_events       (每用户可多个纪念日)
 users (1) ──< media_assets
 users (1) ──< ai_analysis_jobs
 users (1) ──< ai_chat_sessions (1) ──< ai_chat_messages
+users (1) ──< ai_memory_items
+ai_chat_sessions (1) ──< ai_session_summaries
+ai_chat_messages (1) ──< ai_tool_calls
+ai_chat_sessions (1) ──< ai_agent_runs
 
 media_assets 被以下表通过 media_asset_id 引用：
   - users.avatar_asset_id
@@ -247,3 +251,65 @@ users (1) ──< ledger_budgets           (每用户每月可有多条：总预
 users (1) ──< anniversary_events       (每用户可多个纪念日)
 media_assets (1) ──< anniversary_events (通过 media_asset_id)
 ```
+
+## 12. AI Framework 后续表
+
+下一次数据库迁移建议新增或扩展以下表，以支持会话记忆和 function calling。
+
+### 12.1 `ai_tool_calls`
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `id` | uuid | 主键 |
+| `user_id` | uuid | 当前用户 |
+| `session_id` | uuid | AI 会话 |
+| `message_id` | uuid | 触发工具调用的消息 |
+| `tool_name` | text | 工具名 |
+| `arguments` | jsonb | 工具参数，禁止包含客户端传入 userId |
+| `result_summary` | jsonb | 工具结果摘要，不保存过量原始明细 |
+| `status` | text | pending / succeeded / failed |
+| `latency_ms` | int | 执行耗时 |
+| `created_at` | timestamptz | 创建时间 |
+
+### 12.2 `ai_memory_items`
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `id` | uuid | 主键 |
+| `user_id` | uuid | 当前用户 |
+| `memory_type` | text | preference / goal / constraint / health_note / routine |
+| `content` | text | 记忆内容 |
+| `source` | text | user_confirmed / assistant_suggested / system_extracted |
+| `confidence` | numeric(4,3) | 置信度 |
+| `enabled` | boolean | 是否启用 |
+| `created_at` | timestamptz | 创建时间 |
+| `updated_at` | timestamptz | 更新时间 |
+| `deleted_at` | timestamptz | 软删除 |
+
+### 12.3 `ai_session_summaries`
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `id` | uuid | 主键 |
+| `session_id` | uuid | AI 会话 |
+| `user_id` | uuid | 当前用户 |
+| `summary` | text | 当前会话压缩摘要 |
+| `message_count` | int | 摘要覆盖的消息数 |
+| `created_at` | timestamptz | 创建时间 |
+| `updated_at` | timestamptz | 更新时间 |
+
+### 12.4 `ai_agent_runs`
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `id` | uuid | 主键 |
+| `user_id` | uuid | 当前用户 |
+| `session_id` | uuid | AI 会话，可为空 |
+| `provider` | text | AI Provider |
+| `model` | text | 模型名 |
+| `input_tokens` | int | 输入 token |
+| `output_tokens` | int | 输出 token |
+| `tool_rounds` | int | 工具调用轮数 |
+| `status` | text | succeeded / failed |
+| `error_code` | text | 错误码 |
+| `created_at` | timestamptz | 创建时间 |

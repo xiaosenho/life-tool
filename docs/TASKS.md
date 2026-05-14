@@ -307,23 +307,62 @@ blocked
   - 用户确认后生成饮食记录并进入同步队列。
 - 风险等级：高
 
-### TASK-BE-106：实现 AI 生活建议与对话接口
+### TASK-BE-106：实现 AI 框架、会话记忆与 Function Calling
 
 - 状态：todo
 - 推荐负责人：Claude
 - 影响文件：
   - `backend/src/main/**/ai/**`
   - `backend/src/main/**/stats/**`
-  - `docs/API.md`
+  - `docs/AI_FRAMEWORK.md`
 - 描述：
-  - 汇总用户近期专注、习惯、饮食、记账数据。
-  - 提供生活建议接口。
-  - 提供 AI 对话 session 和 message 接口。
+  - 实现 `AiProvider`、`AiOrchestrator`、`ToolRegistry`、`ToolExecutor`、`MemoryService`。
+  - 支持 OpenAI-compatible function calling provider 和本地 `MockAiProvider`。
+  - 实现 AI 对话 session、message、session summary、长期记忆管理。
+  - 模型只能通过后端注册工具访问当前用户数据。
 - 验收标准：
-  - AI 只使用当前用户授权数据。
-  - 返回建议包含免责声明。
-  - 对话记录默认私密，并支持删除。
+  - 可创建会话并完成一次多轮对话。
+  - AI 可触发至少一个只读工具调用，并记录 `ai_tool_calls`。
+  - 长期记忆可查看、禁用、删除。
+  - AI 只使用当前用户授权数据，返回建议包含免责声明。
+  - `mvn test` 通过。
 - 风险等级：高
+
+### TASK-BE-110：实现 AI 用户数据查询工具集
+
+- 状态：todo
+- 推荐负责人：Claude
+- 影响文件：
+  - `backend/src/main/**/ai/tools/**`
+  - `backend/src/main/**/focus/**`
+  - `backend/src/main/**/habits/**`
+  - `backend/src/main/**/ledger/**`
+  - `backend/src/main/**/events/**`
+- 描述：
+  - 实现 `get_focus_summary`、`get_habit_summary`、`get_diet_summary`、`get_ledger_summary`、`get_upcoming_events`、`get_user_profile_context`。
+  - 所有工具由服务端注入当前 `userId`。
+  - 工具默认返回汇总数据，不返回过量原始明细。
+- 验收标准：
+  - 每个工具都有参数校验和用户隔离测试。
+  - 工具结果可被 `AiOrchestrator` 作为 function result 继续传给模型。
+  - `mvn test` 通过。
+- 风险等级：高
+
+### TASK-DB-003：补充 AI Framework 持久化 DDL
+
+- 状态：todo
+- 推荐负责人：DeepSeek
+- 影响文件：
+  - `backend/src/main/resources/db/migration/**`
+  - `docs/DATABASE.md`
+- 描述：
+  - 新增 AI 工具调用、长期记忆、会话摘要、agent run 审计表。
+  - 不修改已发布 V1/V2，新增 V3 migration。
+- 验收标准：
+  - DDL 覆盖 `ai_tool_calls`、`ai_memory_items`、`ai_session_summaries`、`ai_agent_runs`。
+  - 包含用户隔离索引、状态 CHECK、软删除字段。
+  - `docs/DATABASE.md` 与迁移一致。
+- 风险等级：中
 
 ### TASK-FE-105：实现 AI 建议与对话页面
 
@@ -336,10 +375,13 @@ blocked
 - 描述：
   - 增加 AI 建议入口和对话界面。
   - 展示近期生活摘要、建议卡片和聊天消息。
+  - 展示长期记忆开关和记忆管理入口。
+  - 对 function calling 工具调用提供简化状态提示，例如“正在读取专注汇总”。
   - 对 AI 建议添加非专业建议提示。
 - 验收标准：
   - 用户可以请求近期生活建议。
   - 用户可以进行多轮 AI 对话。
+  - 用户可以查看和删除长期记忆。
   - 页面清楚提示 AI 建议仅供参考。
 - 风险等级：中
 

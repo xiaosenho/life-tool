@@ -566,6 +566,8 @@ POST /api/ai/life-advice
 POST /api/ai/chat/sessions
 POST /api/ai/chat/sessions/{id}/messages
 GET  /api/ai/chat/sessions/{id}/messages
+GET  /api/ai/memories
+DELETE /api/ai/memories/{id}
 ```
 
 ### POST /api/ai/food-recognition/jobs
@@ -635,6 +637,125 @@ GET  /api/ai/chat/sessions/{id}/messages
   "disclaimer": "AI 建议仅供参考，不构成医疗或营养诊断。"
 }
 ```
+
+### POST /api/ai/chat/sessions
+
+请求：
+
+```json
+{
+  "title": "最近状态分析",
+  "useLongTermMemory": true
+}
+```
+
+响应：
+
+```json
+{
+  "id": "uuid",
+  "title": "最近状态分析",
+  "useLongTermMemory": true,
+  "createdAt": "2026-05-14T10:00:00Z"
+}
+```
+
+### POST /api/ai/chat/sessions/{id}/messages
+
+请求：
+
+```json
+{
+  "content": "我最近晚睡很多，能结合我的专注和饮食记录给点建议吗？",
+  "enabledTools": [
+    "get_focus_summary",
+    "get_diet_summary",
+    "get_habit_summary"
+  ]
+}
+```
+
+响应：
+
+```json
+{
+  "messageId": "uuid",
+  "role": "assistant",
+  "content": "你最近 7 天晚间饮食记录偏多，上午专注表现更稳定。建议先把深度专注安排在上午，并在晚餐后设置一个轻提醒。",
+  "disclaimer": "AI 建议仅供参考，不构成医疗或营养诊断。",
+  "toolCalls": [
+    {
+      "toolName": "get_focus_summary",
+      "status": "succeeded"
+    },
+    {
+      "toolName": "get_diet_summary",
+      "status": "succeeded"
+    }
+  ],
+  "createdAt": "2026-05-14T10:00:10Z"
+}
+```
+
+说明：
+
+- 客户端不能直接调用工具，`enabledTools` 只是本次对话允许使用的工具范围。
+- 工具实际执行由后端 `AiOrchestrator` 完成。
+- 后端必须按当前登录用户注入 `userId`。
+
+### GET /api/ai/chat/sessions/{id}/messages
+
+响应：
+
+```json
+{
+  "messages": [
+    {
+      "id": "uuid",
+      "role": "user",
+      "content": "我最近晚睡很多，能给点建议吗？",
+      "createdAt": "2026-05-14T10:00:00Z"
+    },
+    {
+      "id": "uuid",
+      "role": "assistant",
+      "content": "可以，我会优先参考你的近期汇总数据。",
+      "createdAt": "2026-05-14T10:00:10Z"
+    }
+  ]
+}
+```
+
+### GET /api/ai/memories
+
+响应：
+
+```json
+{
+  "items": [
+    {
+      "id": "uuid",
+      "type": "preference",
+      "content": "用户更喜欢早上安排深度专注",
+      "source": "user_confirmed",
+      "createdAt": "2026-05-14T10:00:00Z"
+    }
+  ]
+}
+```
+
+### Function Calling 工具
+
+工具由服务端内部注册，不作为公开 API 暴露。MVP 工具：
+
+| tool | 说明 |
+| --- | --- |
+| `get_focus_summary` | 查询当前用户近 N 天专注汇总 |
+| `get_habit_summary` | 查询当前用户习惯完成率和连续打卡 |
+| `get_diet_summary` | 查询当前用户已确认饮食汇总 |
+| `get_ledger_summary` | 查询当前用户月度收支和预算汇总 |
+| `get_upcoming_events` | 查询当前用户未来纪念日和提醒 |
+| `get_user_profile_context` | 查询当前用户基础偏好和隐私配置 |
 
 ## 13. 错误码
 
