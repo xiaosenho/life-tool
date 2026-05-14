@@ -22,6 +22,18 @@ const toolLabels: Record<string, string> = {
   get_user_profile_context: "正在读取偏好设置"
 };
 
+const defaultEnabledTools = [
+  "get_focus_summary",
+  "get_habit_summary",
+  "get_diet_summary",
+  "get_ledger_summary",
+  "get_upcoming_events",
+  "get_user_profile_context"
+];
+
+let cachedSession: ChatSession | null = null;
+let cachedMessages: ChatMessage[] = [];
+
 export default function AiScreen() {
   const [advice, setAdvice] = useState<LifeAdvice | null>(null);
   const [session, setSession] = useState<ChatSession | null>(null);
@@ -29,6 +41,8 @@ export default function AiScreen() {
   const [memories, setMemories] = useState<MemoryItem[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [activeTools, setActiveTools] = useState<string[]>([]);
 
   useEffect(() => {
     bootstrap();
@@ -37,15 +51,31 @@ export default function AiScreen() {
   const bootstrap = async () => {
     setLoading(true);
     try {
-      const [adviceRes, sessionRes, memoryRes] = await Promise.all([
+      const [adviceRes, memoryRes] = await Promise.all([
         aiService.getLifeAdvice(),
-        aiService.createSession(),
         aiService.getMemories()
       ]);
 
       if (adviceRes.success && adviceRes.data) setAdvice(adviceRes.data);
-      if (sessionRes.success && sessionRes.data) setSession(sessionRes.data);
       if (memoryRes.success && memoryRes.data) setMemories(memoryRes.data.items);
+
+      if (cachedSession) {
+        setSession(cachedSession);
+        setMessages(cachedMessages);
+        const messagesRes = await aiService.getMessages(cachedSession.id);
+        if (messagesRes.success && messagesRes.data) {
+          cachedMessages = messagesRes.data.messages;
+          setMessages(messagesRes.data.messages);
+        }
+      } else {
+        const sessionRes = await aiService.createSession();
+        if (sessionRes.success && sessionRes.data) {
+          cachedSession = sessionRes.data;
+          cachedMessages = [];
+          setSession(sessionRes.data);
+          setMessages([]);
+        }
+      }
     } catch (error) {
       Alert.alert("加载失败", error instanceof Error ? error.message : "请稍后重试。");
     } finally {
@@ -55,7 +85,7 @@ export default function AiScreen() {
 
   const sendMessage = async () => {
     const content = input.trim();
-    if (!content || !session || loading) return;
+    if (!content || !session || loading || sending) return;
 
     const optimistic: ChatMessage = {
       id: `local-${Date.now()}`,
@@ -64,20 +94,53 @@ export default function AiScreen() {
       createdAt: new Date().toISOString()
     };
 
-    setMessages((current) => [...current, optimistic]);
+    setMessages((current) => {
+      const next = [...current, optimistic];
+      cachedMessages = next;
+      return next;
+    });
     setInput("");
-    setLoading(true);
+    setSending(true);
+    setActiveTools(defaultEnabledTools);
     try {
-      const response = await aiService.sendMessage(session.id, content);
+      const response = await aiService.sendMessage(session.id, content, defaultEnabledTools);
       if (response.success && response.data) {
-        setMessages((current) => [...current, response.data as ChatMessage]);
+        setMessages((current) => {
+          const next = [...current, response.data as ChatMessage];
+          cachedMessages = next;
+          return next;
+        });
       } else {
         Alert.alert("发送失败", response.error?.message ?? "请稍后重试。");
       }
     } catch (error) {
       Alert.alert("发送失败", error instanceof Error ? error.message : "请稍后重试。");
     } finally {
+      setActiveTools([]);
+      setSending(false);
+    }
+  };
+
+  const refreshAdvice = async () => {
+    setLoading(true);
+    try {
+      const response = await aiService.getLifeAdvice();
+      if (response.success && response.data) {
+        setAdvice(response.data);
+      } else {
+        Alert.alert("刷新失败", response.error?.message ?? "请稍后重试。");
+      }
+    } finally {
       setLoading(false);
+    }
+  };
+
+  const refreshMemories = async () => {
+    const response = await aiService.getMemories();
+    if (response.success && response.data) {
+      setMemories(response.data.items);
+    } else {
+      Alert.alert("刷新失败", response.error?.message ?? "请稍后重试。");
     }
   };
 
@@ -95,7 +158,9 @@ export default function AiScreen() {
       <View style={styles.advicePanel}>
         <View style={styles.panelHeader}>
           <Text style={styles.panelTitle}>近期建议</Text>
-          <Ionicons name="sparkles-outline" size={22} color={colors.accent} />
+          <TouchableOpacity style={styles.smallButton} onPress={refreshAdvice} disabled={loading}>
+            <Ionicons name="refresh" size={18} color={colors.accent} />
+          </TouchableOpacity>
         </View>
         <Text style={styles.summary}>
           {advice?.summary ?? "正在整理你的近期专注、饮食、记账和提醒数据。"}
@@ -134,6 +199,13 @@ export default function AiScreen() {
             </View>
           ))
         )}
+        {activeTools.length > 0 && (
+          <View style={styles.toolPanel}>
+            {activeTools.map((tool) => (
+              <Text key={tool} style={styles.toolText}>{toolLabels[tool] ?? tool}</Text>
+            ))}
+          </View>
+        )}
       </View>
 
       <View style={styles.inputRow}>
@@ -144,14 +216,17 @@ export default function AiScreen() {
           placeholder="输入你的问题..."
           multiline
         />
-        <TouchableOpacity style={[styles.sendButton, loading && styles.disabledButton]} onPress={sendMessage}>
+        <TouchableOpacity style={[styles.sendButton, sending && styles.disabledButton]} onPress={sendMessage}>
           <Ionicons name="send" size={18} color={colors.surface} />
         </TouchableOpacity>
       </View>
 
       <View style={styles.sectionHeader}>
         <Text style={styles.sectionTitle}>长期记忆</Text>
-        <Text style={styles.sectionMeta}>{memories.length} 条</Text>
+        <TouchableOpacity style={styles.memoryRefresh} onPress={refreshMemories}>
+          <Text style={styles.sectionMeta}>{memories.length} 条</Text>
+          <Ionicons name="refresh" size={15} color={colors.muted} />
+        </TouchableOpacity>
       </View>
       <View style={styles.memoryList}>
         {memories.length === 0 ? (
@@ -259,6 +334,11 @@ const styles = StyleSheet.create({
   memoryList: {
     gap: 10
   },
+  memoryRefresh: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 5
+  },
   memoryText: {
     color: colors.text,
     fontSize: 14,
@@ -307,6 +387,12 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     width: 44
   },
+  smallButton: {
+    alignItems: "center",
+    height: 34,
+    justifyContent: "center",
+    width: 34
+  },
   suggestionRow: {
     flexDirection: "row",
     gap: 8
@@ -326,6 +412,17 @@ const styles = StyleSheet.create({
     color: colors.muted,
     fontSize: 12,
     marginTop: 8
+  },
+  toolPanel: {
+    alignSelf: "flex-start",
+    backgroundColor: "#F1F5F9",
+    borderColor: colors.border,
+    borderRadius: 12,
+    borderWidth: 1,
+    gap: 2,
+    maxWidth: "88%",
+    paddingHorizontal: 12,
+    paddingVertical: 10
   },
   userBubble: {
     alignSelf: "flex-end",

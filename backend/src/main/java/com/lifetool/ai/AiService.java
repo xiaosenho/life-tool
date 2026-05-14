@@ -21,6 +21,15 @@ import com.lifetool.ai.dto.SendAiMessageRequest;
 
 @Service
 public class AiService {
+    private static final String SYSTEM_PROMPT = """
+            你是 LifeTool AI 助手，帮助用户管理专注、习惯、饮食、记账和纪念日。
+            规则：
+            - 只使用已授权的用户数据工具读取汇总信息。
+            - 不直接修改用户数据。
+            - 返回简洁、可执行的中文建议。
+            - 涉及健康、财务或法律问题时，明确说明仅供参考。
+            """;
+
     private static final List<String> DEFAULT_TOOLS = List.of(
             "get_focus_summary",
             "get_habit_summary",
@@ -33,13 +42,16 @@ public class AiService {
     private final AiMemoryStore memoryStore;
     private final UserDataTools userDataTools;
     private final AiProperties properties;
+    private final AiAssistantClient assistantClient;
 
     public AiService(AiChatStore chatStore, AiMemoryStore memoryStore,
-                     UserDataTools userDataTools, AiProperties properties) {
+                     UserDataTools userDataTools, AiProperties properties,
+                     AiAssistantClient assistantClient) {
         this.chatStore = chatStore;
         this.memoryStore = memoryStore;
         this.userDataTools = userDataTools;
         this.properties = properties;
+        this.assistantClient = assistantClient;
     }
 
     public AiChatSessionResponse createSession(String userId, CreateAiChatSessionRequest request) {
@@ -58,7 +70,23 @@ public class AiService {
                 sessionId, userId, "user", request.content().trim(), chatStore.nextSeq(sessionId)));
 
         List<AiToolCall> toolCalls = executeTools(userId, sessionId, userMessage.getId(), request.enabledTools());
-        String assistantContent = buildAssistantReply(request.content(), toolCalls, session.isUseLongTermMemory());
+
+        String systemPrompt = buildSystemPrompt(session.isUseLongTermMemory(), userId);
+        List<AiAssistantClient.ChatEntry> history = chatStore.listMessages(sessionId).stream()
+                .map(m -> new AiAssistantClient.ChatEntry(m.getRole(), m.getContent()))
+                .toList();
+        List<AiAssistantClient.ToolResult> toolResults = toolCalls.stream()
+                .map(tc -> new AiAssistantClient.ToolResult(tc.getToolName(), tc.getResultSummary()))
+                .toList();
+
+        String assistantContent;
+        try {
+            UserDataTools.setCurrentUserId(userId);
+            assistantContent = assistantClient.chat(systemPrompt, history, toolResults);
+        } finally {
+            UserDataTools.clearCurrentUserId();
+        }
+
         AiChatMessage assistantMessage = chatStore.appendMessage(new AiChatMessage(
                 sessionId, userId, "assistant", assistantContent, chatStore.nextSeq(sessionId)));
         session.touch();
@@ -109,6 +137,21 @@ public class AiService {
         memory.disable();
     }
 
+    private String buildSystemPrompt(boolean useLongTermMemory, String userId) {
+        StringBuilder sb = new StringBuilder(SYSTEM_PROMPT);
+        if (useLongTermMemory) {
+            sb.append("\n已启用长期记忆。");
+            List<AiMemoryItem> memories = memoryStore.findEnabledByUserId(userId);
+            if (!memories.isEmpty()) {
+                sb.append("\n用户长期记忆：");
+                for (AiMemoryItem m : memories) {
+                    sb.append("\n- [").append(m.getType()).append("] ").append(m.getContent());
+                }
+            }
+        }
+        return sb.toString();
+    }
+
     private AiChatSession findOwnedSession(String userId, String sessionId) {
         AiChatSession session = chatStore.findSession(sessionId)
                 .orElseThrow(() -> new AiException("NOT_FOUND", "AI session not found"));
@@ -143,15 +186,6 @@ public class AiService {
             executed.add(toolCall);
         }
         return executed;
-    }
-
-    private String buildAssistantReply(String userContent, List<AiToolCall> toolCalls, boolean useLongTermMemory) {
-        String memoryText = useLongTermMemory ? "已启用长期记忆。" : "本次未使用长期记忆。";
-        String toolText = toolCalls.isEmpty()
-                ? "本次没有读取额外数据。"
-                : "我已读取 " + toolCalls.stream().map(AiToolCall::getToolName).toList() + " 的汇总数据。";
-        return "收到：" + userContent.strip() + "\n" + toolText + "\n" + memoryText
-                + "\n建议先从一个最小可执行动作开始，并在记录数据后继续让我结合趋势复盘。";
     }
 
     private List<String> normalizeRequestedTools(List<String> requestedTools) {

@@ -106,6 +106,70 @@ class AiControllerTest {
     }
 
     @Test
+    void unknownToolsAreSilentlyIgnored() throws Exception {
+        String sessionId = createSession(tokenA);
+
+        mockMvc.perform(post("/api/ai/chat/sessions/{id}/messages", sessionId)
+                        .header("Authorization", "Bearer " + tokenA)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "content": "测试未知工具",
+                                  "enabledTools": ["get_focus_summary", "nonexistent_tool", "also_unknown"]
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.toolCalls.length()").value(1))
+                .andExpect(jsonPath("$.data.toolCalls[0].toolName").value("get_focus_summary"));
+    }
+
+    @Test
+    void shortNamesFocusLedgerMapToFullToolNames() throws Exception {
+        String sessionId = createSession(tokenA);
+
+        mockMvc.perform(post("/api/ai/chat/sessions/{id}/messages", sessionId)
+                        .header("Authorization", "Bearer " + tokenA)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "content": "测试简写映射",
+                                  "enabledTools": ["focus", "ledger"]
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.toolCalls.length()").value(2))
+                .andExpect(jsonPath("$.data.toolCalls[0].toolName").value("get_focus_summary"))
+                .andExpect(jsonPath("$.data.toolCalls[0].status").value("succeeded"))
+                .andExpect(jsonPath("$.data.toolCalls[1].toolName").value("get_ledger_summary"))
+                .andExpect(jsonPath("$.data.toolCalls[1].status").value("succeeded"));
+    }
+
+    @Test
+    void deleteNonExistentMemoryReturnsNotFound() throws Exception {
+        mockMvc.perform(delete("/api/ai/memories/{id}", "non-existent-memory-id")
+                        .header("Authorization", "Bearer " + tokenA))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.error.code").value("NOT_FOUND"));
+    }
+
+    @Test
+    void sendMessageWithEmptyContentReturns400() throws Exception {
+        String sessionId = createSession(tokenA);
+
+        mockMvc.perform(post("/api/ai/chat/sessions/{id}/messages", sessionId)
+                        .header("Authorization", "Bearer " + tokenA)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "content": "",
+                                  "enabledTools": ["focus"]
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.code").value("VALIDATION_ERROR"));
+    }
+
+    @Test
     void unauthenticatedReturns401() throws Exception {
         mockMvc.perform(get("/api/ai/memories"))
                 .andExpect(status().isUnauthorized());
