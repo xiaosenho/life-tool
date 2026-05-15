@@ -121,7 +121,15 @@ ls -lh app/build/outputs/apk/release/app-release.apk
 
 ## 7. 常见问题
 
-### 7.1 SDK location not found
+### 7.1 无法发起 HTTP 请求
+
+Android 9+ 默认禁止明文 HTTP 流量，APK 安装后无法连接 `http://` 开头的 API。
+
+已通过 `app.json` 配置 `expo-build-properties` 插件，在 `android.usesCleartextTraffic` 设为 `true` 来允许明文 HTTP。
+
+如果后续需要更细粒度的控制（只允许特定域名），可以创建 `network_security_config.xml`。
+
+### 7.2 SDK location not found
 
 现象：
 
@@ -136,7 +144,7 @@ cd frontend
 printf 'sdk.dir=%s\n' "$ANDROID_HOME" > android/local.properties
 ```
 
-### 7.2 React Native Codegen 报 VirtualViewNativeComponent
+### 7.3 React Native Codegen 报 VirtualViewNativeComponent
 
 现象：
 
@@ -155,7 +163,7 @@ npm install --legacy-peer-deps
 npx expo install --check
 ```
 
-### 7.3 TypeScript ignoreDeprecations 报错
+### 7.4 TypeScript ignoreDeprecations 报错
 
 现象：
 
@@ -175,7 +183,7 @@ TS5103: Invalid value for '--ignoreDeprecations'
 
 不要写成 `"6.0"`，否则 TypeScript 5.x 会直接报错。
 
-### 7.4 expo-linking 缺失
+### 7.5 expo-linking 缺失
 
 现象：
 
