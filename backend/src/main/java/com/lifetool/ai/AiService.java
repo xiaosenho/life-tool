@@ -20,6 +20,7 @@ import com.lifetool.ai.dto.FoodRecognitionResponse;
 import com.lifetool.ai.dto.LifeAdviceRequest;
 import com.lifetool.ai.dto.LifeAdviceResponse;
 import com.lifetool.ai.dto.SendAiMessageRequest;
+import com.lifetool.media.MediaService;
 import com.lifetool.meals.MealLog;
 import com.lifetool.meals.MealService;
 
@@ -48,16 +49,18 @@ public class AiService {
     private final AiProperties properties;
     private final AiAssistantClient assistantClient;
     private final MealService mealService;
+    private final MediaService mediaService;
 
     public AiService(AiChatStore chatStore, AiMemoryStore memoryStore,
                      UserDataTools userDataTools, AiProperties properties,
-                     AiAssistantClient assistantClient, MealService mealService) {
+                     AiAssistantClient assistantClient, MealService mealService, MediaService mediaService) {
         this.chatStore = chatStore;
         this.memoryStore = memoryStore;
         this.userDataTools = userDataTools;
         this.properties = properties;
         this.assistantClient = assistantClient;
         this.mealService = mealService;
+        this.mediaService = mediaService;
     }
 
     public AiChatSessionResponse createSession(String userId, CreateAiChatSessionRequest request) {
@@ -167,10 +170,11 @@ public class AiService {
                 ? request.customPrompt()
                 : "请识别图片中的食物并估算热量";
 
+        String imageUrl = resolveFoodImageUrl(userId, request);
         String response;
         try {
             UserDataTools.setCurrentUserId(userId);
-            response = assistantClient.chatWithImage("food-" + userId, systemPrompt, request.imageUrl(), userText);
+            response = assistantClient.chatWithImage("food-" + userId, systemPrompt, imageUrl, userText);
         } catch (RuntimeException ex) {
             throw new AiException("AI_RECOGNITION_FAILED", "AI 识图失败，请确认图片可以访问或稍后重试");
         } finally {
@@ -187,6 +191,13 @@ public class AiService {
                 properties.getDisclaimer(),
                 mealLog.getId(),
                 mealLog.getTotalCalories());
+    }
+
+    private String resolveFoodImageUrl(String userId, FoodRecognitionRequest request) {
+        if (hasText(request.mediaAssetId())) {
+            return mediaService.generateReadUrl(userId, request.mediaAssetId(), "meal_photo");
+        }
+        return request.imageUrl();
     }
 
     private String buildSystemPrompt(boolean useLongTermMemory, String userId) {
@@ -261,5 +272,9 @@ public class AiService {
         if (memoryStore.findEnabledByUserId(userId).isEmpty()) {
             memoryStore.save(new AiMemoryItem(userId, "preference", "默认优先返回中文、简洁、可执行的生活建议。", "system_extracted"));
         }
+    }
+
+    private static boolean hasText(String value) {
+        return value != null && !value.isBlank();
     }
 }

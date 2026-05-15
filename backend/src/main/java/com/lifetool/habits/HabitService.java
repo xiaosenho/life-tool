@@ -103,12 +103,14 @@ public class HabitService {
 
     public HabitCheckinResponse checkin(String userId, String habitId, CreateCheckinRequest request) {
         Habit habit = findOwnedHabit(userId, habitId);
-        LocalDate today = LocalDate.now();
+        LocalDate today = request != null && request.checkinDate() != null
+                ? request.checkinDate()
+                : LocalDate.now();
 
         HabitCheckin existing = checkinStore.findByHabitIdAndDate(habitId, today).orElse(null);
         if (existing != null) {
-            existing.setCount(request.count() > 0 ? request.count() : existing.getCount() + 1);
-            existing.setNote(request.note() != null ? request.note() : existing.getNote());
+            existing.setCount(request != null && request.count() > 0 ? request.count() : existing.getCount() + 1);
+            existing.setNote(request != null && request.note() != null ? request.note() : existing.getNote());
             existing.setUpdatedAt(Instant.now());
             checkinStore.save(existing);
             refreshTodayStats(userId);
@@ -119,8 +121,8 @@ public class HabitService {
         checkin.setUserId(userId);
         checkin.setHabitId(habitId);
         checkin.setCheckinDate(today);
-        checkin.setCount(request.count() > 0 ? request.count() : 1);
-        checkin.setNote(blankToNull(request.note()));
+        checkin.setCount(request != null && request.count() > 0 ? request.count() : 1);
+        checkin.setNote(request == null ? null : blankToNull(request.note()));
 
         checkinStore.save(checkin);
         refreshTodayStats(userId);

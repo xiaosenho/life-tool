@@ -68,6 +68,14 @@ public class MediaService {
         return toResponse(asset);
     }
 
+    public String generateReadUrl(String userId, String assetId, String expectedPurpose) {
+        MediaAsset asset = findOwnedAsset(userId, assetId);
+        if (expectedPurpose != null && !expectedPurpose.equals(asset.getPurpose())) {
+            throw new MediaException("VALIDATION_ERROR", "Media asset purpose does not match expected purpose");
+        }
+        return buildReadUrl(asset);
+    }
+
     public void deleteAsset(String userId, String assetId) {
         MediaAsset asset = findOwnedAsset(userId, assetId);
         asset.markDeleted();
@@ -124,6 +132,6 @@ public class MediaService {
     private String buildReadUrl(MediaAsset asset) {
         return uploadUrlSigner.generateGetUrl(
                 asset.getObjectKey(),
-                Instant.now().plusSeconds(config.getUploadTokenTtlSeconds()));
+                Instant.now().plusSeconds(config.getReadUrlTtlSeconds()));
     }
 }

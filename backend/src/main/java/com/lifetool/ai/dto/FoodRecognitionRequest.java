@@ -1,11 +1,19 @@
 package com.lifetool.ai.dto;
 
-import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.AssertTrue;
 
 public record FoodRecognitionRequest(
-        @NotBlank String imageUrl,
+        String imageUrl,
         String customPrompt,
         String mealType,
         String mediaAssetId
 ) {
+    @AssertTrue(message = "imageUrl or mediaAssetId is required")
+    public boolean hasImageSource() {
+        return hasText(imageUrl) || hasText(mediaAssetId);
+    }
+
+    private static boolean hasText(String value) {
+        return value != null && !value.isBlank();
+    }
 }

@@ -32,6 +32,9 @@ public class MediaConfig {
     @Value("${COS_UPLOAD_TOKEN_TTL_SECONDS:300}")
     private int uploadTokenTtlSeconds;
 
+    @Value("${COS_READ_URL_TTL_SECONDS:1800}")
+    private int readUrlTtlSeconds;
+
     @Value("${MEDIA_MAX_IMAGE_BYTES:10485760}")
     private long maxImageBytes;
 
@@ -41,6 +44,7 @@ public class MediaConfig {
     public String getCosSecretKey() { return cosSecretKey; }
     public String getCosPublicBaseUrl() { return cosPublicBaseUrl; }
     public int getUploadTokenTtlSeconds() { return uploadTokenTtlSeconds; }
+    public int getReadUrlTtlSeconds() { return readUrlTtlSeconds; }
     public long getMaxImageBytes() { return maxImageBytes; }
 
     public boolean isCosSigningEnabled() {

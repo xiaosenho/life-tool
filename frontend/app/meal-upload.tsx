@@ -87,7 +87,7 @@ export default function MealUploadScreen() {
       });
       setAsset(result);
       setStatus("success");
-      recognizeMeal(result.readUrl || uri);
+      recognizeMeal(result);
     } catch (err: any) {
       console.error("上传图片失败：", err);
       setStatus("error");
@@ -95,16 +95,19 @@ export default function MealUploadScreen() {
     }
   };
 
-  const recognizeMeal = async (imageUrl: string) => {
+  const recognizeMeal = async (currentAsset: AssetResponse | null = asset) => {
     setRecognizing(true);
     setRecognition(null);
     setRecognitionError(null);
     try {
-      const response = await aiService.recognizeFood(
-        imageUrl,
-        "请用中文识别图片中的食物，估算每种食物的重量、热量、蛋白质、脂肪和碳水，并给出总热量。",
-        asset?.id
-      );
+      if (!currentAsset?.id) {
+        throw new Error("图片资产信息缺失，请重新上传图片");
+      }
+
+      const response = await aiService.recognizeFood({
+        mediaAssetId: currentAsset.id,
+        customPrompt: "请用中文识别图片中的食物，估算每种食物的重量、热量、蛋白质、脂肪和碳水，并给出总热量。",
+      });
       if (!response.success || !response.data) {
         throw new Error(response.error?.message || "识别失败");
       }
@@ -214,7 +217,7 @@ export default function MealUploadScreen() {
                     <Text style={styles.aiErrorText}>{recognitionError}</Text>
                     <TouchableOpacity
                       style={styles.retryAiButton}
-                      onPress={() => recognizeMeal(asset?.readUrl || image || "")}
+                      onPress={() => recognizeMeal(asset)}
                     >
                       <Text style={styles.retryAiButtonText}>重新识别</Text>
                     </TouchableOpacity>

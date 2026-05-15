@@ -207,6 +207,42 @@ class AiControllerTest {
                 .andExpect(jsonPath("$.data.toolCalls[0].status").value("succeeded"));
     }
 
+    @Test
+    void foodRecognitionCanUseMediaAssetIdWithoutClientReadUrl() throws Exception {
+        TestAsset asset = createMealAsset(tokenA);
+
+        mockMvc.perform(post("/api/ai/food-recognition")
+                        .header("Authorization", "Bearer " + tokenA)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "mediaAssetId": "%s",
+                                  "mealType": "dinner"
+                                }
+                                """.formatted(asset.id())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.result").isString())
+                .andExpect(jsonPath("$.data.mealLogId").isString())
+                .andExpect(jsonPath("$.data.totalCalories").value(520));
+    }
+
+    @Test
+    void foodRecognitionRejectsOtherUsersMediaAsset() throws Exception {
+        TestAsset asset = createMealAsset(tokenA);
+
+        mockMvc.perform(post("/api/ai/food-recognition")
+                        .header("Authorization", "Bearer " + tokenB)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "mediaAssetId": "%s",
+                                  "mealType": "dinner"
+                                }
+                                """.formatted(asset.id())))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.error.code").value("FORBIDDEN"));
+    }
+
     private String createSession(String token) throws Exception {
         MvcResult result = mockMvc.perform(post("/api/ai/chat/sessions")
                         .header("Authorization", "Bearer " + token)
@@ -218,6 +254,45 @@ class AiControllerTest {
         return objectMapper.readTree(result.getResponse().getContentAsString())
                 .get("data").get("id").asText();
     }
+
+    private TestAsset createMealAsset(String token) throws Exception {
+        MvcResult uploadResult = mockMvc.perform(post("/api/media/upload-token")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "contentType": "image/jpeg",
+                                  "purpose": "meal_photo",
+                                  "fileSize": 512000
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        var uploadData = objectMapper.readTree(uploadResult.getResponse().getContentAsString()).get("data");
+        String assetId = uploadData.get("assetId").asText();
+        String objectKey = uploadData.get("objectKey").asText();
+
+        mockMvc.perform(post("/api/media/assets")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "assetId": "%s",
+                                  "objectKey": "%s",
+                                  "contentType": "image/jpeg",
+                                  "purpose": "meal_photo",
+                                  "fileSize": 512000,
+                                  "width": 1280,
+                                  "height": 960
+                                }
+                                """.formatted(assetId, objectKey)))
+                .andExpect(status().isCreated());
+
+        return new TestAsset(assetId, objectKey);
+    }
+
+    private record TestAsset(String id, String objectKey) {}
 
     private String registerAndToken(String email, String name) throws Exception {
         String body = "{\"email\":\"" + email + "\",\"password\":\"secret123\",\"displayName\":\"" + name + "\"}";

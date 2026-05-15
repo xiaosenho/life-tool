@@ -125,16 +125,26 @@ export default function TodayScreen() {
     const isChecked = checkins.some(c => c.habit_id === habitId);
     if (isChecked) return;
 
+    const date = todayKey();
     try {
-      const response = await habitService.checkinOnServer(habitId);
-      if (!response.success) {
+      const response = await habitService.checkinOnServer(habitId, { checkinDate: date });
+      if (!response.success || !response.data) {
         throw new Error(response.error?.message || "打卡失败");
       }
+      const serverCheckin = serverCheckinToLocal(response.data);
+      setCheckins((current) => [
+        ...current.filter((checkin) => checkin.habit_id !== habitId),
+        serverCheckin,
+      ]);
       setOfflineNotice(null);
       loadData();
     } catch (error) {
       try {
-        await habitService.checkin(habitId);
+        const localCheckin = await habitService.checkin(habitId, date);
+        setCheckins((current) => [
+          ...current.filter((checkin) => checkin.habit_id !== habitId),
+          localCheckin,
+        ]);
         setOfflineNotice("当前无法连接服务器，本次打卡已保存到本地。恢复网络后请到“我的”页手动同步。");
         Alert.alert("已离线保存", "本次打卡已保存到本地。恢复网络后请到“我的”页点击立即同步。");
         loadData();

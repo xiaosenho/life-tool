@@ -57,6 +57,12 @@ export interface ServerHabitCheckin {
   updatedAt: string;
 }
 
+export interface ServerCheckinInput {
+  count?: number;
+  note?: string | null;
+  checkinDate?: string;
+}
+
 export function serverHabitToLocal(habit: ServerHabit): Habit {
   return {
     id: habit.id,
@@ -223,8 +229,12 @@ export const habitService = {
     return apiClient.delete<void>(`/habits/${id}`);
   },
 
-  async checkinOnServer(habitId: string, count: number = 1, note?: string) {
-    return apiClient.post<ServerHabitCheckin>(`/habits/${habitId}/checkins`, { count, note });
+  async checkinOnServer(habitId: string, input: ServerCheckinInput = {}) {
+    return apiClient.post<ServerHabitCheckin>(`/habits/${habitId}/checkins`, {
+      count: input.count ?? 1,
+      note: input.note,
+      checkinDate: input.checkinDate,
+    });
   },
 
   async getCheckinsFromServer(habitId: string, from?: string, to?: string) {
