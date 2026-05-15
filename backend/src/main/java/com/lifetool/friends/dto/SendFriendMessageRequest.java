@@ -1,10 +1,10 @@
 package com.lifetool.friends.dto;
 
-import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.Valid;
 
 public record SendFriendMessageRequest(
-        @NotBlank(message = "content is required")
         String content,
-        String type
+        String type,
+        @Valid FriendMessageAttachmentRequest attachment
 ) {
 }

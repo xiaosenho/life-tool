@@ -3,6 +3,7 @@ package com.lifetool.ai.dto;
 import java.time.Instant;
 import java.util.List;
 
+import com.lifetool.ai.AiChatAttachment;
 import com.lifetool.ai.AiChatMessage;
 
 public record AiChatMessageResponse(
@@ -10,6 +11,7 @@ public record AiChatMessageResponse(
         String messageId,
         String role,
         String content,
+        AiChatAttachment attachment,
         String disclaimer,
         List<AiToolCallStatusResponse> toolCalls,
         boolean longTermMemorySaved,
@@ -28,6 +30,7 @@ public record AiChatMessageResponse(
                 message.getId(),
                 message.getRole(),
                 message.getContent(),
+                message.getAttachment(),
                 disclaimer,
                 toolCalls,
                 longTermMemorySaved,

@@ -14,6 +14,7 @@ import org.slf4j.LoggerFactory;
 import com.lifetool.ai.dto.AiChatMessageResponse;
 import com.lifetool.ai.dto.AiChatMessagesResponse;
 import com.lifetool.ai.dto.AiChatSessionResponse;
+import com.lifetool.ai.dto.AiChatAttachmentRequest;
 import com.lifetool.ai.dto.AiMemoriesResponse;
 import com.lifetool.ai.dto.AiMemoryResponse;
 import com.lifetool.ai.dto.AiToolCallStatusResponse;
@@ -23,6 +24,7 @@ import com.lifetool.ai.dto.FoodRecognitionResponse;
 import com.lifetool.ai.dto.LifeAdviceRequest;
 import com.lifetool.ai.dto.LifeAdviceResponse;
 import com.lifetool.ai.dto.SendAiMessageRequest;
+import com.lifetool.media.MediaAsset;
 import com.lifetool.media.MediaService;
 import com.lifetool.meals.MealLog;
 import com.lifetool.meals.MealService;
@@ -30,6 +32,8 @@ import com.lifetool.meals.MealService;
 @Service
 public class AiService {
     private static final Logger log = LoggerFactory.getLogger(AiService.class);
+    private static final int FOOD_IMAGE_RETRY_TIMES = 3;
+    private static final long FOOD_IMAGE_RETRY_DELAY_MS = 1200L;
     private static final String SYSTEM_PROMPT = """
             你是 LifeTool AI 助手，帮助用户管理专注、习惯、饮食、记账和纪念日。
             规则：
@@ -81,8 +85,10 @@ public class AiService {
 
     public AiChatMessageResponse sendMessage(String userId, String sessionId, SendAiMessageRequest request) {
         AiChatSession session = findOwnedSession(userId, sessionId);
+        AiChatAttachment attachment = buildAttachment(userId, request.attachment());
+        String userContent = normalizeUserContent(request.content(), attachment);
         AiChatMessage userMessage = chatStore.appendMessage(new AiChatMessage(
-                sessionId, userId, "user", request.content().trim(), chatStore.nextSeq(sessionId)));
+                sessionId, userId, "user", userContent, attachment, chatStore.nextSeq(sessionId)));
 
         List<AiToolCall> toolCalls = executeTools(userId, sessionId, userMessage.getId(), request.enabledTools());
 
@@ -99,7 +105,19 @@ public class AiService {
         try {
             UserDataTools.setCurrentUserId(userId);
             UserDataTools.resetSavedMemoryEvents();
-            assistantContent = assistantClient.chat(sessionId, systemPrompt, history, toolResults);
+            if (attachment != null) {
+                assistantContent = assistantClient.chatWithMedia(
+                        sessionId,
+                        systemPrompt,
+                        history,
+                        toolResults,
+                        new AiAssistantClient.MediaInput(
+                                attachment.kind(),
+                                attachment.url(),
+                                attachment.contentType()));
+            } else {
+                assistantContent = assistantClient.chat(sessionId, systemPrompt, history, toolResults);
+            }
             savedMemoryEvents = UserDataTools.consumeSavedMemoryEvents();
         } finally {
             if (savedMemoryEvents.isEmpty()) {
@@ -118,6 +136,33 @@ public class AiService {
                 properties.getDisclaimer(),
                 mergeToolCallStatuses(toolCalls, savedMemoryEvents),
                 !savedMemoryEvents.isEmpty());
+    }
+
+    private String normalizeUserContent(String content, AiChatAttachment attachment) {
+        String normalized = content == null ? "" : content.trim();
+        if (attachment == null && normalized.isBlank()) {
+            throw new AiException("VALIDATION_ERROR", "content is required");
+        }
+        if (!normalized.isBlank()) {
+            return normalized;
+        }
+        return attachment != null && "audio".equals(attachment.kind()) ? "[语音消息]" : "[图片消息]";
+    }
+
+    private AiChatAttachment buildAttachment(String userId, AiChatAttachmentRequest request) {
+        if (request == null || request.assetId() == null || request.assetId().isBlank()) {
+            return null;
+        }
+        MediaAsset asset = mediaService.findOwnedAsset(userId, request.assetId());
+        boolean audio = asset.getContentType().startsWith("audio/");
+        return new AiChatAttachment(
+                asset.getId(),
+                audio ? "audio" : "image",
+                asset.getContentType(),
+                mediaService.generateReadUrl(userId, asset.getId(), asset.getPurpose()),
+                request.width(),
+                request.height(),
+                request.durationSeconds());
     }
 
     public AiChatMessagesResponse listMessages(String userId, String sessionId) {
@@ -217,17 +262,27 @@ public class AiService {
             String systemPrompt,
             String userText,
             String firstImageUrl) {
-        try {
-            return assistantClient.chatWithImage("food-" + userId, systemPrompt, firstImageUrl, userText);
-        } catch (RuntimeException firstEx) {
-            if (!isCosDownload403(firstEx)) {
-                throw firstEx;
+        String currentImageUrl = firstImageUrl;
+        RuntimeException lastException = null;
+        for (int attempt = 1; attempt <= FOOD_IMAGE_RETRY_TIMES; attempt++) {
+            try {
+                return assistantClient.chatWithImage("food-" + userId, systemPrompt, currentImageUrl, userText);
+            } catch (RuntimeException ex) {
+                lastException = ex;
+                if (!isCosDownload403(ex) || attempt >= FOOD_IMAGE_RETRY_TIMES) {
+                    throw ex;
+                }
+                log.warn(
+                        "AI image download got 403, retrying with refreshed URL. attempt={}/{}, userId={}, mediaAssetId={}",
+                        attempt + 1,
+                        FOOD_IMAGE_RETRY_TIMES,
+                        userId,
+                        request.mediaAssetId());
+                sleepBeforeFoodRetry();
+                currentImageUrl = resolveFoodImageUrl(userId, request);
             }
-            String refreshedImageUrl = resolveFoodImageUrl(userId, request);
-            log.warn("AI image download got 403, retrying with refreshed signed URL. userId={}, mediaAssetId={}",
-                    userId, request.mediaAssetId());
-            return assistantClient.chatWithImage("food-" + userId, systemPrompt, refreshedImageUrl, userText);
         }
+        throw lastException == null ? new RuntimeException("AI image recognition failed") : lastException;
     }
 
     private boolean isCosDownload403(Throwable ex) {
@@ -240,6 +295,15 @@ public class AiService {
 
     private String resolveFoodImageUrl(String userId, FoodRecognitionRequest request) {
         return mediaService.generateReadUrl(userId, request.mediaAssetId(), "meal_photo");
+    }
+
+    private void sleepBeforeFoodRetry() {
+        try {
+            Thread.sleep(FOOD_IMAGE_RETRY_DELAY_MS);
+        } catch (InterruptedException interruptedException) {
+            Thread.currentThread().interrupt();
+            throw new RuntimeException("Interrupted while retrying AI image recognition", interruptedException);
+        }
     }
 
     private String buildSystemPrompt(boolean useLongTermMemory, String userId) {

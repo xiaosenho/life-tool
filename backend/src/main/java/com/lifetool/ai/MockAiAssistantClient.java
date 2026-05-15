@@ -26,6 +26,18 @@ public class MockAiAssistantClient implements AiAssistantClient {
     }
 
     @Override
+    public String chatWithMedia(String conversationId, String systemPrompt, List<ChatEntry> history,
+                                List<ToolResult> toolResults, MediaInput mediaInput) {
+        String lastUserContent = history.stream()
+                .filter(e -> "user".equals(e.role()))
+                .reduce((a, b) -> b)
+                .map(ChatEntry::content)
+                .orElse("");
+        String kind = mediaInput == null ? "无附件" : ("audio".equals(mediaInput.kind()) ? "语音" : "图片");
+        return "收到你的" + kind + "消息：" + lastUserContent + "\n我已经结合近期记录给你分析建议。";
+    }
+
+    @Override
     public String chat(String conversationId, String systemPrompt, List<ChatEntry> history, List<ToolResult> toolResults) {
         String lastUserContent = history.stream()
                 .filter(e -> "user".equals(e.role()))

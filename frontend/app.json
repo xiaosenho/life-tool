@@ -19,14 +19,20 @@
       ]
     ],
     "ios": {
-      "supportsTablet": false
+      "supportsTablet": false,
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "用于发送语音消息与 AI 语音提问"
+      }
     },
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#0F172A"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.anonymous.lifetool"
+      "package": "com.anonymous.lifetool",
+      "permissions": [
+        "RECORD_AUDIO"
+      ]
     },
     "web": {
       "bundler": "metro",

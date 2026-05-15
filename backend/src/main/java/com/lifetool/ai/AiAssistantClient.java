@@ -9,7 +9,12 @@ public interface AiAssistantClient {
 
     String chatWithImage(String conversationId, String systemPrompt, String imageUrl, String userText);
 
+    String chatWithMedia(String conversationId, String systemPrompt, List<ChatEntry> history,
+                         List<ToolResult> toolResults, MediaInput mediaInput);
+
     record ChatEntry(String role, String content) {}
 
     record ToolResult(String toolName, Map<String, Object> data) {}
+
+    record MediaInput(String kind, String url, String contentType) {}
 }

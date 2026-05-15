@@ -24,6 +24,15 @@ export interface ChatMessage {
   messageId?: string;
   role: "user" | "assistant";
   content: string;
+  attachment?: {
+    assetId: string;
+    kind: "image" | "audio";
+    contentType: string;
+    url: string;
+    width?: number;
+    height?: number;
+    durationSeconds?: number;
+  } | null;
   disclaimer?: string;
   toolCalls?: ToolCallStatus[];
   longTermMemorySaved?: boolean;
@@ -56,8 +65,13 @@ export const aiService = {
     return apiClient.post<ChatSession>("/ai/chat/sessions", { title, useLongTermMemory });
   },
 
-  sendMessage(sessionId: string, content: string, enabledTools: string[] = defaultTools) {
-    return apiClient.post<ChatMessage>(`/ai/chat/sessions/${sessionId}/messages`, { content, enabledTools });
+  sendMessage(
+    sessionId: string,
+    content: string,
+    enabledTools: string[] = defaultTools,
+    attachment?: { assetId: string; width?: number; height?: number; durationSeconds?: number }
+  ) {
+    return apiClient.post<ChatMessage>(`/ai/chat/sessions/${sessionId}/messages`, { content, enabledTools, attachment });
   },
 
   getMessages(sessionId: string) {

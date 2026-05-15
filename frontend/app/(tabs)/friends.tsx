@@ -25,6 +25,7 @@ import { LeaderboardDetailResponse, leaderboardService } from "@/services/leader
 import { useAuthStore } from "@/store/authStore";
 import { colors } from "@/theme/colors";
 import { formatDateTimeCn } from "@/utils/time";
+import { FRIEND_MESSAGE_TYPE_LABELS } from "@/services/friendService";
 
 type TabKey = "friends" | "leaderboards" | "messages";
 type BoardKey = "focus_today" | "focus_week" | "habits_today" | "streaks";
@@ -391,7 +392,7 @@ export default function FriendsScreen() {
                   <View style={styles.flexBlock}>
                     <Text style={styles.friendName}>{item.friendDisplayName}</Text>
                     <Text style={styles.friendMeta}>
-                      {item.lastMessageType === "cheer" ? "加油消息" : "文字消息"} · {formatDateTimeCn(item.lastMessageAt)}
+                      {FRIEND_MESSAGE_TYPE_LABELS[item.lastMessageType]} · {formatDateTimeCn(item.lastMessageAt)}
                     </Text>
                     <Text style={styles.messagePreview} numberOfLines={1}>
                       {item.lastMessage}

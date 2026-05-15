@@ -3,6 +3,7 @@ package com.lifetool.friends.dto;
 import java.time.Instant;
 
 import com.lifetool.friends.FriendMessage;
+import com.lifetool.friends.FriendMessageAttachment;
 
 public record FriendMessageResponse(
         String id,
@@ -10,6 +11,7 @@ public record FriendMessageResponse(
         String toUserId,
         String type,
         String content,
+        FriendMessageAttachment attachment,
         Instant createdAt,
         Instant readAt
 ) {
@@ -20,6 +22,7 @@ public record FriendMessageResponse(
                 message.getToUserId(),
                 message.getType().name().toLowerCase(),
                 message.getContent(),
+                message.getAttachment(),
                 message.getCreatedAt(),
                 message.getReadAt());
     }

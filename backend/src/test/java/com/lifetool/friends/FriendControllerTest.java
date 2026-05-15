@@ -195,6 +195,29 @@ class FriendControllerTest {
     }
 
     @Test
+    void friendsCanSendRichInteractionMessages() throws Exception {
+        String bobEmail = getBobEmail();
+        String requestId = sendRequest(tokenA, bobEmail);
+        acceptRequest(tokenB, requestId);
+
+        mockMvc.perform(post("/api/friends/messages/" + userIdB)
+                        .header("Authorization", "Bearer " + tokenA)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"content":"奖励你一杯咖啡，辛苦啦 ☕","type":"coffee"}
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.type").value("coffee"))
+                .andExpect(jsonPath("$.data.content").value("奖励你一杯咖啡，辛苦啦 ☕"));
+
+        mockMvc.perform(get("/api/friends/messages")
+                        .header("Authorization", "Bearer " + tokenB))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[0].lastMessageType").value("coffee"))
+                .andExpect(jsonPath("$.data[0].lastMessage").value("奖励你一杯咖啡，辛苦啦 ☕"));
+    }
+
+    @Test
     void nonFriendsCannotSendMessages() throws Exception {
         mockMvc.perform(post("/api/friends/messages/" + userIdB)
                         .header("Authorization", "Bearer " + tokenA)

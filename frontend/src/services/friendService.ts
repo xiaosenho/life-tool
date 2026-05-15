@@ -17,12 +17,36 @@ export interface FriendRequest {
   updatedAt: string;
 }
 
+export type FriendMessageType = "text" | "cheer" | "celebrate" | "hug" | "coffee" | "poke";
+export type FriendMessageMediaType = FriendMessageType | "image" | "audio";
+
+export const FRIEND_MESSAGE_TYPE_LABELS: Record<FriendMessageMediaType, string> = {
+  text: "消息",
+  cheer: "加油",
+  celebrate: "庆祝",
+  hug: "抱抱",
+  coffee: "咖啡",
+  poke: "提醒",
+  image: "图片",
+  audio: "语音"
+};
+
+export interface FriendMessageAttachment {
+  assetId: string;
+  kind: "image" | "audio";
+  contentType: string;
+  url: string;
+  width?: number;
+  height?: number;
+  durationSeconds?: number;
+}
+
 export interface FriendConversationSummary {
   friendUserId: string;
   friendDisplayName: string;
   friendEmail: string;
   lastMessage: string;
-  lastMessageType: "text" | "cheer";
+  lastMessageType: FriendMessageMediaType;
   lastMessageAt: string;
   unreadCount: number;
 }
@@ -31,8 +55,9 @@ export interface FriendMessage {
   id: string;
   fromUserId: string;
   toUserId: string;
-  type: "text" | "cheer";
+  type: FriendMessageMediaType;
   content: string;
+  attachment?: FriendMessageAttachment | null;
   createdAt: string;
   readAt?: string | null;
 }
@@ -70,8 +95,13 @@ export const friendService = {
     return apiClient.get<FriendMessage[]>(`/friends/messages/${friendUserId}`);
   },
 
-  sendMessage(friendUserId: string, content: string, type: "text" | "cheer" = "text") {
-    return apiClient.post<FriendMessage>(`/friends/messages/${friendUserId}`, { content, type });
+  sendMessage(
+    friendUserId: string,
+    content: string,
+    type: FriendMessageMediaType = "text",
+    attachment?: { assetId: string; width?: number; height?: number; durationSeconds?: number }
+  ) {
+    return apiClient.post<FriendMessage>(`/friends/messages/${friendUserId}`, { content, type, attachment });
   },
 
   markConversationRead(friendUserId: string) {

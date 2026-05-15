@@ -8,14 +8,19 @@ import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Repository;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 @Repository
 @Profile("postgres")
 public class JdbcFriendMessageStore implements FriendMessageStore {
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     private final String url;
     private final String username;
@@ -34,8 +39,8 @@ public class JdbcFriendMessageStore implements FriendMessageStore {
     public FriendMessage save(FriendMessage message) {
         String sql = """
                 INSERT INTO friend_messages
-                  (id, from_user_id, to_user_id, message_type, content, created_at, read_at, updated_at)
-                VALUES (?::uuid, ?::uuid, ?::uuid, ?::text, ?, ?, ?, now())
+                  (id, from_user_id, to_user_id, message_type, content, metadata, created_at, read_at, updated_at)
+                VALUES (?::uuid, ?::uuid, ?::uuid, ?::text, ?, ?::jsonb, ?, ?, now())
                 ON CONFLICT (id) DO UPDATE SET
                   read_at = EXCLUDED.read_at,
                   updated_at = now()
@@ -47,8 +52,9 @@ public class JdbcFriendMessageStore implements FriendMessageStore {
             stmt.setString(3, message.getToUserId());
             stmt.setString(4, message.getType().name().toLowerCase());
             stmt.setString(5, message.getContent());
-            stmt.setTimestamp(6, Timestamp.from(message.getCreatedAt()));
-            stmt.setTimestamp(7, message.getReadAt() == null ? null : Timestamp.from(message.getReadAt()));
+            stmt.setString(6, toJson(message.getAttachment()));
+            stmt.setTimestamp(7, Timestamp.from(message.getCreatedAt()));
+            stmt.setTimestamp(8, message.getReadAt() == null ? null : Timestamp.from(message.getReadAt()));
             stmt.executeUpdate();
             return message;
         } catch (SQLException ex) {
@@ -59,7 +65,7 @@ public class JdbcFriendMessageStore implements FriendMessageStore {
     @Override
     public List<FriendMessage> listConversation(String userId, String friendUserId) {
         String sql = """
-                SELECT id, from_user_id, to_user_id, message_type, content, created_at, read_at
+                SELECT id, from_user_id, to_user_id, message_type, content, metadata, created_at, read_at
                 FROM friend_messages
                 WHERE ((from_user_id = ?::uuid AND to_user_id = ?::uuid)
                     OR (from_user_id = ?::uuid AND to_user_id = ?::uuid))
@@ -72,7 +78,7 @@ public class JdbcFriendMessageStore implements FriendMessageStore {
     @Override
     public List<FriendMessage> listByUser(String userId) {
         String sql = """
-                SELECT id, from_user_id, to_user_id, message_type, content, created_at, read_at
+                SELECT id, from_user_id, to_user_id, message_type, content, metadata, created_at, read_at
                 FROM friend_messages
                 WHERE (from_user_id = ?::uuid OR to_user_id = ?::uuid)
                   AND deleted_at IS NULL
@@ -127,8 +133,39 @@ public class JdbcFriendMessageStore implements FriendMessageStore {
                 rs.getString("to_user_id"),
                 FriendMessage.MessageType.valueOf(rs.getString("message_type").toUpperCase()),
                 rs.getString("content"),
+                parseAttachment(rs.getString("metadata")),
                 rs.getTimestamp("created_at").toInstant(),
                 readAt == null ? null : readAt.toInstant());
+    }
+
+    private String toJson(FriendMessageAttachment attachment) {
+        if (attachment == null) {
+            return null;
+        }
+        try {
+            return OBJECT_MAPPER.writeValueAsString(attachment);
+        } catch (Exception ex) {
+            throw new IllegalStateException("Failed to serialize friend message attachment", ex);
+        }
+    }
+
+    private FriendMessageAttachment parseAttachment(String json) {
+        if (json == null || json.isBlank()) {
+            return null;
+        }
+        try {
+            Map<String, Object> raw = OBJECT_MAPPER.readValue(json, new TypeReference<>() {});
+            return new FriendMessageAttachment(
+                    raw.get("assetId") == null ? null : raw.get("assetId").toString(),
+                    raw.get("kind") == null ? null : raw.get("kind").toString(),
+                    raw.get("contentType") == null ? null : raw.get("contentType").toString(),
+                    raw.get("url") == null ? null : raw.get("url").toString(),
+                    raw.get("width") instanceof Number number ? number.intValue() : null,
+                    raw.get("height") instanceof Number number ? number.intValue() : null,
+                    raw.get("durationSeconds") instanceof Number number ? number.intValue() : null);
+        } catch (Exception ex) {
+            throw new IllegalStateException("Failed to parse friend message attachment", ex);
+        }
     }
 
     private Connection getConnection() throws SQLException {

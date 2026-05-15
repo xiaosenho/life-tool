@@ -8,15 +8,20 @@ import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Repository;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 @Repository
 @Profile("postgres")
 public class JdbcAiChatStore implements AiChatStore {
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     private final String url;
     private final String username;
@@ -79,8 +84,8 @@ public class JdbcAiChatStore implements AiChatStore {
     @Override
     public AiChatMessage appendMessage(AiChatMessage message) {
         String sql = """
-                INSERT INTO ai_chat_messages (id, session_id, role, content, seq, created_at, updated_at)
-                VALUES (?::uuid, ?::uuid, ?, ?, ?, ?, ?)
+                INSERT INTO ai_chat_messages (id, session_id, role, content, metadata, seq, created_at, updated_at)
+                VALUES (?::uuid, ?::uuid, ?, ?, ?::jsonb, ?, ?, ?)
                 """;
         try (Connection conn = getConnection();
              var stmt = conn.prepareStatement(sql)) {
@@ -88,10 +93,11 @@ public class JdbcAiChatStore implements AiChatStore {
             stmt.setString(2, message.getSessionId());
             stmt.setString(3, message.getRole());
             stmt.setString(4, message.getContent());
-            stmt.setInt(5, message.getSeq());
+            stmt.setString(5, toAttachmentJson(message.getAttachment()));
+            stmt.setInt(6, message.getSeq());
             Timestamp now = Timestamp.from(message.getCreatedAt());
-            stmt.setTimestamp(6, now);
             stmt.setTimestamp(7, now);
+            stmt.setTimestamp(8, now);
             stmt.executeUpdate();
 
             String updateSql = "UPDATE ai_chat_sessions SET message_count = message_count + 1, updated_at = ? WHERE id = ?::uuid";
@@ -126,7 +132,7 @@ public class JdbcAiChatStore implements AiChatStore {
     @Override
     public List<AiChatMessage> listMessages(String sessionId) {
         String sql = """
-                SELECT id, session_id, role, content, seq, created_at
+                SELECT id, session_id, role, content, metadata, seq, created_at
                 FROM ai_chat_messages
                 WHERE session_id = ?::uuid
                 ORDER BY seq
@@ -142,6 +148,7 @@ public class JdbcAiChatStore implements AiChatStore {
                             "",
                             rs.getString("role"),
                             rs.getString("content"),
+                            parseAttachment(rs.getString("metadata")),
                             rs.getInt("seq"));
                     setId(msg, rs.getString("id"));
                     messages.add(msg);
@@ -220,6 +227,36 @@ public class JdbcAiChatStore implements AiChatStore {
             return new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(map);
         } catch (Exception e) {
             return "{}";
+        }
+    }
+
+    private String toAttachmentJson(AiChatAttachment attachment) {
+        if (attachment == null) {
+            return null;
+        }
+        try {
+            return OBJECT_MAPPER.writeValueAsString(attachment);
+        } catch (Exception ex) {
+            throw new IllegalStateException("Failed to serialize AI chat attachment", ex);
+        }
+    }
+
+    private AiChatAttachment parseAttachment(String json) {
+        if (json == null || json.isBlank()) {
+            return null;
+        }
+        try {
+            Map<String, Object> raw = OBJECT_MAPPER.readValue(json, new TypeReference<>() {});
+            return new AiChatAttachment(
+                    raw.get("assetId") == null ? null : raw.get("assetId").toString(),
+                    raw.get("kind") == null ? null : raw.get("kind").toString(),
+                    raw.get("contentType") == null ? null : raw.get("contentType").toString(),
+                    raw.get("url") == null ? null : raw.get("url").toString(),
+                    raw.get("width") instanceof Number number ? number.intValue() : null,
+                    raw.get("height") instanceof Number number ? number.intValue() : null,
+                    raw.get("durationSeconds") instanceof Number number ? number.intValue() : null);
+        } catch (Exception ex) {
+            throw new IllegalStateException("Failed to parse AI chat attachment", ex);
         }
     }
 

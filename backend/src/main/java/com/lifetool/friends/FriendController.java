@@ -98,7 +98,7 @@ public class FriendController {
             @AuthenticationPrincipal String userId,
             @PathVariable String friendUserId,
             @Valid @RequestBody SendFriendMessageRequest request) {
-        var message = friendService.sendMessage(userId, friendUserId, request.content(), request.type());
+        var message = friendService.sendMessage(userId, friendUserId, request.content(), request.type(), request.attachment());
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.ok(FriendMessageResponse.from(message)));
     }
 

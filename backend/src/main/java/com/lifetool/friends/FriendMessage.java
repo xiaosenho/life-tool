@@ -7,7 +7,13 @@ public class FriendMessage {
 
     public enum MessageType {
         TEXT,
-        CHEER
+        CHEER,
+        CELEBRATE,
+        HUG,
+        COFFEE,
+        POKE,
+        IMAGE,
+        AUDIO
     }
 
     private final String id;
@@ -15,11 +21,16 @@ public class FriendMessage {
     private final String toUserId;
     private final MessageType type;
     private final String content;
+    private final FriendMessageAttachment attachment;
     private final Instant createdAt;
     private Instant readAt;
 
     public FriendMessage(String fromUserId, String toUserId, MessageType type, String content) {
-        this(UUID.randomUUID().toString(), fromUserId, toUserId, type, content, Instant.now(), null);
+        this(UUID.randomUUID().toString(), fromUserId, toUserId, type, content, null, Instant.now(), null);
+    }
+
+    public FriendMessage(String fromUserId, String toUserId, MessageType type, String content, FriendMessageAttachment attachment) {
+        this(UUID.randomUUID().toString(), fromUserId, toUserId, type, content, attachment, Instant.now(), null);
     }
 
     public FriendMessage(
@@ -28,6 +39,7 @@ public class FriendMessage {
             String toUserId,
             MessageType type,
             String content,
+            FriendMessageAttachment attachment,
             Instant createdAt,
             Instant readAt) {
         this.id = id;
@@ -35,6 +47,7 @@ public class FriendMessage {
         this.toUserId = toUserId;
         this.type = type;
         this.content = content;
+        this.attachment = attachment;
         this.createdAt = createdAt;
         this.readAt = readAt;
     }
@@ -57,6 +70,10 @@ public class FriendMessage {
 
     public String getContent() {
         return content;
+    }
+
+    public FriendMessageAttachment getAttachment() {
+        return attachment;
     }
 
     public Instant getCreatedAt() {

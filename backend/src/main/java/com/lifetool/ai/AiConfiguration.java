@@ -1,6 +1,7 @@
 package com.lifetool.ai;
 
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
@@ -18,7 +19,12 @@ public class AiConfiguration {
 
     @Bean
     @ConditionalOnProperty(name = "lifetool.ai.mock-enabled", havingValue = "false")
-    public AiAssistantClient springAiAssistantClient(ChatClient.Builder chatClientBuilder, UserDataTools userDataTools) {
-        return new SpringAiAssistantClient(chatClientBuilder, userDataTools);
+    public AiAssistantClient springAiAssistantClient(
+            ChatClient.Builder chatClientBuilder,
+            UserDataTools userDataTools,
+            @Value("${spring.ai.openai.api-key}") String apiKey,
+            @Value("${spring.ai.openai.base-url}") String baseUrl,
+            @Value("${spring.ai.openai.chat.options.model}") String model) {
+        return new SpringAiAssistantClient(chatClientBuilder, userDataTools, apiKey, baseUrl, model);
     }
 }

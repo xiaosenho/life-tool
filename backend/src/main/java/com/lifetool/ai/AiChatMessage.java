@@ -9,14 +9,20 @@ public class AiChatMessage {
     private final String userId;
     private final String role;
     private final String content;
+    private final AiChatAttachment attachment;
     private final int seq;
     private final Instant createdAt = Instant.now();
 
     public AiChatMessage(String sessionId, String userId, String role, String content, int seq) {
+        this(sessionId, userId, role, content, null, seq);
+    }
+
+    public AiChatMessage(String sessionId, String userId, String role, String content, AiChatAttachment attachment, int seq) {
         this.sessionId = sessionId;
         this.userId = userId;
         this.role = role;
         this.content = content;
+        this.attachment = attachment;
         this.seq = seq;
     }
 
@@ -38,6 +44,10 @@ public class AiChatMessage {
 
     public String getContent() {
         return content;
+    }
+
+    public AiChatAttachment getAttachment() {
+        return attachment;
     }
 
     public int getSeq() {

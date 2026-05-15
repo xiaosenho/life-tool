@@ -1,7 +1,9 @@
 package com.lifetool.ai;
 
 import java.net.URI;
+import java.util.Base64;
 import java.util.List;
+import java.util.Map;
 
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
@@ -13,15 +15,26 @@ import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.content.Media;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.io.ByteArrayResource;
+import org.springframework.http.MediaType;
 import org.springframework.util.MimeTypeUtils;
+import org.springframework.web.client.RestClient;
 
 public class SpringAiAssistantClient implements AiAssistantClient {
 
     private final ChatClient chatClient;
     private final ChatClient statelessChatClient;
     private final UserDataTools userDataTools;
+    private final RestClient restClient;
+    private final String chatModel;
 
-    public SpringAiAssistantClient(ChatClient.Builder chatClientBuilder, UserDataTools userDataTools) {
+    public SpringAiAssistantClient(
+            ChatClient.Builder chatClientBuilder,
+            UserDataTools userDataTools,
+            @Value("${spring.ai.openai.api-key}") String apiKey,
+            @Value("${spring.ai.openai.base-url}") String baseUrl,
+            @Value("${spring.ai.openai.chat.options.model}") String chatModel) {
         var chatMemory = MessageWindowChatMemory.builder()
                 .chatMemoryRepository(new InMemoryChatMemoryRepository())
                 .maxMessages(20)
@@ -31,6 +44,11 @@ public class SpringAiAssistantClient implements AiAssistantClient {
                 .build();
         this.statelessChatClient = chatClientBuilder.build();
         this.userDataTools = userDataTools;
+        this.chatModel = chatModel;
+        this.restClient = RestClient.builder()
+                .baseUrl(baseUrl)
+                .defaultHeader("Authorization", "Bearer " + apiKey)
+                .build();
     }
 
     @Override
@@ -80,5 +98,93 @@ public class SpringAiAssistantClient implements AiAssistantClient {
                 .advisors(a -> a.param("chat_memory_conversation_id", conversationId))
                 .call()
                 .content();
+    }
+
+    @Override
+    @SuppressWarnings("unchecked")
+    public String chatWithMedia(String conversationId, String systemPrompt, List<ChatEntry> history,
+                                List<ToolResult> toolResults, MediaInput mediaInput) {
+        StringBuilder system = new StringBuilder();
+        if (systemPrompt != null && !systemPrompt.isBlank()) {
+            system.append(systemPrompt);
+        }
+        if (!toolResults.isEmpty()) {
+            system.append("\n\n以下是已查询到的用户数据工具结果：\n");
+            for (ToolResult tr : toolResults) {
+                system.append("- ").append(tr.toolName()).append(": ").append(tr.data()).append("\n");
+            }
+        }
+
+        List<Map<String, Object>> messages = new java.util.ArrayList<>();
+        if (!system.isEmpty()) {
+            messages.add(Map.of(
+                    "role", "system",
+                    "content", system.toString()));
+        }
+
+        for (ChatEntry entry : history) {
+            if (!"user".equals(entry.role()) && !"assistant".equals(entry.role())) {
+                continue;
+            }
+            if ("user".equals(entry.role()) && mediaInput != null && entry.equals(history.get(history.size() - 1))) {
+                List<Map<String, Object>> content = new java.util.ArrayList<>();
+                if (entry.content() != null && !entry.content().isBlank()) {
+                    content.add(Map.of("type", "text", "text", entry.content()));
+                }
+                if ("audio".equals(mediaInput.kind())) {
+                    content.add(Map.of(
+                            "type", "input_audio",
+                            "input_audio", Map.of(
+                                    "data", fetchAudioAsBase64(mediaInput.url()),
+                                    "format", audioFormat(mediaInput.contentType()))));
+                } else {
+                    content.add(Map.of(
+                            "type", "image_url",
+                            "image_url", Map.of("url", mediaInput.url())));
+                }
+                messages.add(Map.of("role", "user", "content", content));
+            } else {
+                messages.add(Map.of("role", entry.role(), "content", entry.content()));
+            }
+        }
+
+        Map<String, Object> response = restClient.post()
+                .uri("/v1/chat/completions")
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(Map.of(
+                        "model", chatModel,
+                        "messages", messages))
+                .retrieve()
+                .body(Map.class);
+
+        if (response == null) {
+            throw new IllegalStateException("Empty AI response");
+        }
+        List<Map<String, Object>> choices = (List<Map<String, Object>>) response.get("choices");
+        if (choices == null || choices.isEmpty()) {
+            throw new IllegalStateException("No AI choices returned");
+        }
+        Map<String, Object> message = (Map<String, Object>) choices.get(0).get("message");
+        Object content = message == null ? null : message.get("content");
+        return content == null ? "" : content.toString();
+    }
+
+    private String audioFormat(String contentType) {
+        return switch (contentType) {
+            case "audio/wav" -> "wav";
+            case "audio/mpeg", "audio/mp3" -> "mp3";
+            default -> "m4a";
+        };
+    }
+
+    private String fetchAudioAsBase64(String url) {
+        byte[] bytes = restClient.get()
+                .uri(url)
+                .retrieve()
+                .body(byte[].class);
+        if (bytes == null || bytes.length == 0) {
+            throw new IllegalStateException("Failed to load audio bytes");
+        }
+        return Base64.getEncoder().encodeToString(bytes);
     }
 }

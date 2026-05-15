@@ -42,7 +42,7 @@ export const mediaService = {
   async readImageBlob(fileUri: string) {
     const response = await fetch(fileUri);
     if (!response.ok) {
-      throw new Error("读取图片失败");
+      throw new Error("读取文件失败");
     }
     return response.blob();
   },
@@ -63,12 +63,12 @@ export const mediaService = {
       });
 
       if (!uploadResponse.ok) {
-        throw new Error(`图片上传失败，状态码：${uploadResponse.status}`);
+        throw new Error(`文件上传失败，状态码：${uploadResponse.status}`);
       }
 
       return true;
     } catch (error) {
-      console.error("直传图片失败：", error);
+      console.error("直传文件失败：", error);
       throw error;
     }
   },
@@ -80,7 +80,7 @@ export const mediaService = {
   /**
    * Orchestrates the full upload flow
    */
-  async uploadImage(uri: string, options: { purpose: string; width?: number; height?: number; fileSize?: number; type?: string }) {
+  async uploadFile(uri: string, options: { purpose: string; width?: number; height?: number; fileSize?: number; type?: string }) {
     const { purpose, width, height, fileSize = 0, type = "image/jpeg" } = options;
     const blob = await this.readImageBlob(uri);
     const resolvedFileSize = fileSize > 0 ? fileSize : Math.max(blob.size, 1);
@@ -113,5 +113,9 @@ export const mediaService = {
     }
 
     return saveRes.data;
+  },
+
+  async uploadImage(uri: string, options: { purpose: string; width?: number; height?: number; fileSize?: number; type?: string }) {
+    return this.uploadFile(uri, options);
   }
 };
