@@ -162,6 +162,50 @@ class FriendControllerTest {
                 .andExpect(jsonPath("$.error.code").value("VALIDATION_ERROR"));
     }
 
+    @Test
+    void friendsCanSendAndReadMessages() throws Exception {
+        String bobEmail = getBobEmail();
+        String requestId = sendRequest(tokenA, bobEmail);
+        acceptRequest(tokenB, requestId);
+
+        mockMvc.perform(post("/api/friends/messages/" + userIdB)
+                        .header("Authorization", "Bearer " + tokenA)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"content":"今天专注很棒，继续加油！","type":"cheer"}
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.type").value("cheer"));
+
+        mockMvc.perform(get("/api/friends/messages")
+                        .header("Authorization", "Bearer " + tokenB))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[0].friendUserId").value(extractMyUserId(tokenA)))
+                .andExpect(jsonPath("$.data[0].unreadCount").value(1));
+
+        mockMvc.perform(get("/api/friends/messages/" + extractMyUserId(tokenA))
+                        .header("Authorization", "Bearer " + tokenB))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[0].content").value("今天专注很棒，继续加油！"));
+
+        mockMvc.perform(post("/api/friends/messages/" + extractMyUserId(tokenA) + "/read")
+                        .header("Authorization", "Bearer " + tokenB))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.updated").value(1));
+    }
+
+    @Test
+    void nonFriendsCannotSendMessages() throws Exception {
+        mockMvc.perform(post("/api/friends/messages/" + userIdB)
+                        .header("Authorization", "Bearer " + tokenA)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"content":"hello"}
+                                """))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.error.code").value("FORBIDDEN"));
+    }
+
     // --- helpers ---
 
     private String getBobEmail() throws Exception {
@@ -203,5 +247,13 @@ class FriendControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"action\":\"accept\"}"))
                 .andExpect(status().isOk());
+    }
+
+    private String extractMyUserId(String token) throws Exception {
+        MvcResult result = mockMvc.perform(get("/api/me")
+                        .header("Authorization", "Bearer " + token))
+                .andReturn();
+        return objectMapper.readTree(result.getResponse().getContentAsString())
+                .get("data").get("id").asText();
     }
 }

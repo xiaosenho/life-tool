@@ -23,6 +23,12 @@ public class InMemoryMealStore implements MealStore {
     }
 
     @Override
+    public MealLog updateAiMealLog(MealLog mealLog) {
+        byId.put(mealLog.getId(), mealLog);
+        return mealLog;
+    }
+
+    @Override
     public MealSummary getSummary(String userId) {
         LocalDate today = LocalDate.now();
         LocalDate sevenDaysAgo = today.minusDays(6);
@@ -44,6 +50,24 @@ public class InMemoryMealStore implements MealStore {
                 sumCalories(weekMeals),
                 weekMeals.size(),
                 meals.stream().limit(5).map(this::toRecentMeal).toList());
+    }
+
+    @Override
+    public MealLog findById(String userId, String mealLogId) {
+        MealLog mealLog = byId.get(mealLogId);
+        if (mealLog == null || !userId.equals(mealLog.getUserId())) {
+            return null;
+        }
+        return mealLog;
+    }
+
+    @Override
+    public void delete(String userId, String mealLogId) {
+        MealLog mealLog = findById(userId, mealLogId);
+        if (mealLog == null) {
+            return;
+        }
+        byId.remove(mealLogId);
     }
 
     private MealSummary.RecentMeal toRecentMeal(MealLog meal) {

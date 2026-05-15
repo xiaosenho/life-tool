@@ -19,7 +19,7 @@
 | 同步 | `server_versions`, `sync_mutations` | 多设备数据同步 | MVP |
 | 专注 | `focus_sessions`, `focus_preferences` | 番茄钟、倒计时、正计时记录 + 偏好 | MVP + V2 |
 | 习惯 | `habits`, `habit_checkins` | 习惯定义与每日打卡 | MVP |
-| 好友 | `friendships` | 好友申请、通过、删除 | MVP |
+| 好友 | `friendships`, `friend_messages` | 好友申请、通过、删除、互动消息 | MVP + Phase 3 |
 | 统计/排行榜 | `daily_stats` | 每日用户汇总统计 | MVP |
 | 媒体 | `media_assets` | 图片/文件元数据管理 | Phase 2 |
 | 饮食 | `meal_logs`, `meal_items` | 饮食记录与食物条目 | Phase 2 |
@@ -38,6 +38,7 @@ users (1) ──< focus_sessions
 users (1) ──< focus_preferences        (每用户一行，unique)
 users (1) ──< habits (1) ──< habit_checkins
 users (1) ──< friendships              (requester_id / addressee_id 双向指向 users)
+users (1) ──< friend_messages          (from_user_id / to_user_id 双向指向 users)
 users (1) ──< daily_stats              (每个 stat_date 一行)
 users (1) ──< meal_logs (1) ──< meal_items
 users (1) ──< ledger_transactions
@@ -101,6 +102,7 @@ media_assets 被以下表通过 media_asset_id 引用：
 | ledger_budget | ledger_budgets | 创建/编辑月度预算时 |
 | event_log | event_logs | 创建/编辑事件时 |
 | anniversary_event | anniversary_events | 创建/编辑纪念日和重复提醒时 |
+| friend_message | friend_messages | 好友发送消息或鼓励互动时 |
 
 ## 5. 隐私原则
 
@@ -278,7 +280,6 @@ V3 新增 `ai_tool_calls`、`ai_memory_items`、`ai_session_summaries`、`ai_age
   - `idx_ai_tool_calls_user_session` — `(user_id, session_id)` 按会话查询工具调用。
   - `idx_ai_tool_calls_user_message` — `(user_id, message_id)` 按消息查询工具调用。
   - `idx_ai_tool_calls_user_status` — `(user_id, status)` 按状态过滤。
-- 同步 entity_type：不需要同步（服务端审计用途）。
 
 ### 12.2 AI 长期记忆 (`ai_memory_items`)
 
@@ -348,6 +349,34 @@ ai_chat_sessions (1) ──< ai_session_summaries (每会话一条)
 ai_chat_sessions (1) ──< ai_agent_runs (可多条)
 ai_chat_messages (1) ──< ai_tool_calls (每消息可多条工具调用)
 ```
+
+## 13. V5 已迁移内容
+
+V5 新增 `friend_messages`，用于支持好友间站内消息和轻量鼓励互动，对应迁移文件 `V5__add_friend_messages.sql`。
+
+### 13.1 好友互动消息 (`friend_messages`)
+
+| 字段 | 类型 | 约束 | 说明 |
+|------|------|------|------|
+| `id` | uuid | 主键 | |
+| `from_user_id` | uuid | FK → users, NOT NULL | 发送者 |
+| `to_user_id` | uuid | FK → users, NOT NULL | 接收者 |
+| `message_type` | text | CHECK, NOT NULL | `text` / `cheer` |
+| `content` | text | NOT NULL | 消息内容或鼓励文本 |
+| `read_at` | timestamptz | NULL | 首次已读时间 |
+| `created_at` | timestamptz | NOT NULL | 发送时间 |
+| `updated_at` | timestamptz | NOT NULL | 更新时间 |
+| `deleted_at` | timestamptz | NULL | 软删除 |
+
+- 索引：
+  - `idx_friend_messages_to_user_created` — `(to_user_id, created_at DESC)` 支持收件箱与未读查询。
+  - `idx_friend_messages_pair_created` — `(from_user_id, to_user_id, created_at DESC)` 支持好友会话查询。
+- 约束：
+  - `friend_messages_type_check` — 仅允许 `text` 和 `cheer`。
+- 说明：
+  - 应用层必须先校验双方是否为好友，再允许写入互动消息。
+  - 未读数量按 `to_user_id = 当前用户 AND read_at IS NULL` 统计。
+  - 同步 entity_type：当前不进入离线同步队列，按服务端实时互动处理。
 
 - `ai_tool_calls` 同时依赖 `ai_chat_sessions` 和 `ai_chat_messages` 表。
 - `ai_agent_runs.session_id` 可为 NULL，以支持不绑定会话的运行（如定时分析任务）。

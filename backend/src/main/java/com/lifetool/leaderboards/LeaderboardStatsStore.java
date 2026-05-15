@@ -13,6 +13,10 @@ public interface LeaderboardStatsStore {
 
     void setHabitsTodayCompletion(String userId, long completion);
 
+    default long getHabitsTodayTotal(String userId) {
+        return 0L;
+    }
+
     default void setHabitTodayStats(String userId, long completed, long total) {
         setHabitsTodayCompletion(userId, completed);
     }

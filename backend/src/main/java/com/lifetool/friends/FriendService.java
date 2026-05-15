@@ -1,9 +1,12 @@
 package com.lifetool.friends;
 
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
 
+import com.lifetool.friends.dto.FriendConversationSummaryResponse;
 import com.lifetool.users.User;
 import com.lifetool.users.UserRepository;
 
@@ -11,10 +14,12 @@ import com.lifetool.users.UserRepository;
 public class FriendService {
 
     private final FriendStore store;
+    private final FriendMessageStore messageStore;
     private final UserRepository userRepo;
 
-    public FriendService(FriendStore store, UserRepository userRepo) {
+    public FriendService(FriendStore store, FriendMessageStore messageStore, UserRepository userRepo) {
         this.store = store;
+        this.messageStore = messageStore;
         this.userRepo = userRepo;
     }
 
@@ -82,5 +87,70 @@ public class FriendService {
             throw new FriendException("NOT_FOUND", "Not friends");
         }
         store.removeFriendship(userId, friendUserId);
+    }
+
+    public FriendMessage sendMessage(String userId, String friendUserId, String content, String type) {
+        ensureFriends(userId, friendUserId);
+        String normalized = content == null ? "" : content.trim();
+        if (normalized.isEmpty()) {
+            throw new FriendException("VALIDATION_ERROR", "content is required");
+        }
+        FriendMessage.MessageType messageType = "cheer".equalsIgnoreCase(type)
+                ? FriendMessage.MessageType.CHEER
+                : FriendMessage.MessageType.TEXT;
+        return messageStore.save(new FriendMessage(userId, friendUserId, messageType, normalized));
+    }
+
+    public List<FriendMessage> listConversation(String userId, String friendUserId) {
+        ensureFriends(userId, friendUserId);
+        return messageStore.listConversation(userId, friendUserId);
+    }
+
+    public int markConversationRead(String userId, String friendUserId) {
+        ensureFriends(userId, friendUserId);
+        return messageStore.markConversationRead(userId, friendUserId);
+    }
+
+    public List<FriendConversationSummaryResponse> listConversations(String userId) {
+        Map<String, FriendInfo> friends = listFriends(userId).stream()
+                .collect(Collectors.toMap(FriendInfo::userId, info -> info));
+        return messageStore.listByUser(userId).stream()
+                .collect(Collectors.groupingBy(message -> conversationFriendId(userId, message)))
+                .entrySet().stream()
+                .map(entry -> {
+                    String friendId = entry.getKey();
+                    FriendInfo info = friends.get(friendId);
+                    if (info == null) {
+                        return null;
+                    }
+                    List<FriendMessage> messages = entry.getValue();
+                    FriendMessage latest = messages.stream()
+                            .max(java.util.Comparator.comparing(FriendMessage::getCreatedAt))
+                            .orElse(null);
+                    int unreadCount = (int) messages.stream()
+                            .filter(message -> message.getToUserId().equals(userId) && !message.isRead())
+                            .count();
+                    return latest == null ? null : new FriendConversationSummaryResponse(
+                            friendId,
+                            info.displayName(),
+                            info.email(),
+                            latest.getContent(),
+                            latest.getType().name().toLowerCase(),
+                            latest.getCreatedAt(),
+                            unreadCount);
+                })
+                .filter(item -> item != null)
+                .sorted((left, right) -> right.lastMessageAt().compareTo(left.lastMessageAt()))
+                .toList();
+    }
+
+    private void ensureFriends(String userId, String friendUserId) {
+        if (!store.areFriends(userId, friendUserId)) {
+            throw new FriendException("FORBIDDEN", "Only friends can interact");
+        }
+    }
+
+    private String conversationFriendId(String userId, FriendMessage message) {
+        return message.getFromUserId().equals(userId) ? message.getToUserId() : message.getFromUserId();
     }
 }

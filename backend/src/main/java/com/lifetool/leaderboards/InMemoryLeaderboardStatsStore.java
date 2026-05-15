@@ -47,6 +47,11 @@ public class InMemoryLeaderboardStatsStore implements LeaderboardStatsStore {
     }
 
     @Override
+    public long getHabitsTodayTotal(String userId) {
+        return habitsTodayTotal.getOrDefault(userId, 0L);
+    }
+
+    @Override
     public void setHabitTodayStats(String userId, long completed, long total) {
         habitsTodayCompletion.put(userId, completed);
         habitsTodayTotal.put(userId, total);

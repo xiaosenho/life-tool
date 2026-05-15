@@ -181,6 +181,10 @@ POST   /api/friends/requests
 GET    /api/friends/requests
 PATCH  /api/friends/requests/{id}
 DELETE /api/friends/{friendUserId}
+GET    /api/friends/messages
+GET    /api/friends/messages/{friendUserId}
+POST   /api/friends/messages/{friendUserId}
+POST   /api/friends/messages/{friendUserId}/read
 ```
 
 好友申请状态：
@@ -190,6 +194,68 @@ pending
 accepted
 blocked
 deleted
+```
+
+### GET /api/friends/messages
+
+响应：
+
+```json
+[
+  {
+    "friendUserId": "uuid",
+    "friendDisplayName": "Alex",
+    "friendEmail": "alex@example.com",
+    "lastMessage": "今天继续加油！",
+    "lastMessageType": "cheer",
+    "lastMessageAt": "2026-05-15T12:00:00Z",
+    "unreadCount": 1
+  }
+]
+```
+
+### GET /api/friends/messages/{friendUserId}
+
+响应：
+
+```json
+[
+  {
+    "id": "uuid",
+    "fromUserId": "uuid",
+    "toUserId": "uuid",
+    "type": "text",
+    "content": "今晚继续冲一下榜单？",
+    "createdAt": "2026-05-15T12:00:00Z",
+    "readAt": null
+  }
+]
+```
+
+### POST /api/friends/messages/{friendUserId}
+
+请求：
+
+```json
+{
+  "content": "今天继续加油！",
+  "type": "cheer"
+}
+```
+
+说明：
+
+- `type` 当前支持 `text` 和 `cheer`，缺省时按 `text` 处理。
+- 只有已建立好友关系的双方才允许互发消息。
+
+### POST /api/friends/messages/{friendUserId}/read
+
+响应：
+
+```json
+{
+  "updated": 1
+}
 ```
 
 ## 6. Privacy
@@ -212,8 +278,12 @@ friends_detail
 ```text
 GET /api/leaderboards/focus?period=today
 GET /api/leaderboards/focus?period=week
+GET /api/leaderboards/focus/detail?period=today
+GET /api/leaderboards/focus/detail?period=week
 GET /api/leaderboards/habits?period=today
+GET /api/leaderboards/habits/detail?period=today
 GET /api/leaderboards/streaks
+GET /api/leaderboards/streaks/detail
 ```
 
 响应：
@@ -233,6 +303,41 @@ GET /api/leaderboards/streaks
   ]
 }
 ```
+
+### GET /api/leaderboards/focus/detail?period=today
+
+响应：
+
+```json
+{
+  "period": "today",
+  "metric": "focus_seconds",
+  "entries": [
+    {
+      "userId": "uuid",
+      "displayName": "Alex",
+      "avatarUrl": null,
+      "value": 7200,
+      "rank": 1
+    }
+  ],
+  "self": {
+    "userId": "uuid",
+    "displayName": "Alex",
+    "avatarUrl": null,
+    "value": 7200,
+    "rank": 1
+  },
+  "gapToPrevious": 0,
+  "totalParticipants": 3
+}
+```
+
+说明：
+
+- detail 接口返回完整好友榜单，而不是仅摘要。
+- `self` 表示当前用户自己的榜单条目。
+- `gapToPrevious` 表示当前用户与前一名的差距；若当前已是并列第 1，则返回 0。
 
 ## 8. Focus Preferences
 

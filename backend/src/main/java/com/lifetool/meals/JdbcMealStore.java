@@ -53,6 +53,25 @@ public class JdbcMealStore implements MealStore {
     }
 
     @Override
+    public MealLog updateAiMealLog(MealLog mealLog) {
+        try (Connection conn = getConnection()) {
+            conn.setAutoCommit(false);
+            try {
+                updateMealLog(conn, mealLog);
+                replaceAiMealItem(conn, mealLog);
+                refreshTodayCalories(conn, mealLog.getUserId());
+                conn.commit();
+                return mealLog;
+            } catch (SQLException ex) {
+                conn.rollback();
+                throw ex;
+            }
+        } catch (SQLException ex) {
+            throw new IllegalStateException("Failed to update meal log", ex);
+        }
+    }
+
+    @Override
     public MealSummary getSummary(String userId) {
         String summarySql = """
                 SELECT
@@ -113,6 +132,66 @@ public class JdbcMealStore implements MealStore {
         }
     }
 
+    @Override
+    public MealLog findById(String userId, String mealLogId) {
+        String sql = """
+                SELECT id, user_id, meal_type, occurred_at, total_calories, note, media_asset_id,
+                       is_ai_generated, created_at, updated_at
+                FROM meal_logs
+                WHERE id = ?::uuid AND user_id = ?::uuid
+                """;
+        try (Connection conn = getConnection();
+             var stmt = conn.prepareStatement(sql)) {
+            stmt.setString(1, mealLogId);
+            stmt.setString(2, userId);
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (!rs.next()) {
+                    return null;
+                }
+                return mapMealLog(rs);
+            }
+        } catch (SQLException ex) {
+            throw new IllegalStateException("Failed to find meal log", ex);
+        }
+    }
+
+    @Override
+    public void delete(String userId, String mealLogId) {
+        try (Connection conn = getConnection()) {
+            conn.setAutoCommit(false);
+            try {
+                BigDecimal removedCalories = null;
+                try (var queryStmt = conn.prepareStatement(
+                        "SELECT total_calories FROM meal_logs WHERE id = ?::uuid AND user_id = ?::uuid")) {
+                    queryStmt.setString(1, mealLogId);
+                    queryStmt.setString(2, userId);
+                    try (ResultSet rs = queryStmt.executeQuery()) {
+                        if (rs.next()) {
+                            removedCalories = rs.getBigDecimal("total_calories");
+                        } else {
+                            conn.rollback();
+                            return;
+                        }
+                    }
+                }
+
+                try (var deleteStmt = conn.prepareStatement(
+                        "DELETE FROM meal_logs WHERE id = ?::uuid AND user_id = ?::uuid")) {
+                    deleteStmt.setString(1, mealLogId);
+                    deleteStmt.setString(2, userId);
+                    deleteStmt.executeUpdate();
+                }
+                refreshTodayCalories(conn, userId);
+                conn.commit();
+            } catch (SQLException ex) {
+                conn.rollback();
+                throw ex;
+            }
+        } catch (SQLException ex) {
+            throw new IllegalStateException("Failed to delete meal log", ex);
+        }
+    }
+
     private void insertMealLog(Connection conn, MealLog mealLog) throws SQLException {
         String sql = """
                 INSERT INTO meal_logs (id, user_id, meal_type, occurred_at, total_calories, note, media_asset_id,
@@ -152,6 +231,41 @@ public class JdbcMealStore implements MealStore {
         }
     }
 
+    private void updateMealLog(Connection conn, MealLog mealLog) throws SQLException {
+        String sql = """
+                UPDATE meal_logs
+                SET meal_type = ?, occurred_at = ?, total_calories = ?, note = ?, media_asset_id = ?::uuid,
+                    is_ai_generated = ?, updated_at = ?
+                WHERE id = ?::uuid AND user_id = ?::uuid
+                """;
+        try (var stmt = conn.prepareStatement(sql)) {
+            stmt.setString(1, mealLog.getMealType());
+            stmt.setTimestamp(2, Timestamp.from(mealLog.getOccurredAt()));
+            stmt.setBigDecimal(3, mealLog.getTotalCalories());
+            stmt.setString(4, mealLog.getNote());
+            if (mealLog.getMediaAssetId() == null || mealLog.getMediaAssetId().isBlank()) {
+                stmt.setNull(5, Types.OTHER);
+            } else {
+                stmt.setString(5, mealLog.getMediaAssetId());
+            }
+            stmt.setBoolean(6, mealLog.isAiGenerated());
+            stmt.setTimestamp(7, Timestamp.from(mealLog.getUpdatedAt()));
+            stmt.setString(8, mealLog.getId());
+            stmt.setString(9, mealLog.getUserId());
+            stmt.executeUpdate();
+        }
+    }
+
+    private void replaceAiMealItem(Connection conn, MealLog mealLog) throws SQLException {
+        try (var deleteStmt = conn.prepareStatement("DELETE FROM meal_items WHERE meal_log_id = ?::uuid")) {
+            deleteStmt.setString(1, mealLog.getId());
+            deleteStmt.executeUpdate();
+        }
+        if (mealLog.getTotalCalories() != null) {
+            insertAiMealItem(conn, mealLog);
+        }
+    }
+
     private void refreshTodayCalories(Connection conn, String userId) throws SQLException {
         String sql = """
                 INSERT INTO daily_stats (id, user_id, stat_date, meal_total_calories, created_at, updated_at)
@@ -170,6 +284,21 @@ public class JdbcMealStore implements MealStore {
             stmt.setString(3, userId);
             stmt.executeUpdate();
         }
+    }
+
+    private MealLog mapMealLog(ResultSet rs) throws SQLException {
+        MealLog mealLog = new MealLog();
+        mealLog.setId(rs.getString("id"));
+        mealLog.setUserId(rs.getString("user_id"));
+        mealLog.setMealType(rs.getString("meal_type"));
+        mealLog.setOccurredAt(rs.getTimestamp("occurred_at").toInstant());
+        mealLog.setTotalCalories(rs.getBigDecimal("total_calories"));
+        mealLog.setNote(rs.getString("note"));
+        mealLog.setMediaAssetId(rs.getString("media_asset_id"));
+        mealLog.setAiGenerated(rs.getBoolean("is_ai_generated"));
+        mealLog.setCreatedAt(rs.getTimestamp("created_at").toInstant());
+        mealLog.setUpdatedAt(rs.getTimestamp("updated_at").toInstant());
+        return mealLog;
     }
 
     private Connection getConnection() throws SQLException {
