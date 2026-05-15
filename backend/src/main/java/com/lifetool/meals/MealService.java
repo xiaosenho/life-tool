@@ -8,6 +8,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import org.springframework.stereotype.Service;
+import org.springframework.context.annotation.Lazy;
 
 import com.lifetool.ai.AiAssistantClient;
 import com.lifetool.media.MediaService;
@@ -26,7 +27,7 @@ public class MealService {
     private final MediaService mediaService;
     private final AiAssistantClient assistantClient;
 
-    public MealService(MealStore mealStore, MediaService mediaService, AiAssistantClient assistantClient) {
+    public MealService(MealStore mealStore, MediaService mediaService, @Lazy AiAssistantClient assistantClient) {
         this.mealStore = mealStore;
         this.mediaService = mediaService;
         this.assistantClient = assistantClient;
