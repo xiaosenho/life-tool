@@ -16,6 +16,8 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Repository;
 
+import com.lifetool.common.TimeSupport;
+
 @Repository
 @Profile("postgres")
 public class JdbcFocusSessionStore implements FocusSessionStore {
@@ -118,8 +120,8 @@ public class JdbcFocusSessionStore implements FocusSessionStore {
     @Override
     public List<FocusSession> findByUserIdAndMonth(String userId, String month) {
         YearMonth ym = YearMonth.parse(month);
-        Instant monthStart = ym.atDay(1).atStartOfDay(ZoneOffset.UTC).toInstant();
-        Instant monthEnd = ym.plusMonths(1).atDay(1).atStartOfDay(ZoneOffset.UTC).toInstant();
+        Instant monthStart = TimeSupport.startOfMonth(ym);
+        Instant monthEnd = TimeSupport.startOfNextMonth(ym);
 
         String sql = """
                 SELECT id, user_id, mode, target_seconds, actual_seconds, status,

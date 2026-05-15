@@ -15,6 +15,8 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Repository;
 
+import com.lifetool.common.TimeSupport;
+
 @Repository
 @Profile("postgres")
 public class JdbcMealStore implements MealStore {
@@ -73,23 +75,27 @@ public class JdbcMealStore implements MealStore {
 
     @Override
     public MealSummary getSummary(String userId) {
+        String businessDateSql = TimeSupport.businessDateSql();
         String summarySql = """
                 SELECT
                   COALESCE(SUM(total_calories) FILTER (
-                    WHERE occurred_at >= CURRENT_DATE::timestamptz
-                      AND occurred_at < (CURRENT_DATE + INTERVAL '1 day')::timestamptz
+                    WHERE occurred_at >= ((%s)::timestamp AT TIME ZONE 'Asia/Shanghai')
+                      AND occurred_at < (((%s) + INTERVAL '1 day')::timestamp AT TIME ZONE 'Asia/Shanghai')
                   ), 0) AS today_calories,
                   COUNT(*) FILTER (
-                    WHERE occurred_at >= CURRENT_DATE::timestamptz
-                      AND occurred_at < (CURRENT_DATE + INTERVAL '1 day')::timestamptz
+                    WHERE occurred_at >= ((%s)::timestamp AT TIME ZONE 'Asia/Shanghai')
+                      AND occurred_at < (((%s) + INTERVAL '1 day')::timestamp AT TIME ZONE 'Asia/Shanghai')
                   ) AS today_count,
                   COALESCE(SUM(total_calories), 0) AS week_calories,
                   COUNT(*) AS week_count
                 FROM meal_logs
                 WHERE user_id = ?::uuid
-                  AND occurred_at >= (CURRENT_DATE - INTERVAL '6 days')::timestamptz
-                  AND occurred_at < (CURRENT_DATE + INTERVAL '1 day')::timestamptz
-                """;
+                  AND occurred_at >= (((%s) - INTERVAL '6 days')::timestamp AT TIME ZONE 'Asia/Shanghai')
+                  AND occurred_at < (((%s) + INTERVAL '1 day')::timestamp AT TIME ZONE 'Asia/Shanghai')
+                """.formatted(
+                businessDateSql, businessDateSql,
+                businessDateSql, businessDateSql,
+                businessDateSql, businessDateSql);
         String recentSql = """
                 SELECT id, meal_type, occurred_at, total_calories, is_ai_generated
                 FROM meal_logs
@@ -267,17 +273,18 @@ public class JdbcMealStore implements MealStore {
     }
 
     private void refreshTodayCalories(Connection conn, String userId) throws SQLException {
+        String businessDateSql = TimeSupport.businessDateSql();
         String sql = """
                 INSERT INTO daily_stats (id, user_id, stat_date, meal_total_calories, created_at, updated_at)
-                SELECT ?::uuid, ?::uuid, CURRENT_DATE, COALESCE(SUM(total_calories), 0), now(), now()
+                SELECT ?::uuid, ?::uuid, %s, COALESCE(SUM(total_calories), 0), now(), now()
                 FROM meal_logs
                 WHERE user_id = ?::uuid
-                  AND occurred_at >= CURRENT_DATE::timestamptz
-                  AND occurred_at < (CURRENT_DATE + INTERVAL '1 day')::timestamptz
+                  AND occurred_at >= ((%s)::timestamp AT TIME ZONE 'Asia/Shanghai')
+                  AND occurred_at < (((%s) + INTERVAL '1 day')::timestamp AT TIME ZONE 'Asia/Shanghai')
                 ON CONFLICT (user_id, stat_date) DO UPDATE SET
                   meal_total_calories = EXCLUDED.meal_total_calories,
                   updated_at = now()
-                """;
+                """.formatted(businessDateSql, businessDateSql, businessDateSql);
         try (var stmt = conn.prepareStatement(sql)) {
             stmt.setString(1, UUID.randomUUID().toString());
             stmt.setString(2, userId);

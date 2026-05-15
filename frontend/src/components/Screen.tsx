@@ -1,5 +1,5 @@
 import type { PropsWithChildren } from "react";
-import { ScrollView, StyleSheet, Text, View, ViewStyle } from "react-native";
+import { RefreshControl, ScrollView, StyleSheet, Text, View, ViewStyle } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { colors } from "@/theme/colors";
@@ -9,9 +9,10 @@ type ScreenProps = PropsWithChildren<{
   style?: ViewStyle;
   contentContainerStyle?: ViewStyle;
   scrollable?: boolean;
+  refreshControl?: React.ReactElement<any>;
 }>;
 
-export function Screen({ children, title, style, contentContainerStyle, scrollable = true }: ScreenProps) {
+export function Screen({ children, title, style, contentContainerStyle, scrollable = true, refreshControl }: ScreenProps) {
   const content = (
     <>
       {title && (
@@ -26,7 +27,7 @@ export function Screen({ children, title, style, contentContainerStyle, scrollab
   return (
     <SafeAreaView style={[styles.safeArea, style]}>
       {scrollable ? (
-        <ScrollView contentContainerStyle={[styles.scrollContent, contentContainerStyle]}>
+        <ScrollView refreshControl={refreshControl} contentContainerStyle={[styles.scrollContent, contentContainerStyle]}>
           {content}
         </ScrollView>
       ) : (

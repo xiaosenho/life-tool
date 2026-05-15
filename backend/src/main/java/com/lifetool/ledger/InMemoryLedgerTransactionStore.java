@@ -2,7 +2,6 @@ package com.lifetool.ledger;
 
 import java.time.Instant;
 import java.time.YearMonth;
-import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -11,6 +10,8 @@ import java.util.concurrent.ConcurrentHashMap;
 
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Repository;
+
+import com.lifetool.common.TimeSupport;
 
 @Repository
 @Profile("!postgres")
@@ -38,7 +39,7 @@ public class InMemoryLedgerTransactionStore implements LedgerTransactionStore {
             if (tx.getUserId().equals(userId) && !tx.isDeleted()) {
                 Instant occurredAt = tx.getOccurredAt();
                 if (occurredAt != null) {
-                    YearMonth txMonth = YearMonth.from(occurredAt.atZone(ZoneOffset.UTC));
+                    YearMonth txMonth = TimeSupport.toBusinessMonth(occurredAt);
                     if (txMonth.equals(yearMonth)) {
                         result.add(tx);
                     }

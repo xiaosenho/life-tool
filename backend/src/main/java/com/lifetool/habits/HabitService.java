@@ -6,6 +6,7 @@ import java.util.List;
 
 import org.springframework.stereotype.Service;
 
+import com.lifetool.common.TimeSupport;
 import com.lifetool.habits.dto.CreateCheckinRequest;
 import com.lifetool.habits.dto.CreateHabitRequest;
 import com.lifetool.habits.dto.HabitCheckinResponse;
@@ -105,7 +106,7 @@ public class HabitService {
         Habit habit = findOwnedHabit(userId, habitId);
         LocalDate today = request != null && request.checkinDate() != null
                 ? request.checkinDate()
-                : LocalDate.now();
+                : TimeSupport.today();
 
         HabitCheckin existing = checkinStore.findByHabitIdAndDate(habitId, today).orElse(null);
         if (existing != null) {
@@ -152,7 +153,7 @@ public class HabitService {
     }
 
     private void refreshTodayStats(String userId) {
-        LocalDate today = LocalDate.now();
+        LocalDate today = TimeSupport.today();
         long total = habitStore.findByUserId(userId).stream()
                 .filter(h -> !h.isArchived())
                 .count();

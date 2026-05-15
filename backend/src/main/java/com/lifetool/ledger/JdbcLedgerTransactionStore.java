@@ -15,6 +15,8 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Repository;
 
+import com.lifetool.common.TimeSupport;
+
 @Repository
 @Profile("postgres")
 public class JdbcLedgerTransactionStore implements LedgerTransactionStore {
@@ -92,14 +94,15 @@ public class JdbcLedgerTransactionStore implements LedgerTransactionStore {
 
     @Override
     public List<LedgerTransaction> findByUserIdAndMonth(String userId, String month) {
+        String businessZone = TimeSupport.BUSINESS_ZONE.getId();
         String sql = """
                 SELECT id, user_id, type, category, amount, currency, occurred_at, \
                 description, media_asset_id, created_at, updated_at
                 FROM ledger_transactions
                 WHERE user_id = ?::uuid
-                  AND to_char(occurred_at, 'YYYY-MM') = ?
+                  AND to_char(occurred_at AT TIME ZONE '%s', 'YYYY-MM') = ?
                   AND deleted_at IS NULL
-                """;
+                """.formatted(businessZone);
         List<LedgerTransaction> transactions = new ArrayList<>();
         try (Connection conn = getConnection();
              var stmt = conn.prepareStatement(sql)) {

@@ -1,9 +1,10 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -11,18 +12,19 @@ import {
   TouchableOpacity,
   View
 } from "react-native";
+import { useRouter } from "expo-router";
 
 import { Screen } from "@/components/Screen";
 import {
   FriendConversationSummary,
   FriendInfo,
-  FriendMessage,
   FriendRequest,
   friendService
 } from "@/services/friendService";
 import { LeaderboardDetailResponse, leaderboardService } from "@/services/leaderboardService";
 import { useAuthStore } from "@/store/authStore";
 import { colors } from "@/theme/colors";
+import { formatDateTimeCn } from "@/utils/time";
 
 type TabKey = "friends" | "leaderboards" | "messages";
 type BoardKey = "focus_today" | "focus_week" | "habits_today" | "streaks";
@@ -41,16 +43,14 @@ const boardConfigs: BoardConfig[] = [
 ];
 
 export default function FriendsScreen() {
+  const router = useRouter();
   const userId = useAuthStore((state) => state.user?.id ?? "");
   const [activeTab, setActiveTab] = useState<TabKey>("friends");
   const [activeBoard, setActiveBoard] = useState<BoardKey>("focus_today");
   const [email, setEmail] = useState("");
-  const [messageDraft, setMessageDraft] = useState("");
-  const [selectedFriendId, setSelectedFriendId] = useState<string | null>(null);
   const [friends, setFriends] = useState<FriendInfo[]>([]);
   const [requests, setRequests] = useState<FriendRequest[]>([]);
   const [conversations, setConversations] = useState<FriendConversationSummary[]>([]);
-  const [messages, setMessages] = useState<FriendMessage[]>([]);
   const [leaderboards, setLeaderboards] = useState<Record<BoardKey, LeaderboardDetailResponse | null>>({
     focus_today: null,
     focus_week: null,
@@ -58,7 +58,7 @@ export default function FriendsScreen() {
     streaks: null
   });
   const [loading, setLoading] = useState(true);
-  const [messageLoading, setMessageLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   const incomingRequests = useMemo(
@@ -70,45 +70,12 @@ export default function FriendsScreen() {
     [requests, userId]
   );
 
-  const selectedConversation = useMemo(
-    () => conversations.find((item) => item.friendUserId === selectedFriendId) ?? null,
-    [conversations, selectedFriendId]
-  );
-
-  const selectedFriend = useMemo(
-    () => friends.find((item) => item.userId === selectedFriendId) ?? null,
-    [friends, selectedFriendId]
-  );
-
   const activeBoardData = leaderboards[activeBoard];
 
-  useEffect(() => {
-    void loadData();
-  }, []);
-
-  useEffect(() => {
-    if (selectedFriendId) {
-      return;
+  const loadData = useCallback(async (silent = false) => {
+    if (!silent) {
+      setLoading(true);
     }
-    if (conversations.length > 0) {
-      setSelectedFriendId(conversations[0].friendUserId);
-      return;
-    }
-    if (friends.length > 0) {
-      setSelectedFriendId(friends[0].userId);
-    }
-  }, [conversations, friends, selectedFriendId]);
-
-  useEffect(() => {
-    if (!selectedFriendId) {
-      setMessages([]);
-      return;
-    }
-    void loadConversation(selectedFriendId);
-  }, [selectedFriendId]);
-
-  async function loadData() {
-    setLoading(true);
     try {
       const [
         friendRes,
@@ -141,28 +108,17 @@ export default function FriendsScreen() {
       Alert.alert("加载失败", error instanceof Error ? error.message : "请稍后重试");
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
-  }
+  }, []);
 
-  async function loadConversation(friendUserId: string) {
-    setMessageLoading(true);
-    try {
-      const response = await friendService.listMessages(friendUserId);
-      if (response.success && response.data) {
-        setMessages(response.data);
-        await friendService.markConversationRead(friendUserId);
-        const conversationRes = await friendService.listConversations();
-        if (conversationRes.success && conversationRes.data) {
-          setConversations(conversationRes.data);
-        }
-      } else {
-        setMessages([]);
-      }
-    } catch {
-      setMessages([]);
-    } finally {
-      setMessageLoading(false);
-    }
+  useEffect(() => {
+    void loadData();
+  }, [loadData]);
+
+  async function handleRefresh() {
+    setRefreshing(true);
+    await loadData(true);
   }
 
   async function handleSendRequest() {
@@ -174,7 +130,7 @@ export default function FriendsScreen() {
       const response = await friendService.sendRequest(targetEmail);
       if (response.success) {
         setEmail("");
-        await loadData();
+        await loadData(true);
       } else {
         Alert.alert("添加失败", response.error?.message ?? "请稍后重试");
       }
@@ -188,7 +144,7 @@ export default function FriendsScreen() {
       ? await friendService.acceptRequest(id)
       : await friendService.rejectRequest(id);
     if (response.success) {
-      await loadData();
+      await loadData(true);
     } else {
       Alert.alert("处理失败", response.error?.message ?? "请稍后重试");
     }
@@ -197,31 +153,17 @@ export default function FriendsScreen() {
   async function handleRemoveFriend(friend: FriendInfo) {
     const response = await friendService.removeFriend(friend.userId);
     if (response.success) {
-      if (selectedFriendId === friend.userId) {
-        setSelectedFriendId(null);
-      }
-      await loadData();
+      await loadData(true);
     } else {
       Alert.alert("删除失败", response.error?.message ?? "请稍后重试");
     }
   }
 
-  async function handleSendMessage(type: "text" | "cheer" = "text") {
-    if (!selectedFriendId) return;
-    const content = type === "cheer" ? "今天也继续加油！" : messageDraft.trim();
-    if (!content) return;
-
-    const response = await friendService.sendMessage(selectedFriendId, content, type);
-    if (!response.success) {
-      Alert.alert("发送失败", response.error?.message ?? "请稍后重试");
-      return;
-    }
-    setMessageDraft("");
-    await loadConversation(selectedFriendId);
-  }
-
   return (
-    <Screen title="好友">
+    <Screen
+      title="好友"
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.accent} />}
+    >
       <View style={styles.tabRow}>
         <TabButton label="好友" active={activeTab === "friends"} onPress={() => setActiveTab("friends")} />
         <TabButton label="排行榜" active={activeTab === "leaderboards"} onPress={() => setActiveTab("leaderboards")} />
@@ -260,29 +202,31 @@ export default function FriendsScreen() {
             {friends.length === 0 ? (
               <EmptyState text="还没有好友，先邀请一位一起坚持吧。" />
             ) : (
-              friends.map((friend) => (
-                <View key={friend.userId} style={styles.friendCard}>
-                  <View style={styles.avatar}>
-                    <Text style={styles.avatarText}>{friend.displayName.slice(0, 1)}</Text>
+              friends.map((friend) => {
+                const conversation = conversations.find((item) => item.friendUserId === friend.userId);
+                return (
+                  <View key={friend.userId} style={styles.friendCard}>
+                    <View style={styles.avatar}>
+                      <Text style={styles.avatarText}>{friend.displayName.slice(0, 1)}</Text>
+                    </View>
+                    <View style={styles.friendInfo}>
+                      <Text style={styles.friendName}>{friend.displayName}</Text>
+                      <Text style={styles.friendMeta}>{friend.email}</Text>
+                    </View>
+                    <TouchableOpacity
+                      style={styles.secondaryButton}
+                      onPress={() => router.push({ pathname: "/friend-chat", params: { friendUserId: friend.userId, friendName: friend.displayName } })}
+                    >
+                      <Text style={styles.secondaryButtonText}>
+                        {conversation?.unreadCount ? `互动(${conversation.unreadCount})` : "互动"}
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.iconButton} onPress={() => handleRemoveFriend(friend)}>
+                      <Ionicons name="trash-outline" size={18} color={colors.error} />
+                    </TouchableOpacity>
                   </View>
-                  <View style={styles.friendInfo}>
-                    <Text style={styles.friendName}>{friend.displayName}</Text>
-                    <Text style={styles.friendMeta}>{friend.email}</Text>
-                  </View>
-                  <TouchableOpacity
-                    style={styles.secondaryButton}
-                    onPress={() => {
-                      setSelectedFriendId(friend.userId);
-                      setActiveTab("messages");
-                    }}
-                  >
-                    <Text style={styles.secondaryButtonText}>互动</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={styles.iconButton} onPress={() => handleRemoveFriend(friend)}>
-                    <Ionicons name="trash-outline" size={18} color={colors.error} />
-                  </TouchableOpacity>
-                </View>
-              ))
+                );
+              })
             )}
           </View>
 
@@ -340,12 +284,8 @@ export default function FriendsScreen() {
               <ActivityIndicator color={colors.accent} />
             ) : (
               <>
-                <Text style={styles.summaryHighlight}>
-                  你当前第 {activeBoardData.self.rank} 名
-                </Text>
-                <Text style={styles.summaryText}>
-                  共 {activeBoardData.totalParticipants} 人参与
-                </Text>
+                <Text style={styles.summaryHighlight}>你当前第 {activeBoardData.self.rank} 名</Text>
+                <Text style={styles.summaryText}>共 {activeBoardData.totalParticipants} 人参与</Text>
                 <Text style={styles.summaryText}>
                   与前一名差距 {formatBoardValue(activeBoardData.metric, activeBoardData.gapToPrevious)} {boardConfigs.find((item) => item.key === activeBoard)?.unit}
                 </Text>
@@ -380,7 +320,7 @@ export default function FriendsScreen() {
         <>
           <SectionHeader title="互动会话" meta={`${conversations.length} 个`} />
           <View style={styles.panel}>
-            <Text style={styles.panelTitle}>选择好友</Text>
+            <Text style={styles.panelTitle}>快捷发起聊天</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.conversationTabs}>
               {friends.length === 0 ? (
                 <EmptyState text="还没有好友，先去添加一位好友吧。" />
@@ -390,12 +330,10 @@ export default function FriendsScreen() {
                   return (
                     <Pressable
                       key={friend.userId}
-                      style={[styles.conversationChip, selectedFriendId === friend.userId && styles.conversationChipActive]}
-                      onPress={() => setSelectedFriendId(friend.userId)}
+                      style={styles.conversationChip}
+                      onPress={() => router.push({ pathname: "/friend-chat", params: { friendUserId: friend.userId, friendName: friend.displayName } })}
                     >
-                      <Text style={[styles.conversationChipText, selectedFriendId === friend.userId && styles.conversationChipTextActive]}>
-                        {friend.displayName}
-                      </Text>
+                      <Text style={styles.conversationChipText}>{friend.displayName}</Text>
                       {!!conversation?.unreadCount && (
                         <View style={styles.unreadDot}>
                           <Text style={styles.unreadText}>{conversation.unreadCount}</Text>
@@ -416,13 +354,13 @@ export default function FriendsScreen() {
               conversations.map((item) => (
                 <Pressable
                   key={item.friendUserId}
-                  style={[styles.conversationListItem, selectedFriendId === item.friendUserId && styles.conversationListItemActive]}
-                  onPress={() => setSelectedFriendId(item.friendUserId)}
+                  style={styles.conversationListItem}
+                  onPress={() => router.push({ pathname: "/friend-chat", params: { friendUserId: item.friendUserId, friendName: item.friendDisplayName } })}
                 >
                   <View style={styles.flexBlock}>
                     <Text style={styles.friendName}>{item.friendDisplayName}</Text>
                     <Text style={styles.friendMeta}>
-                      {item.lastMessageType === "cheer" ? "加油消息" : "文字消息"} · {formatDateTime(item.lastMessageAt)}
+                      {item.lastMessageType === "cheer" ? "加油消息" : "文字消息"} · {formatDateTimeCn(item.lastMessageAt)}
                     </Text>
                     <Text style={styles.messagePreview} numberOfLines={1}>
                       {item.lastMessage}
@@ -438,59 +376,6 @@ export default function FriendsScreen() {
                 </Pressable>
               ))
             )}
-          </View>
-
-          <View style={styles.panel}>
-            <Text style={styles.panelTitle}>
-              {selectedFriend?.displayName ?? selectedConversation?.friendDisplayName ?? "选择一个好友开始互动"}
-            </Text>
-            <Text style={styles.panelSubtitle}>
-              {selectedConversation?.lastMessageAt ? `最近互动：${formatDateTime(selectedConversation.lastMessageAt)}` : "支持发送文字消息和快捷加油"}
-            </Text>
-          </View>
-
-          <View style={styles.list}>
-            {messageLoading ? (
-              <ActivityIndicator color={colors.accent} />
-            ) : messages.length === 0 ? (
-              <EmptyState text="还没有消息，发一句鼓励开始吧。" />
-            ) : (
-              messages.map((message) => {
-                const mine = message.fromUserId === userId;
-                return (
-                  <View key={message.id} style={[styles.messageBubble, mine ? styles.messageBubbleMine : styles.messageBubbleOther]}>
-                    <Text style={[styles.messageText, mine && styles.messageTextMine]}>{message.content}</Text>
-                    <Text style={[styles.messageMeta, mine && styles.messageMetaMine]}>
-                      {message.type === "cheer" ? "加油" : "消息"} · {formatDateTime(message.createdAt)}
-                    </Text>
-                  </View>
-                );
-              })
-            )}
-          </View>
-
-          <View style={styles.messageComposer}>
-            <TextInput
-              style={styles.messageInput}
-              value={messageDraft}
-              onChangeText={setMessageDraft}
-              placeholder="发条消息，鼓励一下好友"
-              editable={Boolean(selectedFriendId)}
-            />
-            <TouchableOpacity
-              style={[styles.cheerButton, !selectedFriendId && styles.disabledButton]}
-              onPress={() => handleSendMessage("cheer")}
-              disabled={!selectedFriendId}
-            >
-              <Ionicons name="sparkles-outline" size={18} color={colors.accent} />
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.primaryIconButton, !selectedFriendId && styles.disabledButton]}
-              onPress={() => handleSendMessage("text")}
-              disabled={!selectedFriendId}
-            >
-              <Ionicons name="send-outline" size={18} color={colors.surface} />
-            </TouchableOpacity>
           </View>
         </>
       )}
@@ -524,10 +409,6 @@ function formatBoardValue(metric: string, value: number) {
     return Math.round(value / 60).toString();
   }
   return value.toString();
-}
-
-function formatDateTime(value: string) {
-  return value.replace("T", " ").slice(5, 16);
 }
 
 function shortId(id: string) {
@@ -583,14 +464,6 @@ const styles = StyleSheet.create({
   boardChipTextActive: {
     color: colors.surface
   },
-  cheerButton: {
-    alignItems: "center",
-    backgroundColor: "#CCFBF1",
-    borderRadius: 14,
-    height: 46,
-    justifyContent: "center",
-    width: 46
-  },
   conversationChip: {
     alignItems: "center",
     backgroundColor: colors.surface,
@@ -602,16 +475,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10
   },
-  conversationChipActive: {
-    borderColor: colors.accent
-  },
   conversationChipText: {
     color: colors.text,
     fontSize: 13,
     fontWeight: "700"
-  },
-  conversationChipTextActive: {
-    color: colors.accent
   },
   conversationListItem: {
     alignItems: "center",
@@ -622,10 +489,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 12,
     padding: 14
-  },
-  conversationListItemActive: {
-    borderColor: colors.accent,
-    backgroundColor: "#F0FDFA"
   },
   conversationTabs: {
     flexDirection: "row",
@@ -691,62 +554,10 @@ const styles = StyleSheet.create({
   list: {
     gap: 10
   },
-  messageBubble: {
-    borderRadius: 18,
-    maxWidth: "88%",
-    paddingHorizontal: 14,
-    paddingVertical: 12
-  },
-  messageBubbleMine: {
-    alignSelf: "flex-end",
-    backgroundColor: colors.accent
-  },
-  messageBubbleOther: {
-    alignSelf: "flex-start",
-    backgroundColor: colors.surface,
-    borderColor: colors.border,
-    borderWidth: 1
-  },
-  messageComposer: {
-    alignItems: "center",
-    flexDirection: "row",
-    gap: 10,
-    marginTop: 18
-  },
-  messageInput: {
-    backgroundColor: colors.surface,
-    borderColor: colors.border,
-    borderRadius: 14,
-    borderWidth: 1,
-    color: colors.text,
-    flex: 1,
-    fontSize: 14,
-    height: 46,
-    paddingHorizontal: 12
-  },
-  messageLoading: {
-    paddingVertical: 20
-  },
-  messageMeta: {
-    color: colors.muted,
-    fontSize: 11,
-    marginTop: 6
-  },
-  messageMetaMine: {
-    color: "#CCFBF1"
-  },
   messagePreview: {
     color: colors.muted,
     fontSize: 13,
     marginTop: 2
-  },
-  messageText: {
-    color: colors.text,
-    fontSize: 14,
-    lineHeight: 20
-  },
-  messageTextMine: {
-    color: colors.surface
   },
   panel: {
     backgroundColor: colors.surface,
@@ -756,11 +567,6 @@ const styles = StyleSheet.create({
     gap: 8,
     marginTop: 18,
     padding: 16
-  },
-  panelSubtitle: {
-    color: colors.muted,
-    fontSize: 13,
-    lineHeight: 20
   },
   panelTitle: {
     color: colors.text,
@@ -830,18 +636,17 @@ const styles = StyleSheet.create({
   },
   requestTitle: {
     color: colors.text,
-    fontSize: 14,
-    fontWeight: "800"
+    fontSize: 15,
+    fontWeight: "700"
   },
   secondaryButton: {
-    borderColor: colors.border,
+    backgroundColor: "#ECFDF5",
     borderRadius: 999,
-    borderWidth: 1,
     paddingHorizontal: 12,
     paddingVertical: 8
   },
   secondaryButtonText: {
-    color: colors.text,
+    color: colors.accent,
     fontSize: 13,
     fontWeight: "700"
   },
@@ -850,11 +655,12 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     marginBottom: 10,
-    marginTop: 22
+    marginTop: 18
   },
   sectionMeta: {
     color: colors.muted,
-    fontSize: 12
+    fontSize: 12,
+    fontWeight: "700"
   },
   sectionTitle: {
     color: colors.text,
@@ -862,20 +668,23 @@ const styles = StyleSheet.create({
     fontWeight: "800"
   },
   summaryCard: {
-    backgroundColor: "#0F172A",
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
     borderRadius: 18,
+    borderWidth: 1,
     gap: 8,
     marginTop: 18,
     padding: 18
   },
   summaryHighlight: {
-    color: "#F8FAFC",
+    color: colors.accent,
     fontSize: 24,
     fontWeight: "800"
   },
   summaryText: {
-    color: "#CBD5E1",
-    fontSize: 13
+    color: colors.muted,
+    fontSize: 14,
+    lineHeight: 21
   },
   tabButton: {
     borderColor: colors.border,
@@ -898,11 +707,12 @@ const styles = StyleSheet.create({
   },
   tabRow: {
     flexDirection: "row",
+    flexWrap: "wrap",
     gap: 10
   },
   unreadDot: {
     alignItems: "center",
-    backgroundColor: colors.error,
+    backgroundColor: colors.accent,
     borderRadius: 999,
     justifyContent: "center",
     minWidth: 20,
@@ -915,3 +725,4 @@ const styles = StyleSheet.create({
     fontWeight: "800"
   }
 });
+

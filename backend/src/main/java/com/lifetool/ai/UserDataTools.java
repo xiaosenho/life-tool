@@ -1,7 +1,5 @@
 package com.lifetool.ai;
 
-import java.time.YearMonth;
-import java.time.ZoneOffset;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -10,6 +8,7 @@ import java.util.Map;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.stereotype.Component;
 
+import com.lifetool.common.TimeSupport;
 import com.lifetool.events.EventStore;
 import com.lifetool.focus.FocusPreference;
 import com.lifetool.focus.FocusPreferenceStore;
@@ -114,7 +113,7 @@ public class UserDataTools {
     }
 
     Map<String, Object> getLedgerSummary(String userId) {
-        String month = YearMonth.now(ZoneOffset.UTC).toString();
+        String month = TimeSupport.currentMonth().toString();
         LedgerSummaryResponse summary = ledgerService.getSummary(userId, month);
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("domain", "ledger");
@@ -151,7 +150,7 @@ public class UserDataTools {
                 .filter(h -> !h.isArchived())
                 .toList();
         List<HabitCheckin> todayCheckins = habitCheckinStore.findByUserIdAndDate(
-                userId, java.time.LocalDate.now());
+                userId, TimeSupport.today());
         long completedToday = todayCheckins.stream()
                 .filter(c -> c.getCount() > 0)
                 .map(HabitCheckin::getHabitId)

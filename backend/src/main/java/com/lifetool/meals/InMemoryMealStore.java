@@ -1,8 +1,6 @@
 package com.lifetool.meals;
 
 import java.math.BigDecimal;
-import java.time.LocalDate;
-import java.time.ZoneId;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -10,6 +8,8 @@ import java.util.concurrent.ConcurrentHashMap;
 
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Repository;
+
+import com.lifetool.common.TimeSupport;
 
 @Repository
 @Profile("!postgres")
@@ -30,18 +30,18 @@ public class InMemoryMealStore implements MealStore {
 
     @Override
     public MealSummary getSummary(String userId) {
-        LocalDate today = LocalDate.now();
-        LocalDate sevenDaysAgo = today.minusDays(6);
+        var today = TimeSupport.today();
+        var sevenDaysAgo = today.minusDays(6);
         List<MealLog> meals = byId.values().stream()
                 .filter(m -> userId.equals(m.getUserId()))
                 .sorted(Comparator.comparing(MealLog::getOccurredAt).reversed())
                 .toList();
 
         List<MealLog> todayMeals = meals.stream()
-                .filter(m -> today.equals(LocalDate.ofInstant(m.getOccurredAt(), ZoneId.systemDefault())))
+                .filter(m -> today.equals(TimeSupport.toBusinessDate(m.getOccurredAt())))
                 .toList();
         List<MealLog> weekMeals = meals.stream()
-                .filter(m -> !LocalDate.ofInstant(m.getOccurredAt(), ZoneId.systemDefault()).isBefore(sevenDaysAgo))
+                .filter(m -> !TimeSupport.toBusinessDate(m.getOccurredAt()).isBefore(sevenDaysAgo))
                 .toList();
 
         return new MealSummary(

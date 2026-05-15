@@ -10,6 +10,7 @@ import { authService } from "@/services/authService";
 import { syncService } from "@/services/syncService";
 import { syncStateRepository } from "@/db/syncStateRepository";
 import { syncMutationRepository } from "@/db/syncMutationRepository";
+import { formatDateTimeCn } from "@/utils/time";
 
 export default function ProfileScreen() {
   const { user, clearAuth } = useAuthStore();
@@ -26,7 +27,7 @@ export default function ProfileScreen() {
       syncStateRepository.getValue('last_sync_time'),
       syncMutationRepository.getPendingCount(),
     ]);
-    setLastSync(time ? new Date(time).toLocaleString() : '从未同步');
+    setLastSync(time ? formatDateTimeCn(time) : '从未同步');
     setPendingCount(pending);
   };
 

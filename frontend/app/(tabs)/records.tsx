@@ -22,6 +22,7 @@ import { AnniversaryEvent, eventService, EventType, RepeatRule } from "@/service
 import { LedgerTransaction, LedgerTransactionType, ledgerService } from "@/services/ledgerService";
 import { MealDetail, MealSummary, mealService } from "@/services/mealService";
 import { colors } from "@/theme/colors";
+import { currentMonthInShanghai, formatDateCn, formatDateTimeCn, todayInShanghai } from "@/utils/time";
 
 type RecordsTab = "diet" | "ledger" | "events";
 
@@ -40,11 +41,11 @@ const REPEAT_RULES: { value: RepeatRule; label: string }[] = [
 ];
 
 function currentMonth() {
-  return new Date().toISOString().slice(0, 7);
+  return currentMonthInShanghai();
 }
 
 function today() {
-  return new Date().toISOString().slice(0, 10);
+  return todayInShanghai();
 }
 
 function formatMoney(value: number) {
@@ -356,7 +357,7 @@ export default function RecordsScreen() {
                   <View style={styles.transactionMain}>
                     <Text style={styles.transactionTitle}>{formatMealType(meal.mealType)}</Text>
                     <Text style={styles.transactionMeta}>
-                      {meal.occurredAt.slice(0, 16).replace("T", " ")} · {meal.aiGenerated ? "AI 识别" : "手动记录"}
+                      {formatDateTimeCn(meal.occurredAt)} · {meal.aiGenerated ? "AI 识别" : "手动记录"}
                     </Text>
                   </View>
                   <Text style={[styles.transactionAmount, styles.eventCountdown]}>
@@ -379,7 +380,7 @@ export default function RecordsScreen() {
               <>
                 <Text style={styles.detailTitle}>{formatMealType(selectedMeal.mealType)}</Text>
                 <Text style={styles.detailMeta}>
-                  {selectedMeal.occurredAt.slice(0, 16).replace("T", " ")} · {selectedMeal.aiGenerated ? "AI 识别生成" : "手动记录"}
+                  {formatDateTimeCn(selectedMeal.occurredAt)} · {selectedMeal.aiGenerated ? "AI 识别生成" : "手动记录"}
                 </Text>
                 <Text style={styles.detailCalories}>
                   总热量 {selectedMeal.totalCalories ?? 0} 千卡
@@ -397,7 +398,7 @@ export default function RecordsScreen() {
                     <Image
                       source={{ uri: selectedMeal.imageUrl }}
                       style={styles.mealImage}
-                      resizeMode="cover"
+                      resizeMode="contain"
                       onError={() => refreshMealImageUrl(selectedMeal.id)}
                     />
                   </Pressable>
@@ -544,7 +545,7 @@ export default function RecordsScreen() {
                   <View style={styles.transactionMain}>
                     <Text style={styles.transactionTitle}>{transaction.category || "未分类"}</Text>
                     <Text style={styles.transactionMeta}>
-                      {transaction.occurred_at.slice(0, 10)} · {transaction.account || "默认账户"}
+                      {formatDateCn(transaction.occurred_at)} · {transaction.account || "默认账户"}
                     </Text>
                   </View>
                   <Text
@@ -632,7 +633,7 @@ export default function RecordsScreen() {
                   <View style={styles.transactionMain}>
                     <Text style={styles.transactionTitle}>{event.title}</Text>
                     <Text style={styles.transactionMeta}>
-                      {event.nextOccurrenceDate} · {event.repeat_rule === "none" ? "不重复" : "重复"}
+                      {formatDateCn(event.nextOccurrenceDate)} · {event.repeat_rule === "none" ? "不重复" : "重复"}
                     </Text>
                   </View>
                   <Text style={[styles.transactionAmount, styles.eventCountdown]}>
