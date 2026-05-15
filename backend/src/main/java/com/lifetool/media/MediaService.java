@@ -4,6 +4,8 @@ import com.lifetool.media.dto.AssetResponse;
 import com.lifetool.media.dto.CreateAssetRequest;
 import com.lifetool.media.dto.UploadTokenRequest;
 import com.lifetool.media.dto.UploadTokenResponse;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -12,6 +14,7 @@ import java.util.UUID;
 
 @Service
 public class MediaService {
+    private static final Logger log = LoggerFactory.getLogger(MediaService.class);
 
     private final MediaAssetStore store;
     private final MediaConfig config;
@@ -73,7 +76,17 @@ public class MediaService {
         if (expectedPurpose != null && !expectedPurpose.equals(asset.getPurpose())) {
             throw new MediaException("VALIDATION_ERROR", "Media asset purpose does not match expected purpose");
         }
-        return buildReadUrl(asset);
+        String readUrl = buildReadUrl(asset);
+        log.info(
+                "Generated media read URL. userId={}, assetId={}, expectedPurpose={}, actualPurpose={}, objectKey={}, status={}, readUrl={}",
+                userId,
+                assetId,
+                expectedPurpose,
+                asset.getPurpose(),
+                asset.getObjectKey(),
+                asset.getStatus(),
+                readUrl);
+        return readUrl;
     }
 
     public void deleteAsset(String userId, String assetId) {
@@ -143,10 +156,27 @@ public class MediaService {
         if (config.isPublicReadUrlEnabled()) {
             String baseUrl = config.getCosPublicBaseUrl().trim();
             String normalizedBaseUrl = baseUrl.endsWith("/") ? baseUrl.substring(0, baseUrl.length() - 1) : baseUrl;
-            return normalizedBaseUrl + "/" + asset.getObjectKey();
+            String publicUrl = normalizedBaseUrl + "/" + asset.getObjectKey();
+            log.info(
+                    "Building media read URL with public base URL. assetId={}, objectKey={}, now={}, publicReadEnabled=true, publicBaseUrl={}, readUrl={}",
+                    asset.getId(),
+                    asset.getObjectKey(),
+                    Instant.now(),
+                    normalizedBaseUrl,
+                    publicUrl);
+            return publicUrl;
         }
-        return uploadUrlSigner.generateGetUrl(
+        Instant expiresAt = Instant.now().plusSeconds(config.getReadUrlTtlSeconds());
+        String signedUrl = uploadUrlSigner.generateGetUrl(
                 asset.getObjectKey(),
-                Instant.now().plusSeconds(config.getReadUrlTtlSeconds()));
+                expiresAt);
+        log.info(
+                "Building media read URL with COS signed GET URL. assetId={}, objectKey={}, now={}, expiresAt={}, publicReadEnabled=false, readUrl={}",
+                asset.getId(),
+                asset.getObjectKey(),
+                Instant.now(),
+                expiresAt,
+                signedUrl);
+        return signedUrl;
     }
 }

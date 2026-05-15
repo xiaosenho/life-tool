@@ -6,6 +6,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.Optional;
 
 import org.springframework.stereotype.Service;
 import org.slf4j.Logger;
@@ -251,11 +252,27 @@ public class AiService {
                 : "请识别图片中的食物并估算热量";
 
         String imageUrl = resolveFoodImageUrl(userId, request);
+        log.info(
+                "Starting AI food recognition. userId={}, mediaAssetId={}, mealType={}, now={}, imageUrl={}, qSignTime={}",
+                userId,
+                request.mediaAssetId(),
+                request.mealType(),
+                java.time.Instant.now(),
+                imageUrl,
+                extractQueryParam(imageUrl, "q-sign-time").orElse("<missing>"));
         String response;
         try {
             UserDataTools.setCurrentUserId(userId);
             response = chatWithImageRetryOnExpiredSignedUrl(userId, request, systemPrompt, userText, imageUrl);
         } catch (RuntimeException ex) {
+            log.error(
+                    "AI food recognition failed. userId={}, mediaAssetId={}, imageUrl={}, qSignTime={}, message={}",
+                    userId,
+                    request.mediaAssetId(),
+                    imageUrl,
+                    extractQueryParam(imageUrl, "q-sign-time").orElse("<missing>"),
+                    ex.getMessage(),
+                    ex);
             throw new AiException("AI_RECOGNITION_FAILED", "AI 识图失败，请确认图片可以访问或稍后重试");
         } finally {
             UserDataTools.clearCurrentUserId();
@@ -283,6 +300,15 @@ public class AiService {
         RuntimeException lastException = null;
         for (int attempt = 1; attempt <= FOOD_IMAGE_RETRY_TIMES; attempt++) {
             try {
+                log.info(
+                        "Calling AI image recognition. attempt={}/{}, userId={}, mediaAssetId={}, now={}, imageUrl={}, qSignTime={}",
+                        attempt,
+                        FOOD_IMAGE_RETRY_TIMES,
+                        userId,
+                        request.mediaAssetId(),
+                        java.time.Instant.now(),
+                        currentImageUrl,
+                        extractQueryParam(currentImageUrl, "q-sign-time").orElse("<missing>"));
                 return assistantClient.chatWithImage("food-" + userId, systemPrompt, currentImageUrl, userText);
             } catch (RuntimeException ex) {
                 lastException = ex;
@@ -290,13 +316,22 @@ public class AiService {
                     throw ex;
                 }
                 log.warn(
-                        "AI image download got 403, retrying with refreshed URL. attempt={}/{}, userId={}, mediaAssetId={}",
+                        "AI image download got 403, retrying with refreshed URL. attempt={}/{}, userId={}, mediaAssetId={}, failedImageUrl={}, failedQSignTime={}",
                         attempt + 1,
                         FOOD_IMAGE_RETRY_TIMES,
                         userId,
-                        request.mediaAssetId());
+                        request.mediaAssetId(),
+                        currentImageUrl,
+                        extractQueryParam(currentImageUrl, "q-sign-time").orElse("<missing>"));
                 sleepBeforeFoodRetry();
                 currentImageUrl = resolveFoodImageUrl(userId, request);
+                log.info(
+                        "Refreshed AI image URL after 403. userId={}, mediaAssetId={}, now={}, refreshedImageUrl={}, refreshedQSignTime={}",
+                        userId,
+                        request.mediaAssetId(),
+                        java.time.Instant.now(),
+                        currentImageUrl,
+                        extractQueryParam(currentImageUrl, "q-sign-time").orElse("<missing>"));
             }
         }
         throw lastException == null ? new RuntimeException("AI image recognition failed") : lastException;
@@ -437,6 +472,28 @@ public class AiService {
 
     private static boolean hasText(String value) {
         return value != null && !value.isBlank();
+    }
+
+    private Optional<String> extractQueryParam(String url, String key) {
+        if (!hasText(url) || !hasText(key)) {
+            return Optional.empty();
+        }
+        int queryIndex = url.indexOf('?');
+        if (queryIndex < 0 || queryIndex >= url.length() - 1) {
+            return Optional.empty();
+        }
+        String query = url.substring(queryIndex + 1);
+        for (String pair : query.split("&")) {
+            int equalsIndex = pair.indexOf('=');
+            if (equalsIndex <= 0) {
+                continue;
+            }
+            String currentKey = pair.substring(0, equalsIndex);
+            if (key.equals(currentKey)) {
+                return Optional.of(pair.substring(equalsIndex + 1));
+            }
+        }
+        return Optional.empty();
     }
 
     private AiChatAttachment refreshAttachment(String userId, AiChatAttachment attachment) {
