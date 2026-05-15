@@ -8,6 +8,7 @@ import org.springframework.stereotype.Service;
 
 import com.lifetool.friends.dto.FriendConversationSummaryResponse;
 import com.lifetool.friends.dto.FriendMessageAttachmentRequest;
+import com.lifetool.friends.dto.FriendMessageResponse;
 import com.lifetool.media.MediaAsset;
 import com.lifetool.media.MediaService;
 import com.lifetool.users.User;
@@ -111,6 +112,10 @@ public class FriendService {
         return messageStore.listConversation(userId, friendUserId);
     }
 
+    public FriendMessageResponse toMessageResponse(String viewerUserId, FriendMessage message) {
+        return FriendMessageResponse.from(message, refreshAttachment(message.getFromUserId(), message.getAttachment()));
+    }
+
     public int markConversationRead(String userId, String friendUserId) {
         ensureFriends(userId, friendUserId);
         return messageStore.markConversationRead(userId, friendUserId);
@@ -207,10 +212,29 @@ public class FriendService {
                 asset.getId(),
                 audio ? "audio" : "image",
                 asset.getContentType(),
-                mediaService.generateReadUrl(userId, asset.getId(), asset.getPurpose()),
+                null,
                 attachmentRequest.width(),
                 attachmentRequest.height(),
                 attachmentRequest.durationSeconds());
+    }
+
+    private FriendMessageAttachment refreshAttachment(String userId, FriendMessageAttachment attachment) {
+        if (attachment == null || attachment.assetId() == null || attachment.assetId().isBlank()) {
+            return attachment;
+        }
+        try {
+            String purpose = "audio".equals(attachment.kind()) ? "chat_audio" : "chat_image";
+            return new FriendMessageAttachment(
+                    attachment.assetId(),
+                    attachment.kind(),
+                    attachment.contentType(),
+                    mediaService.generateReadUrl(userId, attachment.assetId(), purpose),
+                    attachment.width(),
+                    attachment.height(),
+                    attachment.durationSeconds());
+        } catch (RuntimeException ex) {
+            return attachment;
+        }
     }
 
     private String conversationFriendId(String userId, FriendMessage message) {

@@ -106,15 +106,16 @@ public class AiService {
             UserDataTools.setCurrentUserId(userId);
             UserDataTools.resetSavedMemoryEvents();
             if (attachment != null) {
+                AiChatAttachment requestAttachment = refreshAttachment(userId, attachment);
                 assistantContent = assistantClient.chatWithMedia(
                         sessionId,
                         systemPrompt,
                         history,
                         toolResults,
                         new AiAssistantClient.MediaInput(
-                                attachment.kind(),
-                                attachment.url(),
-                                attachment.contentType()));
+                                requestAttachment.kind(),
+                                requestAttachment.url(),
+                                requestAttachment.contentType()));
             } else {
                 assistantContent = assistantClient.chat(sessionId, systemPrompt, history, toolResults);
             }
@@ -131,7 +132,8 @@ public class AiService {
         appendSavedMemoryToolCalls(userId, sessionId, assistantMessage.getId(), savedMemoryEvents);
         session.touch();
 
-        return AiChatMessageResponse.from(
+        return toMessageResponse(
+                userId,
                 assistantMessage,
                 properties.getDisclaimer(),
                 mergeToolCallStatuses(toolCalls, savedMemoryEvents),
@@ -159,16 +161,31 @@ public class AiService {
                 asset.getId(),
                 audio ? "audio" : "image",
                 asset.getContentType(),
-                mediaService.generateReadUrl(userId, asset.getId(), asset.getPurpose()),
+                null,
                 request.width(),
                 request.height(),
                 request.durationSeconds());
     }
 
+    public AiChatMessageResponse toMessageResponse(
+            String userId,
+            AiChatMessage message,
+            String disclaimer,
+            List<AiToolCallStatusResponse> toolCalls,
+            boolean longTermMemorySaved) {
+        return AiChatMessageResponse.from(
+                message,
+                refreshAttachment(userId, message.getAttachment()),
+                disclaimer,
+                toolCalls,
+                longTermMemorySaved);
+    }
+
     public AiChatMessagesResponse listMessages(String userId, String sessionId) {
         findOwnedSession(userId, sessionId);
         List<AiChatMessageResponse> messages = chatStore.listMessages(sessionId).stream()
-                .map(message -> AiChatMessageResponse.from(
+                .map(message -> toMessageResponse(
+                        userId,
                         message,
                         "assistant".equals(message.getRole()) ? properties.getDisclaimer() : null,
                         chatStore.listToolCalls(message.getId()).stream()
@@ -420,5 +437,24 @@ public class AiService {
 
     private static boolean hasText(String value) {
         return value != null && !value.isBlank();
+    }
+
+    private AiChatAttachment refreshAttachment(String userId, AiChatAttachment attachment) {
+        if (attachment == null || attachment.assetId() == null || attachment.assetId().isBlank()) {
+            return attachment;
+        }
+        try {
+            String purpose = "audio".equals(attachment.kind()) ? "chat_audio" : "chat_image";
+            return new AiChatAttachment(
+                    attachment.assetId(),
+                    attachment.kind(),
+                    attachment.contentType(),
+                    mediaService.generateReadUrl(userId, attachment.assetId(), purpose),
+                    attachment.width(),
+                    attachment.height(),
+                    attachment.durationSeconds());
+        } catch (RuntimeException ex) {
+            return attachment;
+        }
     }
 }

@@ -21,7 +21,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         "COS_BUCKET=life-tool-test-1250000000",
         "COS_SECRET_ID=test-secret-id",
         "COS_SECRET_KEY=test-secret-key",
-        "COS_PUBLIC_BASE_URL=https://cdn.example.com"
+        "COS_PUBLIC_BASE_URL=https://cdn.example.com",
+        "COS_PUBLIC_READ_ENABLED=true"
 })
 @AutoConfigureMockMvc
 class MediaCosSigningTest {

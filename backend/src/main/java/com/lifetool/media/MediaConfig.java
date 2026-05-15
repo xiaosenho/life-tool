@@ -30,6 +30,9 @@ public class MediaConfig {
     @Value("${COS_PUBLIC_BASE_URL:}")
     private String cosPublicBaseUrl;
 
+    @Value("${COS_PUBLIC_READ_ENABLED:false}")
+    private boolean cosPublicReadEnabled;
+
     @Value("${COS_UPLOAD_TOKEN_TTL_SECONDS:300}")
     private int uploadTokenTtlSeconds;
 
@@ -47,13 +50,14 @@ public class MediaConfig {
     public String getCosSecretId() { return cosSecretId; }
     public String getCosSecretKey() { return cosSecretKey; }
     public String getCosPublicBaseUrl() { return cosPublicBaseUrl; }
+    public boolean isCosPublicReadEnabled() { return cosPublicReadEnabled; }
     public int getUploadTokenTtlSeconds() { return uploadTokenTtlSeconds; }
     public int getReadUrlTtlSeconds() { return readUrlTtlSeconds; }
     public long getMaxImageBytes() { return maxImageBytes; }
     public long getMaxAudioBytes() { return maxAudioBytes; }
 
     public boolean isPublicReadUrlEnabled() {
-        return hasText(cosPublicBaseUrl);
+        return cosPublicReadEnabled && hasText(cosPublicBaseUrl);
     }
 
     public boolean isCosSigningEnabled() {

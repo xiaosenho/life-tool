@@ -19,10 +19,18 @@ public record AiChatMessageResponse(
 ) {
     public static AiChatMessageResponse from(AiChatMessage message, String disclaimer,
                                              List<AiToolCallStatusResponse> toolCalls) {
-        return from(message, disclaimer, toolCalls, false);
+        return from(message, message.getAttachment(), disclaimer, toolCalls, false);
     }
 
     public static AiChatMessageResponse from(AiChatMessage message, String disclaimer,
+                                             List<AiToolCallStatusResponse> toolCalls,
+                                             boolean longTermMemorySaved) {
+        return from(message, message.getAttachment(), disclaimer, toolCalls, longTermMemorySaved);
+    }
+
+    public static AiChatMessageResponse from(AiChatMessage message,
+                                             AiChatAttachment attachment,
+                                             String disclaimer,
                                              List<AiToolCallStatusResponse> toolCalls,
                                              boolean longTermMemorySaved) {
         return new AiChatMessageResponse(
@@ -30,7 +38,7 @@ public record AiChatMessageResponse(
                 message.getId(),
                 message.getRole(),
                 message.getContent(),
-                message.getAttachment(),
+                attachment,
                 disclaimer,
                 toolCalls,
                 longTermMemorySaved,

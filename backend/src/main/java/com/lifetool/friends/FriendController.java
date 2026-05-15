@@ -89,7 +89,7 @@ public class FriendController {
             @AuthenticationPrincipal String userId,
             @PathVariable String friendUserId) {
         return ResponseEntity.ok(ApiResponse.ok(friendService.listConversation(userId, friendUserId).stream()
-                .map(FriendMessageResponse::from)
+                .map(message -> friendService.toMessageResponse(userId, message))
                 .toList()));
     }
 
@@ -99,7 +99,7 @@ public class FriendController {
             @PathVariable String friendUserId,
             @Valid @RequestBody SendFriendMessageRequest request) {
         var message = friendService.sendMessage(userId, friendUserId, request.content(), request.type(), request.attachment());
-        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.ok(FriendMessageResponse.from(message)));
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.ok(friendService.toMessageResponse(userId, message)));
     }
 
     @PostMapping("/messages/{friendUserId}/read")

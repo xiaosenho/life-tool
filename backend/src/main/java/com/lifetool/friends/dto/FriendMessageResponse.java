@@ -16,13 +16,17 @@ public record FriendMessageResponse(
         Instant readAt
 ) {
     public static FriendMessageResponse from(FriendMessage message) {
+        return from(message, message.getAttachment());
+    }
+
+    public static FriendMessageResponse from(FriendMessage message, FriendMessageAttachment attachment) {
         return new FriendMessageResponse(
                 message.getId(),
                 message.getFromUserId(),
                 message.getToUserId(),
                 message.getType().name().toLowerCase(),
                 message.getContent(),
-                message.getAttachment(),
+                attachment,
                 message.getCreatedAt(),
                 message.getReadAt());
     }
