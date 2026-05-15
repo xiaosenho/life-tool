@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Image,
+  Modal,
   Pressable,
   StyleSheet,
   Text,
@@ -71,6 +73,8 @@ export default function RecordsScreen() {
   const [selectedMeal, setSelectedMeal] = useState<MealDetail | null>(null);
   const [mealLoading, setMealLoading] = useState(false);
   const [mealActionLoading, setMealActionLoading] = useState(false);
+  const [mealImageLoading, setMealImageLoading] = useState(false);
+  const [imagePreviewVisible, setImagePreviewVisible] = useState(false);
 
   const [type, setType] = useState<LedgerTransactionType>("expense");
   const [amount, setAmount] = useState("");
@@ -292,6 +296,19 @@ export default function RecordsScreen() {
     }
   }
 
+  async function refreshMealImageUrl(id: string) {
+    setMealImageLoading(true);
+    try {
+      const res = await mealService.getMealImageUrl(id);
+      if (!res.success || !res.data) {
+        return;
+      }
+      setSelectedMeal((current) => current && current.id === id ? { ...current, imageUrl: res.data } : current);
+    } finally {
+      setMealImageLoading(false);
+    }
+  }
+
   return (
     <Screen title="记录">
       <View style={styles.tabRow}>
@@ -367,10 +384,26 @@ export default function RecordsScreen() {
                 <Text style={styles.detailCalories}>
                   总热量 {selectedMeal.totalCalories ?? 0} 千卡
                 </Text>
-                <Text style={styles.detailLabel}>图片</Text>
-                <Text style={styles.detailBody}>
-                  {selectedMeal.imageUrl ? selectedMeal.imageUrl : "当前记录没有可查看的图片。"}
-                </Text>
+                <View style={styles.inlineHeader}>
+                  <Text style={styles.detailLabel}>图片</Text>
+                  {selectedMeal.imageUrl ? (
+                    <TouchableOpacity onPress={() => refreshMealImageUrl(selectedMeal.id)} disabled={mealImageLoading}>
+                      <Text style={styles.refreshLink}>{mealImageLoading ? "刷新中..." : "刷新图片"}</Text>
+                    </TouchableOpacity>
+                  ) : null}
+                </View>
+                {selectedMeal.imageUrl ? (
+                  <Pressable onPress={() => setImagePreviewVisible(true)}>
+                    <Image
+                      source={{ uri: selectedMeal.imageUrl }}
+                      style={styles.mealImage}
+                      resizeMode="cover"
+                      onError={() => refreshMealImageUrl(selectedMeal.id)}
+                    />
+                  </Pressable>
+                ) : (
+                  <Text style={styles.detailBody}>当前记录没有可查看的图片。</Text>
+                )}
                 <Text style={styles.detailLabel}>识别结果</Text>
                 <Text style={styles.detailBody}>
                   {selectedMeal.note ?? "暂无识别结果说明。"}
@@ -614,6 +647,30 @@ export default function RecordsScreen() {
           </View>
         </View>
       )}
+
+      <Modal
+        visible={imagePreviewVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setImagePreviewVisible(false)}
+      >
+        <Pressable style={styles.previewOverlay} onPress={() => setImagePreviewVisible(false)}>
+          <View style={styles.previewHeader}>
+            <TouchableOpacity style={styles.previewCloseButton} onPress={() => setImagePreviewVisible(false)}>
+              <MaterialCommunityIcons name="close" size={24} color={colors.surface} />
+            </TouchableOpacity>
+          </View>
+          {selectedMeal?.imageUrl ? (
+            <Pressable>
+              <Image
+                source={{ uri: selectedMeal.imageUrl }}
+                style={styles.previewImage}
+                resizeMode="contain"
+              />
+            </Pressable>
+          ) : null}
+        </Pressable>
+      </Modal>
     </Screen>
   );
 }
@@ -746,6 +803,11 @@ const styles = StyleSheet.create({
   incomeAmount: {
     color: colors.accent,
   },
+  inlineHeader: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
   input: {
     backgroundColor: colors.surface,
     borderColor: colors.border,
@@ -758,6 +820,12 @@ const styles = StyleSheet.create({
   },
   metricGrid: {
     gap: 10,
+  },
+  mealImage: {
+    backgroundColor: colors.background,
+    borderRadius: 14,
+    height: 220,
+    width: "100%",
   },
   panel: {
     backgroundColor: colors.surface,
@@ -781,6 +849,34 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontSize: 17,
     fontWeight: "800",
+  },
+  previewCloseButton: {
+    alignItems: "center",
+    backgroundColor: "rgba(15,23,42,0.6)",
+    borderRadius: 999,
+    height: 40,
+    justifyContent: "center",
+    width: 40,
+  },
+  previewHeader: {
+    alignItems: "flex-end",
+    left: 0,
+    paddingHorizontal: 20,
+    paddingTop: 56,
+    position: "absolute",
+    right: 0,
+    top: 0,
+    zIndex: 2,
+  },
+  previewImage: {
+    height: "78%",
+    width: "92%",
+  },
+  previewOverlay: {
+    alignItems: "center",
+    backgroundColor: "rgba(15,23,42,0.92)",
+    flex: 1,
+    justifyContent: "center",
   },
   primaryButton: {
     alignItems: "center",
@@ -806,6 +902,11 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     height: 8,
     overflow: "hidden",
+  },
+  refreshLink: {
+    color: colors.accent,
+    fontSize: 13,
+    fontWeight: "700",
   },
   row: {
     alignItems: "center",

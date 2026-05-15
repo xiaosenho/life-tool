@@ -36,6 +36,10 @@ export const mealService = {
     return apiClient.get<MealDetail>(`/meals/${id}`);
   },
 
+  getMealImageUrl(id: string) {
+    return apiClient.get<string>(`/meals/${id}/image-url`);
+  },
+
   deleteMeal(id: string) {
     return apiClient.delete<void>(`/meals/${id}`);
   },

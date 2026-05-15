@@ -45,6 +45,11 @@ class MealControllerTest {
                 .andExpect(jsonPath("$.data.mediaAssetId").isString())
                 .andExpect(jsonPath("$.data.aiGenerated").value(true));
 
+        mockMvc.perform(get("/api/meals/" + mealLogId + "/image-url")
+                        .header("Authorization", "Bearer " + tokenA))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data").isString());
+
         mockMvc.perform(post("/api/meals/" + mealLogId + "/rerun-recognition")
                         .header("Authorization", "Bearer " + tokenA))
                 .andExpect(status().isOk())

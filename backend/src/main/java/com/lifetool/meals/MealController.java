@@ -33,6 +33,13 @@ public class MealController {
         return ResponseEntity.ok(ApiResponse.ok(mealService.getMealDetail(userId, id)));
     }
 
+    @GetMapping("/{id}/image-url")
+    public ResponseEntity<ApiResponse<String>> getMealImageUrl(
+            @AuthenticationPrincipal String userId,
+            @PathVariable String id) {
+        return ResponseEntity.ok(ApiResponse.ok(mealService.getMealImageUrl(userId, id)));
+    }
+
     @DeleteMapping("/{id}")
     public ResponseEntity<ApiResponse<Void>> deleteMeal(
             @AuthenticationPrincipal String userId,

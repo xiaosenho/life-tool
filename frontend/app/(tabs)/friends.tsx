@@ -4,6 +4,7 @@ import {
   ActivityIndicator,
   Alert,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -86,10 +87,17 @@ export default function FriendsScreen() {
   }, []);
 
   useEffect(() => {
-    if (!selectedFriendId && conversations.length > 0) {
-      setSelectedFriendId(conversations[0].friendUserId);
+    if (selectedFriendId) {
+      return;
     }
-  }, [conversations, selectedFriendId]);
+    if (conversations.length > 0) {
+      setSelectedFriendId(conversations[0].friendUserId);
+      return;
+    }
+    if (friends.length > 0) {
+      setSelectedFriendId(friends[0].userId);
+    }
+  }, [conversations, friends, selectedFriendId]);
 
   useEffect(() => {
     if (!selectedFriendId) {
@@ -147,7 +155,11 @@ export default function FriendsScreen() {
         if (conversationRes.success && conversationRes.data) {
           setConversations(conversationRes.data);
         }
+      } else {
+        setMessages([]);
       }
+    } catch {
+      setMessages([]);
     } finally {
       setMessageLoading(false);
     }
@@ -367,23 +379,61 @@ export default function FriendsScreen() {
       {activeTab === "messages" && (
         <>
           <SectionHeader title="互动会话" meta={`${conversations.length} 个`} />
-          <View style={styles.conversationTabs}>
+          <View style={styles.panel}>
+            <Text style={styles.panelTitle}>选择好友</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.conversationTabs}>
+              {friends.length === 0 ? (
+                <EmptyState text="还没有好友，先去添加一位好友吧。" />
+              ) : (
+                friends.map((friend) => {
+                  const conversation = conversations.find((item) => item.friendUserId === friend.userId);
+                  return (
+                    <Pressable
+                      key={friend.userId}
+                      style={[styles.conversationChip, selectedFriendId === friend.userId && styles.conversationChipActive]}
+                      onPress={() => setSelectedFriendId(friend.userId)}
+                    >
+                      <Text style={[styles.conversationChipText, selectedFriendId === friend.userId && styles.conversationChipTextActive]}>
+                        {friend.displayName}
+                      </Text>
+                      {!!conversation?.unreadCount && (
+                        <View style={styles.unreadDot}>
+                          <Text style={styles.unreadText}>{conversation.unreadCount}</Text>
+                        </View>
+                      )}
+                    </Pressable>
+                  );
+                })
+              )}
+            </ScrollView>
+          </View>
+
+          <View style={styles.panel}>
+            <Text style={styles.panelTitle}>最近互动</Text>
             {conversations.length === 0 ? (
-              <EmptyState text="还没有互动消息，先去加好友吧。" />
+              <Text style={styles.emptyText}>还没有互动消息，现在就可以直接给好友发第一条消息。</Text>
             ) : (
               conversations.map((item) => (
                 <Pressable
                   key={item.friendUserId}
-                  style={[styles.conversationChip, selectedFriendId === item.friendUserId && styles.conversationChipActive]}
+                  style={[styles.conversationListItem, selectedFriendId === item.friendUserId && styles.conversationListItemActive]}
                   onPress={() => setSelectedFriendId(item.friendUserId)}
                 >
-                  <Text style={[styles.conversationChipText, selectedFriendId === item.friendUserId && styles.conversationChipTextActive]}>
-                    {item.friendDisplayName}
-                  </Text>
-                  {item.unreadCount > 0 && (
+                  <View style={styles.flexBlock}>
+                    <Text style={styles.friendName}>{item.friendDisplayName}</Text>
+                    <Text style={styles.friendMeta}>
+                      {item.lastMessageType === "cheer" ? "加油消息" : "文字消息"} · {formatDateTime(item.lastMessageAt)}
+                    </Text>
+                    <Text style={styles.messagePreview} numberOfLines={1}>
+                      {item.lastMessage}
+                    </Text>
+                  </View>
+                  {item.unreadCount > 0 ? (
                     <View style={styles.unreadDot}>
                       <Text style={styles.unreadText}>{item.unreadCount}</Text>
                     </View>
+                  ) : (
+                    <Ionicons name="chevron-forward" size={18} color={colors.muted} />
                   )}
                 </Pressable>
               ))
@@ -563,9 +613,22 @@ const styles = StyleSheet.create({
   conversationChipTextActive: {
     color: colors.accent
   },
+  conversationListItem: {
+    alignItems: "center",
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: 18,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 12,
+    padding: 14
+  },
+  conversationListItemActive: {
+    borderColor: colors.accent,
+    backgroundColor: "#F0FDFA"
+  },
   conversationTabs: {
     flexDirection: "row",
-    flexWrap: "wrap",
     gap: 10
   },
   disabledButton: {
@@ -671,6 +734,11 @@ const styles = StyleSheet.create({
   },
   messageMetaMine: {
     color: "#CCFBF1"
+  },
+  messagePreview: {
+    color: colors.muted,
+    fontSize: 13,
+    marginTop: 2
   },
   messageText: {
     color: colors.text,

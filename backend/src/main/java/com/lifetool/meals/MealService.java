@@ -51,9 +51,7 @@ public class MealService {
 
     public MealDetailResponse getMealDetail(String userId, String mealLogId) {
         MealLog mealLog = requireMeal(userId, mealLogId);
-        String imageUrl = mealLog.getMediaAssetId() == null
-                ? null
-                : mediaService.generateReadUrl(userId, mealLog.getMediaAssetId(), "meal_photo");
+        String imageUrl = getMealImageUrl(userId, mealLog);
         return new MealDetailResponse(
                 mealLog.getId(),
                 mealLog.getMealType(),
@@ -63,6 +61,10 @@ public class MealService {
                 mealLog.getMediaAssetId(),
                 imageUrl,
                 mealLog.isAiGenerated());
+    }
+
+    public String getMealImageUrl(String userId, String mealLogId) {
+        return getMealImageUrl(userId, requireMeal(userId, mealLogId));
     }
 
     public void deleteMeal(String userId, String mealLogId) {
@@ -111,6 +113,12 @@ public class MealService {
             throw new MealException("NOT_FOUND", "Meal not found");
         }
         return mealLog;
+    }
+
+    private String getMealImageUrl(String userId, MealLog mealLog) {
+        return mealLog.getMediaAssetId() == null
+                ? null
+                : mediaService.generateReadUrl(userId, mealLog.getMediaAssetId(), "meal_photo");
     }
 
     private static String normalizeMealType(String mealType) {
