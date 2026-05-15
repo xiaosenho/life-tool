@@ -31,13 +31,15 @@ public class SpringAiAssistantClient implements AiAssistantClient {
     private final UserDataTools userDataTools;
     private final RestClient restClient;
     private final String chatModel;
+    private final String chatCompletionsPath;
 
     public SpringAiAssistantClient(
             ChatClient.Builder chatClientBuilder,
             UserDataTools userDataTools,
             @Value("${spring.ai.openai.api-key}") String apiKey,
             @Value("${spring.ai.openai.base-url}") String baseUrl,
-            @Value("${spring.ai.openai.chat.options.model}") String chatModel) {
+            @Value("${spring.ai.openai.chat.options.model}") String chatModel,
+            @Value("${spring.ai.openai.chat.completions-path:/v1/chat/completions}") String chatCompletionsPath) {
         var chatMemory = MessageWindowChatMemory.builder()
                 .chatMemoryRepository(new InMemoryChatMemoryRepository())
                 .maxMessages(20)
@@ -48,6 +50,7 @@ public class SpringAiAssistantClient implements AiAssistantClient {
         this.statelessChatClient = chatClientBuilder.build();
         this.userDataTools = userDataTools;
         this.chatModel = chatModel;
+        this.chatCompletionsPath = normalizePath(chatCompletionsPath);
         this.restClient = RestClient.builder()
                 .baseUrl(baseUrl)
                 .defaultHeader("Authorization", "Bearer " + apiKey)
@@ -77,7 +80,7 @@ public class SpringAiAssistantClient implements AiAssistantClient {
         Map<String, Object> response;
         try {
             response = restClient.post()
-                    .uri("/v1/chat/completions")
+                    .uri(chatCompletionsPath)
                     .contentType(MediaType.APPLICATION_JSON)
                     .body(Map.of(
                             "model", chatModel,
@@ -194,7 +197,7 @@ public class SpringAiAssistantClient implements AiAssistantClient {
         }
 
         Map<String, Object> response = restClient.post()
-                .uri("/v1/chat/completions")
+                .uri(chatCompletionsPath)
                 .contentType(MediaType.APPLICATION_JSON)
                 .body(Map.of(
                         "model", chatModel,
@@ -239,5 +242,12 @@ public class SpringAiAssistantClient implements AiAssistantClient {
         }
         int queryIndex = url.indexOf('?');
         return queryIndex >= 0 ? url.substring(0, queryIndex) : url;
+    }
+
+    private String normalizePath(String path) {
+        if (path == null || path.isBlank()) {
+            return "/v1/chat/completions";
+        }
+        return path.startsWith("/") ? path : "/" + path;
     }
 }

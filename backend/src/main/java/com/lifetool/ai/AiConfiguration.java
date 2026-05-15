@@ -24,7 +24,8 @@ public class AiConfiguration {
             UserDataTools userDataTools,
             @Value("${spring.ai.openai.api-key}") String apiKey,
             @Value("${spring.ai.openai.base-url}") String baseUrl,
-            @Value("${spring.ai.openai.chat.options.model}") String model) {
-        return new SpringAiAssistantClient(chatClientBuilder, userDataTools, apiKey, baseUrl, model);
+            @Value("${spring.ai.openai.chat.options.model}") String model,
+            @Value("${spring.ai.openai.chat.completions-path:/v1/chat/completions}") String chatCompletionsPath) {
+        return new SpringAiAssistantClient(chatClientBuilder, userDataTools, apiKey, baseUrl, model, chatCompletionsPath);
     }
 }
