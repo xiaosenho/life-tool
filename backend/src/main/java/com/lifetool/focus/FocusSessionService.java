@@ -8,6 +8,7 @@ import org.springframework.stereotype.Service;
 import com.lifetool.focus.dto.CreateFocusSessionRequest;
 import com.lifetool.focus.dto.EndFocusSessionRequest;
 import com.lifetool.focus.dto.FocusSessionResponse;
+import com.lifetool.leaderboards.LeaderboardStatsStore;
 
 @Service
 public class FocusSessionService {
@@ -16,9 +17,11 @@ public class FocusSessionService {
     private static final List<String> VALID_STATUSES = List.of("completed", "interrupted", "abandoned");
 
     private final FocusSessionStore store;
+    private final LeaderboardStatsStore statsStore;
 
-    public FocusSessionService(FocusSessionStore store) {
+    public FocusSessionService(FocusSessionStore store, LeaderboardStatsStore statsStore) {
         this.store = store;
+        this.statsStore = statsStore;
     }
 
     public FocusSessionResponse startSession(String userId, CreateFocusSessionRequest request) {
@@ -61,6 +64,7 @@ public class FocusSessionService {
         session.setUpdatedAt(Instant.now());
 
         store.save(session);
+        statsStore.refreshFocusStats(userId);
         return FocusSessionResponse.from(session);
     }
 

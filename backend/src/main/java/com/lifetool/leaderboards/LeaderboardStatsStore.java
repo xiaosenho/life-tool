@@ -22,4 +22,7 @@ public interface LeaderboardStatsStore {
     void setStreaksDays(String userId, long days);
 
     void clearAll();
+
+    default void refreshFocusStats(String userId) {
+    }
 }

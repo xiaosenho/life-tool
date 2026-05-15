@@ -226,6 +226,32 @@ public class JdbcLeaderboardStatsStore implements LeaderboardStatsStore {
         }
     }
 
+    @Override
+    public void refreshFocusStats(String userId) {
+        String sql = """
+                INSERT INTO daily_stats (id, user_id, stat_date, focus_total_seconds, created_at, updated_at)
+                SELECT ?::uuid, ?::uuid, CURRENT_DATE,
+                       COALESCE(SUM(actual_seconds), 0), now(), now()
+                FROM focus_sessions
+                WHERE user_id = ?::uuid
+                  AND status = 'completed'
+                  AND started_at >= CURRENT_DATE::timestamptz
+                  AND started_at < (CURRENT_DATE + INTERVAL '1 day')::timestamptz
+                ON CONFLICT (user_id, stat_date) DO UPDATE SET
+                  focus_total_seconds = EXCLUDED.focus_total_seconds,
+                  updated_at = now()
+                """;
+        try (Connection conn = getConnection();
+             var stmt = conn.prepareStatement(sql)) {
+            stmt.setString(1, UUID.randomUUID().toString());
+            stmt.setString(2, userId);
+            stmt.setString(3, userId);
+            stmt.executeUpdate();
+        } catch (SQLException ex) {
+            throw new IllegalStateException("Failed to refresh focus stats", ex);
+        }
+    }
+
     private Connection getConnection() throws SQLException {
         return DriverManager.getConnection(url, username, password);
     }

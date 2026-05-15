@@ -3,20 +3,48 @@ import { Stack, useRouter, useSegments } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useAuthStore } from "@/store/authStore";
 import { initDatabase } from "@/db/database";
+import { authService } from "@/services/authService";
+import { authStorage } from "@/services/authStorage";
 
 export default function RootLayout() {
-  const { isAuthenticated, isLoading, setLoading } = useAuthStore();
+  const { isAuthenticated, isLoading, setLoading, restoreAuth, setAuth } = useAuthStore();
   const segments = useSegments();
   const router = useRouter();
 
   useEffect(() => {
-    // Initialize database
-    initDatabase().catch(console.error);
+    let cancelled = false;
 
-    // Simulate initial auth check
-    setTimeout(() => {
-      setLoading(false);
-    }, 500);
+    const bootstrap = async () => {
+      try {
+        await initDatabase();
+        const session = await authStorage.load();
+        if (!session) {
+          if (!cancelled) setLoading(false);
+          return;
+        }
+
+        if (!cancelled) {
+          restoreAuth(session.user, session.accessToken, session.refreshToken);
+        }
+
+        try {
+          const refreshed = await authService.refresh(session.refreshToken);
+          if (!cancelled) {
+            setAuth(refreshed.user, refreshed.accessToken, refreshed.refreshToken);
+          }
+        } catch (error) {
+          console.warn("刷新登录状态失败，保留本地登录态：", error);
+        }
+      } catch (error) {
+        console.error("启动初始化失败：", error);
+        if (!cancelled) setLoading(false);
+      }
+    };
+
+    bootstrap();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -32,6 +60,10 @@ export default function RootLayout() {
       router.replace("/");
     }
   }, [isAuthenticated, segments, isLoading]);
+
+  if (isLoading) {
+    return null;
+  }
 
   return (
     <>

@@ -79,7 +79,35 @@ export const authService = {
     if (MOCK_ENABLED) {
       return;
     }
-    await apiClient.post("/auth/logout");
+    const refreshToken = await import("@/store/authStore")
+      .then(({ useAuthStore }) => useAuthStore.getState().refreshToken);
+    await apiClient.post("/auth/logout", refreshToken ? { refreshToken } : undefined);
+  },
+
+  async refresh(refreshToken: string): Promise<AuthResponse> {
+    if (MOCK_ENABLED) {
+      return {
+        accessToken: "mock_access_token",
+        refreshToken: "mock_refresh_token",
+        user: {
+          id: "1",
+          email: "test@example.com",
+          displayName: "测试用户",
+        },
+      };
+    }
+
+    const response = await apiClient.post<AuthResponse>("/auth/refresh", {
+      refreshToken,
+    });
+
+    if (!response.success || !response.data) {
+      const error = new Error(response.error?.message || "登录状态已过期") as Error & { code?: string };
+      error.code = response.error?.code;
+      throw error;
+    }
+
+    return response.data;
   },
 
   async getMe(): Promise<User> {
