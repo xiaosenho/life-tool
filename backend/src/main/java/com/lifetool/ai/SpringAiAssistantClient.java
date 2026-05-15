@@ -5,6 +5,8 @@ import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
 import org.springframework.ai.chat.memory.InMemoryChatMemoryRepository;
@@ -22,6 +24,7 @@ import org.springframework.util.MimeTypeUtils;
 import org.springframework.web.client.RestClient;
 
 public class SpringAiAssistantClient implements AiAssistantClient {
+    private static final Logger log = LoggerFactory.getLogger(SpringAiAssistantClient.class);
 
     private final ChatClient chatClient;
     private final ChatClient statelessChatClient;
@@ -54,6 +57,11 @@ public class SpringAiAssistantClient implements AiAssistantClient {
     @Override
     @SuppressWarnings("unchecked")
     public String chatWithImage(String conversationId, String systemPrompt, String imageUrl, String userText) {
+        log.info(
+                "Calling AI chatWithImage via direct REST API. conversationId={}, model={}, imagePath={}",
+                conversationId,
+                chatModel,
+                summarizeUrl(imageUrl));
         List<Map<String, Object>> messages = new java.util.ArrayList<>();
         if (systemPrompt != null && !systemPrompt.isBlank()) {
             messages.add(Map.of(
@@ -66,14 +74,26 @@ public class SpringAiAssistantClient implements AiAssistantClient {
                         Map.of("type", "text", "text", userText != null ? userText : "请识别这张图片中的食物，并估算热量"),
                         Map.of("type", "image_url", "image_url", Map.of("url", imageUrl)))));
 
-        Map<String, Object> response = restClient.post()
-                .uri("/v1/chat/completions")
-                .contentType(MediaType.APPLICATION_JSON)
-                .body(Map.of(
-                        "model", chatModel,
-                        "messages", messages))
-                .retrieve()
-                .body(Map.class);
+        Map<String, Object> response;
+        try {
+            response = restClient.post()
+                    .uri("/v1/chat/completions")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(Map.of(
+                            "model", chatModel,
+                            "messages", messages))
+                    .retrieve()
+                    .body(Map.class);
+        } catch (RuntimeException ex) {
+            log.error(
+                    "AI chatWithImage direct REST call failed. conversationId={}, model={}, imagePath={}, message={}",
+                    conversationId,
+                    chatModel,
+                    summarizeUrl(imageUrl),
+                    ex.getMessage(),
+                    ex);
+            throw ex;
+        }
 
         if (response == null) {
             throw new IllegalStateException("Empty AI response");
@@ -84,6 +104,12 @@ public class SpringAiAssistantClient implements AiAssistantClient {
         }
         Map<String, Object> message = (Map<String, Object>) choices.get(0).get("message");
         Object content = message == null ? null : message.get("content");
+        log.info(
+                "AI chatWithImage direct REST call succeeded. conversationId={}, model={}, choices={}, contentLength={}",
+                conversationId,
+                chatModel,
+                choices.size(),
+                content == null ? 0 : content.toString().length());
         return content == null ? "" : content.toString();
     }
 
@@ -205,5 +231,13 @@ public class SpringAiAssistantClient implements AiAssistantClient {
             throw new IllegalStateException("Failed to load audio bytes");
         }
         return Base64.getEncoder().encodeToString(bytes);
+    }
+
+    private String summarizeUrl(String url) {
+        if (url == null || url.isBlank()) {
+            return "<empty>";
+        }
+        int queryIndex = url.indexOf('?');
+        return queryIndex >= 0 ? url.substring(0, queryIndex) : url;
     }
 }
