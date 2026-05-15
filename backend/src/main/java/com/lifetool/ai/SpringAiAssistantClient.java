@@ -52,20 +52,39 @@ public class SpringAiAssistantClient implements AiAssistantClient {
     }
 
     @Override
+    @SuppressWarnings("unchecked")
     public String chatWithImage(String conversationId, String systemPrompt, String imageUrl, String userText) {
-        List<Message> messages = new java.util.ArrayList<>();
+        List<Map<String, Object>> messages = new java.util.ArrayList<>();
         if (systemPrompt != null && !systemPrompt.isBlank()) {
-            messages.add(new SystemMessage(systemPrompt));
+            messages.add(Map.of(
+                    "role", "system",
+                    "content", systemPrompt));
         }
-        UserMessage userMessage = UserMessage.builder()
-                .text(userText != null ? userText : "请识别这张图片中的食物，并估算热量")
-                .media(List.of(new Media(MimeTypeUtils.IMAGE_JPEG, URI.create(imageUrl))))
-                .build();
-        messages.add(userMessage);
-        Prompt prompt = new Prompt(messages);
-        return statelessChatClient.prompt(prompt)
-                .call()
-                .content();
+        messages.add(Map.of(
+                "role", "user",
+                "content", List.of(
+                        Map.of("type", "text", "text", userText != null ? userText : "请识别这张图片中的食物，并估算热量"),
+                        Map.of("type", "image_url", "image_url", Map.of("url", imageUrl)))));
+
+        Map<String, Object> response = restClient.post()
+                .uri("/v1/chat/completions")
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(Map.of(
+                        "model", chatModel,
+                        "messages", messages))
+                .retrieve()
+                .body(Map.class);
+
+        if (response == null) {
+            throw new IllegalStateException("Empty AI response");
+        }
+        List<Map<String, Object>> choices = (List<Map<String, Object>>) response.get("choices");
+        if (choices == null || choices.isEmpty()) {
+            throw new IllegalStateException("No AI choices returned");
+        }
+        Map<String, Object> message = (Map<String, Object>) choices.get(0).get("message");
+        Object content = message == null ? null : message.get("content");
+        return content == null ? "" : content.toString();
     }
 
     @Override
