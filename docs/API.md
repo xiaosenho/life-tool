@@ -579,7 +579,6 @@ DELETE /api/ai/memories/{id}
 
 ```json
 {
-  "imageUrl": "https://signed-read-url.example.com/meal.jpg",
   "mediaAssetId": "uuid",
   "mealType": "lunch",
   "customPrompt": "这是一份午餐，请估算热量。"
@@ -600,6 +599,8 @@ DELETE /api/ai/memories/{id}
 说明：
 
 - 当前接口为同步识别接口，不再使用 `/jobs` 轮询模型。
+- `mediaAssetId` 为必填；后端会基于媒体资产实时生成可访问的 COS 短时效读链接。
+- 当模型拉取图片命中 COS `403`（签名过期等场景）时，后端会自动刷新读链接并重试一次。
 - 识别成功后，后端会为当前用户生成一条饮食记录，并返回 `mealLogId`。
 - `totalCalories` 由后端从模型文本中提取；无法可靠提取时返回 0 或后端默认值。
 - 前端识别成功后应刷新今日饮食汇总。

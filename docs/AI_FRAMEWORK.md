@@ -134,16 +134,17 @@ POST /api/ai/food-recognition
 
 请求包含：
 
-- `imageUrl`：AI 可访问的图片 URL，通常来自媒体资产 `readUrl`。
-- `mediaAssetId`：可选，绑定已上传的媒体资产。
+- `mediaAssetId`：必填，绑定已上传的媒体资产，后端会在识图时实时生成可访问的短时效图片 URL。
 - `mealType`：可选，默认由后端按当前时间或请求值归类。
 - `customPrompt`：可选，用户补充说明。
 
 当前流程：
 
 ```text
-imageUrl / mediaAssetId
+mediaAssetId
+  -> AiService 生成 COS 短时效读链接
   -> AiService 调用 AiAssistantClient.chatWithImage
+  -> 若模型下载图片返回 403，则刷新读链接并自动重试一次
   -> 模型返回中文识别结果和热量估算
   -> MealService.recordAiRecognition 写入 meal_logs
   -> 返回 result、disclaimer、mealLogId、totalCalories
@@ -196,4 +197,3 @@ imageUrl / mediaAssetId
 - MVP 不实现自主 Agent 长任务。
 - MVP 不把好友数据作为用户对话上下文。
 - MVP 不提供医疗诊断、财务投资建议或法律建议。
-

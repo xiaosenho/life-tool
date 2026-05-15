@@ -151,7 +151,7 @@ Config      安全、AI、COS、迁移和环境配置
 3. 客户端直传图片到腾讯云 COS。
 4. 客户端调用 `POST /api/media/assets` 保存媒体资产记录。
 5. 后端返回媒体资产信息和短有效期 `readUrl`。
-6. 客户端调用 `POST /api/ai/food-recognition`，传入 `imageUrl`、`mediaAssetId` 和可选 `mealType`。
+6. 客户端调用 `POST /api/ai/food-recognition`，传入 `mediaAssetId` 和可选 `mealType`。
 7. 后端通过 AI 多模态能力识别食物和热量。
 8. 后端将识别结果写入当前用户饮食记录，并返回 `mealLogId` 与 `totalCalories`。
 9. 客户端刷新今日饮食统计。
@@ -263,4 +263,3 @@ Records 页承载饮食、记账、纪念日/重要事件三类个人记录。�
 - 云存储密钥不得下发到客户端。
 - AI 请求中不得包含无关个人敏感信息。
 - 生产环境必须通过 `.env` 或云端密钥系统注入数据库、Redis、COS 和 AI Key。
-

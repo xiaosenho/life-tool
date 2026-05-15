@@ -177,15 +177,17 @@ class AiControllerTest {
 
     @Test
     void foodRecognitionCreatesTodayMealLog() throws Exception {
+        TestAsset asset = createMealAsset(tokenA);
+
         mockMvc.perform(post("/api/ai/food-recognition")
                         .header("Authorization", "Bearer " + tokenA)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
-                                  "imageUrl": "https://example.com/meal.jpg",
+                                  "mediaAssetId": "%s",
                                   "mealType": "lunch"
                                 }
-                                """))
+                                """.formatted(asset.id())))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.result").isString())
                 .andExpect(jsonPath("$.data.mealLogId").isString())

@@ -8,9 +8,9 @@ public record FoodRecognitionRequest(
         String mealType,
         String mediaAssetId
 ) {
-    @AssertTrue(message = "imageUrl or mediaAssetId is required")
+    @AssertTrue(message = "mediaAssetId is required")
     public boolean hasImageSource() {
-        return hasText(imageUrl) || hasText(mediaAssetId);
+        return hasText(mediaAssetId);
     }
 
     private static boolean hasText(String value) {

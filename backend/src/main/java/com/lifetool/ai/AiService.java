@@ -7,6 +7,8 @@ import java.util.Map;
 import java.util.Set;
 
 import org.springframework.stereotype.Service;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.lifetool.ai.dto.AiChatMessageResponse;
 import com.lifetool.ai.dto.AiChatMessagesResponse;
@@ -26,6 +28,7 @@ import com.lifetool.meals.MealService;
 
 @Service
 public class AiService {
+    private static final Logger log = LoggerFactory.getLogger(AiService.class);
     private static final String SYSTEM_PROMPT = """
             你是 LifeTool AI 助手，帮助用户管理专注、习惯、饮食、记账和纪念日。
             规则：
@@ -174,7 +177,7 @@ public class AiService {
         String response;
         try {
             UserDataTools.setCurrentUserId(userId);
-            response = assistantClient.chatWithImage("food-" + userId, systemPrompt, imageUrl, userText);
+            response = chatWithImageRetryOnExpiredSignedUrl(userId, request, systemPrompt, userText, imageUrl);
         } catch (RuntimeException ex) {
             throw new AiException("AI_RECOGNITION_FAILED", "AI 识图失败，请确认图片可以访问或稍后重试");
         } finally {
@@ -193,11 +196,35 @@ public class AiService {
                 mealLog.getTotalCalories());
     }
 
-    private String resolveFoodImageUrl(String userId, FoodRecognitionRequest request) {
-        if (hasText(request.mediaAssetId())) {
-            return mediaService.generateReadUrl(userId, request.mediaAssetId(), "meal_photo");
+    private String chatWithImageRetryOnExpiredSignedUrl(
+            String userId,
+            FoodRecognitionRequest request,
+            String systemPrompt,
+            String userText,
+            String firstImageUrl) {
+        try {
+            return assistantClient.chatWithImage("food-" + userId, systemPrompt, firstImageUrl, userText);
+        } catch (RuntimeException firstEx) {
+            if (!isCosDownload403(firstEx)) {
+                throw firstEx;
+            }
+            String refreshedImageUrl = resolveFoodImageUrl(userId, request);
+            log.warn("AI image download got 403, retrying with refreshed signed URL. userId={}, mediaAssetId={}",
+                    userId, request.mediaAssetId());
+            return assistantClient.chatWithImage("food-" + userId, systemPrompt, refreshedImageUrl, userText);
         }
-        return request.imageUrl();
+    }
+
+    private boolean isCosDownload403(Throwable ex) {
+        String message = ex.getMessage();
+        if (!hasText(message)) {
+            return false;
+        }
+        return message.contains("Error while downloading") && message.contains("status code: 403");
+    }
+
+    private String resolveFoodImageUrl(String userId, FoodRecognitionRequest request) {
+        return mediaService.generateReadUrl(userId, request.mediaAssetId(), "meal_photo");
     }
 
     private String buildSystemPrompt(boolean useLongTermMemory, String userId) {

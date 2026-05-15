@@ -71,7 +71,7 @@ export const aiService = {
     return apiClient.delete<void>(`/ai/memories/${id}`);
   },
 
-  recognizeFood(input: { mediaAssetId?: string; imageUrl?: string; customPrompt?: string; mealType?: string }) {
+  recognizeFood(input: { mediaAssetId: string; customPrompt?: string; mealType?: string }) {
     return apiClient.post<{ result: string; disclaimer: string; mealLogId?: string; totalCalories?: number }>(
       "/ai/food-recognition",
       input
