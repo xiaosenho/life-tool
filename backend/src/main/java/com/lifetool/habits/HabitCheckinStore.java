@@ -9,6 +9,8 @@ public interface HabitCheckinStore {
 
     Optional<HabitCheckin> findByHabitIdAndDate(String habitId, LocalDate date);
 
+    void deleteByHabitIdAndDate(String habitId, LocalDate date);
+
     List<HabitCheckin> findByHabitId(String habitId);
 
     List<HabitCheckin> findByUserIdAndDate(String userId, LocalDate date);

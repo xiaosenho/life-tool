@@ -29,6 +29,12 @@ public class InMemoryHabitCheckinStore implements HabitCheckinStore {
     }
 
     @Override
+    public void deleteByHabitIdAndDate(String habitId, LocalDate date) {
+        byId.entrySet().removeIf(entry ->
+                habitId.equals(entry.getValue().getHabitId()) && date.equals(entry.getValue().getCheckinDate()));
+    }
+
+    @Override
     public List<HabitCheckin> findByHabitId(String habitId) {
         return byId.values().stream()
                 .filter(c -> habitId.equals(c.getHabitId()))

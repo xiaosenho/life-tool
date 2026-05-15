@@ -85,4 +85,13 @@ public class HabitController {
         List<HabitCheckinResponse> response = service.listCheckins(userId, id, from, to);
         return ResponseEntity.ok(ApiResponse.ok(response));
     }
+
+    @DeleteMapping("/{id}/checkins")
+    public ResponseEntity<ApiResponse<Void>> cancelCheckin(
+            @AuthenticationPrincipal String userId,
+            @PathVariable String id,
+            @RequestParam(required = false) LocalDate checkinDate) {
+        service.cancelCheckin(userId, id, checkinDate);
+        return ResponseEntity.ok(ApiResponse.ok(null));
+    }
 }

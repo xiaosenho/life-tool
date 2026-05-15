@@ -12,8 +12,8 @@ public class AiConfiguration {
 
     @Bean
     @ConditionalOnProperty(name = "lifetool.ai.mock-enabled", havingValue = "true", matchIfMissing = true)
-    public AiAssistantClient mockAiAssistantClient() {
-        return new MockAiAssistantClient();
+    public AiAssistantClient mockAiAssistantClient(UserDataTools userDataTools) {
+        return new MockAiAssistantClient(userDataTools);
     }
 
     @Bean

@@ -1,9 +1,23 @@
 package com.lifetool.ai;
 
 import java.util.List;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 public class MockAiAssistantClient implements AiAssistantClient {
+    private static final Pattern EXPLICIT_PREFERENCE_PATTERN = Pattern.compile(
+            "(以后|默认|总是|请记住|记住我|今后).*(简洁|中文|可执行|步骤|重点|结论|少讲理论|详细|减脂|预算)",
+            Pattern.CASE_INSENSITIVE);
+
+    private final UserDataTools userDataTools;
+
+    public MockAiAssistantClient() {
+        this.userDataTools = null;
+    }
+
+    public MockAiAssistantClient(UserDataTools userDataTools) {
+        this.userDataTools = userDataTools;
+    }
 
     @Override
     public String chatWithImage(String conversationId, String systemPrompt, String imageUrl, String userText) {
@@ -25,6 +39,10 @@ public class MockAiAssistantClient implements AiAssistantClient {
 
         boolean useLongTermMemory = systemPrompt != null && systemPrompt.contains("长期记忆");
         String memoryText = useLongTermMemory ? "已启用长期记忆。" : "本次未使用长期记忆。";
+        if (userDataTools != null && EXPLICIT_PREFERENCE_PATTERN.matcher(lastUserContent).find()) {
+            userDataTools.saveLongTermMemoryTool("preference", lastUserContent.strip());
+            memoryText += " 已为你记录这条长期偏好。";
+        }
 
         return "收到：" + lastUserContent.strip() + "\n" + toolText + "\n" + memoryText
                 + "\n建议先从一个最小可执行动作开始，并在记录数据后继续让我结合趋势复盘。";

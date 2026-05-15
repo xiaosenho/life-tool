@@ -18,6 +18,7 @@ import org.springframework.util.MimeTypeUtils;
 public class SpringAiAssistantClient implements AiAssistantClient {
 
     private final ChatClient chatClient;
+    private final ChatClient statelessChatClient;
     private final UserDataTools userDataTools;
 
     public SpringAiAssistantClient(ChatClient.Builder chatClientBuilder, UserDataTools userDataTools) {
@@ -28,6 +29,7 @@ public class SpringAiAssistantClient implements AiAssistantClient {
         this.chatClient = chatClientBuilder
                 .defaultAdvisors(MessageChatMemoryAdvisor.builder(chatMemory).build())
                 .build();
+        this.statelessChatClient = chatClientBuilder.build();
         this.userDataTools = userDataTools;
     }
 
@@ -43,8 +45,7 @@ public class SpringAiAssistantClient implements AiAssistantClient {
                 .build();
         messages.add(userMessage);
         Prompt prompt = new Prompt(messages);
-        return chatClient.prompt(prompt)
-                .advisors(a -> a.param("chat_memory_conversation_id", conversationId))
+        return statelessChatClient.prompt(prompt)
                 .call()
                 .content();
     }

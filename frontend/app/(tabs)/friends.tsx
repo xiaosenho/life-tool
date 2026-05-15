@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -12,7 +12,7 @@ import {
   TouchableOpacity,
   View
 } from "react-native";
-import { useRouter } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 
 import { Screen } from "@/components/Screen";
 import {
@@ -42,6 +42,13 @@ const boardConfigs: BoardConfig[] = [
   { key: "streaks", label: "连续打卡", unit: "天" }
 ];
 
+const boardDescriptions: Record<BoardKey, string> = {
+  focus_today: "统计今天累计专注时长，数值越高排名越靠前。",
+  focus_week: "统计最近 7 天累计专注时长，数值越高排名越靠前。",
+  habits_today: "统计今天的习惯完成率，展示已完成习惯数占全部习惯数的比例。",
+  streaks: "连续打卡表示连续多少天完成过至少 1 个习惯打卡，中断 1 天会重新开始计算。"
+};
+
 export default function FriendsScreen() {
   const router = useRouter();
   const userId = useAuthStore((state) => state.user?.id ?? "");
@@ -60,6 +67,7 @@ export default function FriendsScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const hasMountedRef = useRef(false);
 
   const incomingRequests = useMemo(
     () => requests.filter((item) => item.status === "PENDING" && item.toUserId === userId),
@@ -116,7 +124,27 @@ export default function FriendsScreen() {
     void loadData();
   }, [loadData]);
 
+  useFocusEffect(
+    useCallback(() => {
+      void loadData(true);
+    }, [loadData])
+  );
+
+  useEffect(() => {
+    if (!hasMountedRef.current) {
+      hasMountedRef.current = true;
+      return;
+    }
+    void loadData(true);
+  }, [activeTab, loadData]);
+
   async function handleRefresh() {
+    setRefreshing(true);
+    await loadData(true);
+  }
+
+  async function handleBoardPress(boardKey: BoardKey) {
+    setActiveBoard(boardKey);
     setRefreshing(true);
     await loadData(true);
   }
@@ -268,7 +296,9 @@ export default function FriendsScreen() {
             {boardConfigs.map((board) => (
               <Pressable
                 key={board.key}
-                onPress={() => setActiveBoard(board.key)}
+                onPress={() => {
+                  void handleBoardPress(board.key);
+                }}
                 style={[styles.boardChip, activeBoard === board.key && styles.boardChipActive]}
               >
                 <Text style={[styles.boardChipText, activeBoard === board.key && styles.boardChipTextActive]}>
@@ -289,6 +319,7 @@ export default function FriendsScreen() {
                 <Text style={styles.summaryText}>
                   与前一名差距 {formatBoardValue(activeBoardData.metric, activeBoardData.gapToPrevious)} {boardConfigs.find((item) => item.key === activeBoard)?.unit}
                 </Text>
+                <Text style={styles.summaryHint}>{boardDescriptions[activeBoard]}</Text>
               </>
             )}
           </View>
@@ -681,6 +712,12 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: "800"
   },
+  summaryHint: {
+    color: colors.text,
+    fontSize: 13,
+    lineHeight: 20,
+    marginTop: 6
+  },
   summaryText: {
     color: colors.muted,
     fontSize: 14,
@@ -725,4 +762,3 @@ const styles = StyleSheet.create({
     fontWeight: "800"
   }
 });
-

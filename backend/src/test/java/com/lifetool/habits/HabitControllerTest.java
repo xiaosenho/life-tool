@@ -1,6 +1,7 @@
 package com.lifetool.habits;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -49,6 +50,34 @@ class HabitControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.length()").value(1))
                 .andExpect(jsonPath("$.data[0].checkinDate").value(localDate));
+    }
+
+    @Test
+    void cancelCheckinRemovesCompletedHabitForDate() throws Exception {
+        String unique = String.valueOf(System.nanoTime());
+        String token = registerAndToken("habit-cancel-" + unique + "@test.com");
+        String habitId = createHabit(token);
+        String localDate = LocalDate.now().toString();
+
+        mockMvc.perform(post("/api/habits/{id}/checkins", habitId)
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "count": 1,
+                                  "checkinDate": "%s"
+                                }
+                                """.formatted(localDate)))
+                .andExpect(status().isCreated());
+
+        mockMvc.perform(delete("/api/habits/{id}/checkins?checkinDate={date}", habitId, localDate)
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(get("/api/habits/{id}/checkins?from={from}&to={to}", habitId, localDate, localDate)
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.length()").value(0));
     }
 
     private String createHabit(String token) throws Exception {

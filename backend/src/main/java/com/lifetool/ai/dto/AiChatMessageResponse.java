@@ -12,10 +12,17 @@ public record AiChatMessageResponse(
         String content,
         String disclaimer,
         List<AiToolCallStatusResponse> toolCalls,
+        boolean longTermMemorySaved,
         Instant createdAt
 ) {
     public static AiChatMessageResponse from(AiChatMessage message, String disclaimer,
                                              List<AiToolCallStatusResponse> toolCalls) {
+        return from(message, disclaimer, toolCalls, false);
+    }
+
+    public static AiChatMessageResponse from(AiChatMessage message, String disclaimer,
+                                             List<AiToolCallStatusResponse> toolCalls,
+                                             boolean longTermMemorySaved) {
         return new AiChatMessageResponse(
                 message.getId(),
                 message.getId(),
@@ -23,6 +30,7 @@ public record AiChatMessageResponse(
                 message.getContent(),
                 disclaimer,
                 toolCalls,
+                longTermMemorySaved,
                 message.getCreatedAt());
     }
 }

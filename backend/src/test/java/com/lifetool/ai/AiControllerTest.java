@@ -22,15 +22,22 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 class AiControllerTest {
     @Autowired private MockMvc mockMvc;
     @Autowired private ObjectMapper objectMapper;
+    @Autowired private UserDataTools userDataTools;
 
     private String tokenA;
     private String tokenB;
+    private String userIdA;
+    private String userIdB;
 
     @BeforeEach
     void setUp() throws Exception {
         String unique = String.valueOf(System.nanoTime());
-        tokenA = registerAndToken("ai-a-" + unique + "@test.com", "AI A");
-        tokenB = registerAndToken("ai-b-" + unique + "@test.com", "AI B");
+        AuthInfo authA = register("ai-a-" + unique + "@test.com", "AI A");
+        AuthInfo authB = register("ai-b-" + unique + "@test.com", "AI B");
+        tokenA = authA.token();
+        tokenB = authB.token();
+        userIdA = authA.userId();
+        userIdB = authB.userId();
     }
 
     @Test
@@ -70,6 +77,31 @@ class AiControllerTest {
                 .andExpect(jsonPath("$.data.messages.length()").value(2))
                 .andExpect(jsonPath("$.data.messages[0].role").value("user"))
                 .andExpect(jsonPath("$.data.messages[1].role").value("assistant"));
+    }
+
+    @Test
+    void explicitPreferenceMessageMarksLongTermMemorySaved() throws Exception {
+        String sessionId = createSession(tokenA);
+
+        mockMvc.perform(post("/api/ai/chat/sessions/{id}/messages", sessionId)
+                        .header("Authorization", "Bearer " + tokenA)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "content": "以后都用简洁中文回答我",
+                                  "enabledTools": ["get_user_profile_context"]
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.role").value("assistant"))
+                .andExpect(jsonPath("$.data.longTermMemorySaved").value(true))
+                .andExpect(jsonPath("$.data.toolCalls[1].toolName").value("save_long_term_memory"))
+                .andExpect(jsonPath("$.data.toolCalls[1].status").value("succeeded"));
+
+        mockMvc.perform(get("/api/ai/chat/sessions/{id}/messages", sessionId)
+                        .header("Authorization", "Bearer " + tokenA))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.messages[1].longTermMemorySaved").value(true));
     }
 
     @Test
@@ -229,6 +261,35 @@ class AiControllerTest {
     }
 
     @Test
+    void repeatedFoodRecognitionDoesNotReuseChatMemoryImageMessages() throws Exception {
+        TestAsset asset = createMealAsset(tokenA);
+
+        mockMvc.perform(post("/api/ai/food-recognition")
+                        .header("Authorization", "Bearer " + tokenA)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "mediaAssetId": "%s",
+                                  "mealType": "dinner"
+                                }
+                                """.formatted(asset.id())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.result").isString());
+
+        mockMvc.perform(post("/api/ai/food-recognition")
+                        .header("Authorization", "Bearer " + tokenA)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "mediaAssetId": "%s",
+                                  "mealType": "dinner"
+                                }
+                                """.formatted(asset.id())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.result").isString());
+    }
+
+    @Test
     void foodRecognitionRejectsOtherUsersMediaAsset() throws Exception {
         TestAsset asset = createMealAsset(tokenA);
 
@@ -243,6 +304,27 @@ class AiControllerTest {
                                 """.formatted(asset.id())))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.error.code").value("FORBIDDEN"));
+    }
+
+    @Test
+    void saveLongTermMemoryToolStoresExplicitPreferenceWithoutDuplicates() throws Exception {
+        createSession(tokenA);
+
+        UserDataTools.setCurrentUserId(userIdA);
+        try {
+            var first = userDataTools.saveLongTermMemoryTool("preference", "以后都用简洁中文回答我");
+            var second = userDataTools.saveLongTermMemoryTool("preference", "以后都用简洁中文回答我");
+            org.junit.jupiter.api.Assertions.assertEquals(true, first.get("saved"));
+            org.junit.jupiter.api.Assertions.assertEquals(false, second.get("saved"));
+        } finally {
+            UserDataTools.clearCurrentUserId();
+        }
+
+        mockMvc.perform(get("/api/ai/memories")
+                        .header("Authorization", "Bearer " + tokenA))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items.length()").value(2))
+                .andExpect(jsonPath("$.data.items[0].content").value("以后都用简洁中文回答我"));
     }
 
     private String createSession(String token) throws Exception {
@@ -296,14 +378,18 @@ class AiControllerTest {
 
     private record TestAsset(String id, String objectKey) {}
 
-    private String registerAndToken(String email, String name) throws Exception {
+    private AuthInfo register(String email, String name) throws Exception {
         String body = "{\"email\":\"" + email + "\",\"password\":\"secret123\",\"displayName\":\"" + name + "\"}";
         MvcResult result = mockMvc.perform(post("/api/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body))
                 .andExpect(status().isCreated())
                 .andReturn();
-        return objectMapper.readTree(result.getResponse().getContentAsString())
-                .get("data").get("accessToken").asText();
+        var data = objectMapper.readTree(result.getResponse().getContentAsString()).get("data");
+        return new AuthInfo(
+                data.get("accessToken").asText(),
+                data.get("user").get("id").asText());
     }
+
+    private record AuthInfo(String token, String userId) {}
 }

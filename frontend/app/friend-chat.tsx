@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -13,7 +13,7 @@ import {
   TouchableOpacity,
   View
 } from "react-native";
-import { Stack, useLocalSearchParams, useRouter } from "expo-router";
+import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 
 import { Screen } from "@/components/Screen";
 import { FriendMessage, friendService } from "@/services/friendService";
@@ -22,6 +22,7 @@ import { colors } from "@/theme/colors";
 import { formatDateTimeCn } from "@/utils/time";
 
 export default function FriendChatScreen() {
+  const POLL_INTERVAL_MS = 5000;
   const router = useRouter();
   const { friendUserId, friendName } = useLocalSearchParams<{ friendUserId: string; friendName?: string }>();
   const userId = useAuthStore((state) => state.user?.id ?? "");
@@ -30,6 +31,7 @@ export default function FriendChatScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [sending, setSending] = useState(false);
+  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const title = useMemo(() => friendName || "聊天", [friendName]);
 
@@ -59,6 +61,22 @@ export default function FriendChatScreen() {
   useEffect(() => {
     void loadMessages();
   }, [loadMessages]);
+
+  useFocusEffect(
+    useCallback(() => {
+      void loadMessages(true);
+      pollingRef.current = setInterval(() => {
+        void loadMessages(true);
+      }, POLL_INTERVAL_MS);
+
+      return () => {
+        if (pollingRef.current) {
+          clearInterval(pollingRef.current);
+          pollingRef.current = null;
+        }
+      };
+    }, [loadMessages])
+  );
 
   async function onRefresh() {
     setRefreshing(true);
@@ -260,4 +278,3 @@ const styles = StyleSheet.create({
     width: 46
   }
 });
-

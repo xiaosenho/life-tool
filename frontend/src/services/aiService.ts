@@ -26,6 +26,7 @@ export interface ChatMessage {
   content: string;
   disclaimer?: string;
   toolCalls?: ToolCallStatus[];
+  longTermMemorySaved?: boolean;
   createdAt: string;
 }
 

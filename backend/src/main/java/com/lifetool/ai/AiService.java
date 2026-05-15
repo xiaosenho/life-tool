@@ -1,5 +1,6 @@
 package com.lifetool.ai;
 
+import java.util.LinkedHashMap;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -34,6 +35,8 @@ public class AiService {
             规则：
             - 只使用已授权的用户数据工具读取汇总信息。
             - 不直接修改用户数据。
+            - 仅当用户明确表达长期稳定偏好（例如“以后都用简洁中文回答我”“请记住我更关注减脂饮食”）时，调用 save_long_term_memory 保存长期记忆。
+            - 不要保存临时要求、一次性上下文或模糊表达。
             - 返回简洁、可执行的中文建议。
             - 涉及健康、财务或法律问题时，明确说明仅供参考。
             """;
@@ -92,21 +95,29 @@ public class AiService {
                 .toList();
 
         String assistantContent;
+        List<Map<String, Object>> savedMemoryEvents = List.of();
         try {
             UserDataTools.setCurrentUserId(userId);
+            UserDataTools.resetSavedMemoryEvents();
             assistantContent = assistantClient.chat(sessionId, systemPrompt, history, toolResults);
+            savedMemoryEvents = UserDataTools.consumeSavedMemoryEvents();
         } finally {
+            if (savedMemoryEvents.isEmpty()) {
+                UserDataTools.consumeSavedMemoryEvents();
+            }
             UserDataTools.clearCurrentUserId();
         }
 
         AiChatMessage assistantMessage = chatStore.appendMessage(new AiChatMessage(
                 sessionId, userId, "assistant", assistantContent, chatStore.nextSeq(sessionId)));
+        appendSavedMemoryToolCalls(userId, sessionId, assistantMessage.getId(), savedMemoryEvents);
         session.touch();
 
         return AiChatMessageResponse.from(
                 assistantMessage,
                 properties.getDisclaimer(),
-                toolCalls.stream().map(AiToolCallStatusResponse::from).toList());
+                mergeToolCallStatuses(toolCalls, savedMemoryEvents),
+                !savedMemoryEvents.isEmpty());
     }
 
     public AiChatMessagesResponse listMessages(String userId, String sessionId) {
@@ -117,7 +128,8 @@ public class AiService {
                         "assistant".equals(message.getRole()) ? properties.getDisclaimer() : null,
                         chatStore.listToolCalls(message.getId()).stream()
                                 .map(AiToolCallStatusResponse::from)
-                                .toList()))
+                                .toList(),
+                        hasSavedMemoryToolCall(message.getId())))
                 .toList();
         return new AiChatMessagesResponse(messages);
     }
@@ -137,8 +149,11 @@ public class AiService {
         String advice;
         try {
             UserDataTools.setCurrentUserId(userId);
+            UserDataTools.resetSavedMemoryEvents();
             advice = assistantClient.chat("life-advice-" + userId, systemPrompt, history, toolResults);
+            UserDataTools.consumeSavedMemoryEvents();
         } finally {
+            UserDataTools.consumeSavedMemoryEvents();
             UserDataTools.clearCurrentUserId();
         }
 
@@ -299,6 +314,44 @@ public class AiService {
         if (memoryStore.findEnabledByUserId(userId).isEmpty()) {
             memoryStore.save(new AiMemoryItem(userId, "preference", "默认优先返回中文、简洁、可执行的生活建议。", "system_extracted"));
         }
+    }
+
+    private List<AiToolCallStatusResponse> mergeToolCallStatuses(
+            List<AiToolCall> toolCalls,
+            List<Map<String, Object>> savedMemoryEvents) {
+        List<AiToolCallStatusResponse> statuses = new ArrayList<>(
+                toolCalls.stream().map(AiToolCallStatusResponse::from).toList());
+        if (!savedMemoryEvents.isEmpty()) {
+            statuses.add(new AiToolCallStatusResponse("save_long_term_memory", "succeeded"));
+        }
+        return statuses;
+    }
+
+    private void appendSavedMemoryToolCalls(
+            String userId,
+            String sessionId,
+            String messageId,
+            List<Map<String, Object>> savedMemoryEvents) {
+        for (Map<String, Object> event : savedMemoryEvents) {
+            Map<String, Object> arguments = new LinkedHashMap<>();
+            arguments.put("memoryType", event.get("memoryType"));
+            arguments.put("content", event.get("content"));
+            chatStore.appendToolCall(new AiToolCall(
+                    userId,
+                    sessionId,
+                    messageId,
+                    "save_long_term_memory",
+                    arguments,
+                    event,
+                    "succeeded",
+                    0L));
+        }
+    }
+
+    private boolean hasSavedMemoryToolCall(String messageId) {
+        return chatStore.listToolCalls(messageId).stream()
+                .anyMatch(toolCall -> "save_long_term_memory".equals(toolCall.getToolName())
+                        && "succeeded".equals(toolCall.getStatus()));
     }
 
     private static boolean hasText(String value) {

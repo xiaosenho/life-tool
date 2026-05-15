@@ -4,6 +4,8 @@ import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.ArrayList;
 
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.stereotype.Component;
@@ -23,23 +25,30 @@ import com.lifetool.meals.MealSummary;
 
 @Component
 public class UserDataTools {
+    private static final List<String> SUPPORTED_MEMORY_TYPES = List.of("preference");
+    private static final ThreadLocal<List<Map<String, Object>>> SAVED_MEMORY_EVENTS =
+            ThreadLocal.withInitial(ArrayList::new);
+
     private final FocusPreferenceStore focusPreferenceStore;
     private final LedgerService ledgerService;
     private final EventStore eventStore;
     private final HabitStore habitStore;
     private final HabitCheckinStore habitCheckinStore;
     private final MealService mealService;
+    private final AiMemoryStore memoryStore;
 
     private static final ThreadLocal<String> CURRENT_USER_ID = new ThreadLocal<>();
 
     public UserDataTools(FocusPreferenceStore focusPreferenceStore, LedgerService ledgerService, EventStore eventStore,
-                         HabitStore habitStore, HabitCheckinStore habitCheckinStore, MealService mealService) {
+                         HabitStore habitStore, HabitCheckinStore habitCheckinStore, MealService mealService,
+                         AiMemoryStore memoryStore) {
         this.focusPreferenceStore = focusPreferenceStore;
         this.ledgerService = ledgerService;
         this.eventStore = eventStore;
         this.habitStore = habitStore;
         this.habitCheckinStore = habitCheckinStore;
         this.mealService = mealService;
+        this.memoryStore = memoryStore;
     }
 
     public static void setCurrentUserId(String userId) {
@@ -48,6 +57,16 @@ public class UserDataTools {
 
     public static void clearCurrentUserId() {
         CURRENT_USER_ID.remove();
+    }
+
+    public static void resetSavedMemoryEvents() {
+        SAVED_MEMORY_EVENTS.get().clear();
+    }
+
+    public static List<Map<String, Object>> consumeSavedMemoryEvents() {
+        List<Map<String, Object>> events = List.copyOf(SAVED_MEMORY_EVENTS.get());
+        SAVED_MEMORY_EVENTS.remove();
+        return events;
     }
 
     private String requireUserId() {
@@ -98,6 +117,39 @@ public class UserDataTools {
     @Tool(name = "get_user_profile_context", description = "查询用户基础偏好、时区和隐私配置摘要")
     public Map<String, Object> getUserProfileContextTool() {
         return getUserProfileContext(requireUserId());
+    }
+
+    @Tool(name = "save_long_term_memory", description = "仅当用户明确表达长期稳定偏好时调用，例如“以后都用简洁中文回答我”。不要保存临时要求、一次性上下文或模糊表述。")
+    public Map<String, Object> saveLongTermMemoryTool(String memoryType, String content) {
+        String userId = requireUserId();
+        String normalizedType = normalizeMemoryType(memoryType);
+        String normalizedContent = normalizeMemoryContent(content);
+
+        boolean duplicated = memoryStore.findEnabledByUserId(userId).stream()
+                .anyMatch(item -> Objects.equals(item.getType(), normalizedType)
+                        && Objects.equals(item.getContent(), normalizedContent));
+        if (duplicated) {
+            return Map.of(
+                    "saved", false,
+                    "reason", "duplicate",
+                    "memoryType", normalizedType,
+                    "content", normalizedContent);
+        }
+
+        AiMemoryItem memory = memoryStore.save(new AiMemoryItem(
+                userId,
+                normalizedType,
+                normalizedContent,
+                "user_explicit"));
+        SAVED_MEMORY_EVENTS.get().add(Map.of(
+                "memoryId", memory.getId(),
+                "memoryType", memory.getType(),
+                "content", memory.getContent()));
+        return Map.of(
+                "saved", true,
+                "memoryId", memory.getId(),
+                "memoryType", memory.getType(),
+                "content", memory.getContent());
     }
 
     Map<String, Object> getFocusSummary(String userId) {
@@ -195,6 +247,25 @@ public class UserDataTools {
 
     Map<String, Object> getUserProfileContext(String userId) {
         return summaryOnly("profile", "已使用当前登录用户上下文，未暴露用户原始资料。");
+    }
+
+    private static String normalizeMemoryType(String value) {
+        String normalized = value == null ? "" : value.trim().toLowerCase();
+        if (!SUPPORTED_MEMORY_TYPES.contains(normalized)) {
+            throw new AiException("VALIDATION_ERROR", "Unsupported long-term memory type: " + value);
+        }
+        return normalized;
+    }
+
+    private static String normalizeMemoryContent(String value) {
+        if (value == null || value.isBlank()) {
+            throw new AiException("VALIDATION_ERROR", "Long-term memory content is required");
+        }
+        String normalized = value.trim().replaceAll("\\s+", " ");
+        if (normalized.length() > 200) {
+            throw new AiException("VALIDATION_ERROR", "Long-term memory content is too long");
+        }
+        return normalized;
     }
 
     private static Map<String, Object> summaryOnly(String domain, String summary) {

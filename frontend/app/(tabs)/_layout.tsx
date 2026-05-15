@@ -17,6 +17,7 @@ const tabIcons: Record<string, IconName> = {
 export default function TabLayout() {
   return (
     <Tabs
+      backBehavior="history"
       screenOptions={({ route }) => ({
         headerShown: false,
         tabBarActiveTintColor: colors.accent,
@@ -37,7 +38,6 @@ export default function TabLayout() {
       <Tabs.Screen name="focus" options={{ title: "专注" }} />
       <Tabs.Screen name="records" options={{ title: "记录" }} />
       <Tabs.Screen name="friends" options={{ title: "好友" }} />
-      <Tabs.Screen name="ai" options={{ href: null, title: "AI" }} />
       <Tabs.Screen name="profile" options={{ title: "我的" }} />
     </Tabs>
   );

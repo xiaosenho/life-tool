@@ -123,9 +123,30 @@ export default function TodayScreen() {
 
   const handleCheckin = async (habitId: string) => {
     const isChecked = checkins.some(c => c.habit_id === habitId);
-    if (isChecked) return;
-
     const date = todayKey();
+    if (isChecked) {
+      try {
+        const response = await habitService.cancelCheckinOnServer(habitId, date);
+        if (!response.success) {
+          throw new Error(response.error?.message || "取消完成失败");
+        }
+        setCheckins((current) => current.filter((checkin) => !(checkin.habit_id === habitId && checkin.checkin_date === date)));
+        setOfflineNotice(null);
+        loadData();
+      } catch (error) {
+        try {
+          await habitService.cancelCheckin(habitId, date);
+          setCheckins((current) => current.filter((checkin) => !(checkin.habit_id === habitId && checkin.checkin_date === date)));
+          setOfflineNotice("当前无法连接服务器，本次取消完成已保存到本地。恢复网络后请到“我的”页手动同步。");
+          Alert.alert("已离线保存", "本次取消完成已保存到本地。恢复网络后请到“我的”页点击立即同步。");
+          loadData();
+        } catch {
+          Alert.alert("错误", error instanceof Error ? error.message : "取消完成失败");
+        }
+      }
+      return;
+    }
+
     try {
       const response = await habitService.checkinOnServer(habitId, { checkinDate: date });
       if (!response.success || !response.data) {
@@ -199,11 +220,13 @@ export default function TodayScreen() {
                   key={habit.id}
                   style={[styles.habitItem, isChecked && styles.habitItemChecked]}
                   onPress={() => handleCheckin(habit.id)}
-                  disabled={isChecked}
                 >
                   <View style={styles.habitInfo}>
                     <Text style={[styles.habitName, isChecked && styles.habitTextChecked]}>
                       {habit.name}
+                    </Text>
+                    <Text style={styles.habitActionText}>
+                      {isChecked ? "点击取消完成" : "点击完成"}
                     </Text>
                   </View>
                   <View style={[styles.checkbox, isChecked && styles.checkboxChecked]}>
@@ -305,6 +328,11 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: colors.text,
     fontWeight: "500",
+  },
+  habitActionText: {
+    color: colors.muted,
+    fontSize: 12,
+    marginTop: 4,
   },
   habitTextChecked: {
     color: colors.muted,

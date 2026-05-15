@@ -191,6 +191,37 @@ export const habitService = {
     return checkin;
   },
 
+  async cancelCheckin(habitId: string, checkinDate?: string) {
+    const db = await getDb();
+    const userId = useAuthStore.getState().user?.id;
+
+    if (!userId) {
+      throw new Error('User not authenticated');
+    }
+
+    const date = checkinDate || new Date().toISOString().split('T')[0];
+    const existing = await db.getFirstAsync<HabitCheckin>(
+      'SELECT * FROM habit_checkins WHERE user_id = ? AND habit_id = ? AND checkin_date = ? LIMIT 1',
+      [userId, habitId, date]
+    );
+
+    if (!existing) {
+      throw new Error('Habit checkin not found');
+    }
+
+    await db.runAsync(
+      'DELETE FROM habit_checkins WHERE user_id = ? AND habit_id = ? AND checkin_date = ?',
+      [userId, habitId, date]
+    );
+
+    await syncService.enqueueMutation('habit_checkin', existing.id, 'delete', {
+      id: existing.id,
+      user_id: userId,
+      habit_id: habitId,
+      checkin_date: date,
+    });
+  },
+
   async getTodayCheckins() {
     const db = await getDb();
     const userId = useAuthStore.getState().user?.id;
@@ -235,6 +266,11 @@ export const habitService = {
       note: input.note,
       checkinDate: input.checkinDate,
     });
+  },
+
+  async cancelCheckinOnServer(habitId: string, checkinDate?: string) {
+    const suffix = checkinDate ? `?checkinDate=${encodeURIComponent(checkinDate)}` : '';
+    return apiClient.delete<void>(`/habits/${habitId}/checkins${suffix}`);
   },
 
   async getCheckinsFromServer(habitId: string, from?: string, to?: string) {

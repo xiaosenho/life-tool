@@ -84,6 +84,22 @@ public class JdbcHabitCheckinStore implements HabitCheckinStore {
     }
 
     @Override
+    public void deleteByHabitIdAndDate(String habitId, LocalDate date) {
+        String sql = """
+                DELETE FROM habit_checkins
+                WHERE habit_id = ?::uuid AND checkin_date = ?
+                """;
+        try (Connection conn = getConnection();
+             var stmt = conn.prepareStatement(sql)) {
+            stmt.setString(1, habitId);
+            stmt.setDate(2, Date.valueOf(date));
+            stmt.executeUpdate();
+        } catch (SQLException ex) {
+            throw new IllegalStateException("Failed to delete habit checkin", ex);
+        }
+    }
+
+    @Override
     public List<HabitCheckin> findByHabitId(String habitId) {
         String sql = """
                 SELECT id, user_id, habit_id, checkin_date, count, note, created_at, updated_at

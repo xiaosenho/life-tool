@@ -130,6 +130,18 @@ public class HabitService {
         return HabitCheckinResponse.from(checkin);
     }
 
+    public void cancelCheckin(String userId, String habitId, LocalDate checkinDate) {
+        findOwnedHabit(userId, habitId);
+        LocalDate targetDate = checkinDate != null ? checkinDate : TimeSupport.today();
+        HabitCheckin existing = checkinStore.findByHabitIdAndDate(habitId, targetDate)
+                .orElseThrow(() -> new HabitException("NOT_FOUND", "Habit checkin not found"));
+        if (!userId.equals(existing.getUserId())) {
+            throw new HabitException("FORBIDDEN", "Access denied");
+        }
+        checkinStore.deleteByHabitIdAndDate(habitId, targetDate);
+        refreshTodayStats(userId);
+    }
+
     public List<HabitCheckinResponse> listCheckins(String userId, String habitId, LocalDate from, LocalDate to) {
         findOwnedHabit(userId, habitId);
         return checkinStore.findByHabitId(habitId).stream()

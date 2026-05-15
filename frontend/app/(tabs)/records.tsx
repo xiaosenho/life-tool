@@ -662,7 +662,7 @@ export default function RecordsScreen() {
             </TouchableOpacity>
           </View>
           {selectedMeal?.imageUrl ? (
-            <Pressable>
+            <Pressable style={styles.previewContent} onPress={(event) => event.stopPropagation()}>
               <Image
                 source={{ uri: selectedMeal.imageUrl }}
                 style={styles.previewImage}
@@ -869,8 +869,16 @@ const styles = StyleSheet.create({
     top: 0,
     zIndex: 2,
   },
+  previewContent: {
+    alignItems: "center",
+    flex: 1,
+    justifyContent: "center",
+    width: "100%",
+  },
   previewImage: {
     height: "78%",
+    maxHeight: "78%",
+    maxWidth: "92%",
     width: "92%",
   },
   previewOverlay: {

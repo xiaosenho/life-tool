@@ -66,12 +66,13 @@ class AiAssistantClientTest {
                 toolMethods.add(method.getName());
             }
         }
-        assertEquals(6, toolMethods.size(), "Expected 6 @Tool annotated methods");
+        assertEquals(7, toolMethods.size(), "Expected 7 @Tool annotated methods");
         assertTrue(toolMethods.contains("getFocusSummaryTool"));
         assertTrue(toolMethods.contains("getHabitSummaryTool"));
         assertTrue(toolMethods.contains("getDietSummaryTool"));
         assertTrue(toolMethods.contains("getLedgerSummaryTool"));
         assertTrue(toolMethods.contains("getUpcomingEventsTool"));
         assertTrue(toolMethods.contains("getUserProfileContextTool"));
+        assertTrue(toolMethods.contains("saveLongTermMemoryTool"));
     }
 }
