@@ -271,17 +271,12 @@ export default function RecordsScreen() {
 
   async function fetchHabitsForDate(date: string) {
     try {
-      const habitsRes = await habitService.getHabitsFromServer();
-      if (!habitsRes.success || !habitsRes.data) {
-        throw new Error(habitsRes.error?.message || "获取习惯失败");
+      const response = await habitService.getCalendarDataFromServer(date, date);
+      if (!response.success || !response.data) {
+        throw new Error(response.error?.message || "获取习惯失败");
       }
-      const habits = habitsRes.data.map(serverHabitToLocal);
-      const checkinResults = await Promise.all(
-        habitsRes.data.map((habit) => habitService.getCheckinsFromServer(habit.id, date, date))
-      );
-      const checkins = checkinResults.flatMap((res) => (
-        res.success && res.data ? res.data.map(serverCheckinToLocal) : []
-      ));
+      const habits = response.data.habits.map(serverHabitToLocal);
+      const checkins = response.data.checkins.map(serverCheckinToLocal);
       return { habits, checkins };
     } catch {
       const [habits, checkins] = await Promise.all([

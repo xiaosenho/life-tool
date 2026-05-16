@@ -45,18 +45,13 @@ export default function TodayScreen() {
       let todayCheckins: HabitCheckin[];
       let usingLocalHabits = false;
       try {
-        const habitsRes = await habitService.getHabitsFromServer();
-        if (!habitsRes.success || !habitsRes.data) {
-          throw new Error(habitsRes.error?.message || "获取习惯失败");
-        }
         const date = todayKey();
-        allHabits = habitsRes.data.map(serverHabitToLocal);
-        const checkinResults = await Promise.all(
-          habitsRes.data.map((habit) => habitService.getCheckinsFromServer(habit.id, date, date))
-        );
-        todayCheckins = checkinResults.flatMap((res) => (
-          res.success && res.data ? res.data.map(serverCheckinToLocal) : []
-        ));
+        const calendarRes = await habitService.getCalendarDataFromServer(date, date);
+        if (!calendarRes.success || !calendarRes.data) {
+          throw new Error(calendarRes.error?.message || "获取习惯失败");
+        }
+        allHabits = calendarRes.data.habits.map(serverHabitToLocal);
+        todayCheckins = calendarRes.data.checkins.map(serverCheckinToLocal);
       } catch {
         usingLocalHabits = true;
         allHabits = await habitService.getHabits();
