@@ -38,35 +38,35 @@ public class VocabService {
         return store.listBooks().stream().map(VocabBookResponse::from).toList();
     }
 
-    public VocabPageResponse getPage(String bookCode, int offset, int limit) {
-        VocabBook book = findBook(bookCode);
+    public VocabPageResponse getPage(String bookCode, String variant, int offset, int limit) {
+        VocabBook book = findBook(bookCode, normalizeVariant(variant));
         int normalizedLimit = limit <= 0 ? DEFAULT_LIMIT : Math.min(limit, 100);
         int normalizedOffset = Math.max(offset, 0);
         List<VocabEntryResponse> entries = store.listEntries(book.getId(), normalizedOffset, normalizedLimit).stream()
                 .map(VocabEntryResponse::from)
                 .toList();
-        return new VocabPageResponse(book.getCode(), book.getName(), normalizedOffset, normalizedLimit, book.getWordCount(), entries);
+        return new VocabPageResponse(book.getCode(), book.getVariant(), book.getName(), normalizedOffset, normalizedLimit, book.getWordCount(), entries);
     }
 
-    public VocabProgressResponse getProgress(String userId, String bookCode) {
-        VocabBook book = findBook(bookCode);
+    public VocabProgressResponse getProgress(String userId, String bookCode, String variant) {
+        VocabBook book = findBook(bookCode, normalizeVariant(variant));
         return store.findProgress(userId, book.getId())
-                .map(progress -> new VocabProgressResponse(bookCode, progress.getLastSeqNo(), progress.isHideMeaning()))
-                .orElse(new VocabProgressResponse(bookCode, 0, false));
+                .map(progress -> new VocabProgressResponse(bookCode, book.getVariant(), progress.getLastSeqNo(), progress.isHideMeaning()))
+                .orElse(new VocabProgressResponse(bookCode, book.getVariant(), 0, false));
     }
 
     public VocabProgressResponse updateProgress(String userId, UpdateVocabProgressRequest request) {
         if (request.bookCode() == null || request.bookCode().isBlank()) {
             throw new VocabException("VALIDATION_ERROR", "bookCode is required");
         }
-        VocabBook book = findBook(request.bookCode());
+        VocabBook book = findBook(request.bookCode(), normalizeVariant(request.variant()));
         UserVocabProgress progress = store.findProgress(userId, book.getId()).orElseGet(UserVocabProgress::new);
         progress.setUserId(userId);
         progress.setBookId(book.getId());
         progress.setLastSeqNo(Math.max(0, request.lastSeqNo() == null ? progress.getLastSeqNo() : request.lastSeqNo()));
         progress.setHideMeaning(request.hideMeaning() == null ? progress.isHideMeaning() : request.hideMeaning());
         UserVocabProgress saved = store.saveProgress(progress);
-        return new VocabProgressResponse(book.getCode(), saved.getLastSeqNo(), saved.isHideMeaning());
+        return new VocabProgressResponse(book.getCode(), book.getVariant(), saved.getLastSeqNo(), saved.isHideMeaning());
     }
 
     @EventListener(ApplicationReadyEvent.class)
@@ -76,9 +76,12 @@ public class VocabService {
         }
         try {
             List<VocabStore.VocabBookSeed> seeds = new ArrayList<>();
-            seeds.add(loadSeed("cet4", "英语四级", "vocab/cet4.json"));
-            seeds.add(loadSeed("cet6", "英语六级", "vocab/cet6.json"));
-            seeds.add(loadSeed("kaoyan", "考研英语", "vocab/kaoyan.json"));
+            seeds.add(loadSeed("cet4", "ordered", "英语四级", "vocab/cet4.json"));
+            seeds.add(loadSeed("cet4", "shuffled", "英语四级（乱序）", "vocab/cet4-shuffled.txt"));
+            seeds.add(loadSeed("cet6", "ordered", "英语六级", "vocab/cet6.json"));
+            seeds.add(loadSeed("cet6", "shuffled", "英语六级（乱序）", "vocab/cet6-shuffled.txt"));
+            seeds.add(loadSeed("kaoyan", "ordered", "考研英语", "vocab/kaoyan.json"));
+            seeds.add(loadSeed("kaoyan", "shuffled", "考研英语（乱序）", "vocab/kaoyan-shuffled.txt"));
             store.replaceBookData(seeds);
             log.info("Seeded vocab books successfully, count={}", seeds.size());
         } catch (Exception ex) {
@@ -86,8 +89,11 @@ public class VocabService {
         }
     }
 
-    private VocabStore.VocabBookSeed loadSeed(String code, String name, String path) throws Exception {
+    private VocabStore.VocabBookSeed loadSeed(String code, String variant, String name, String path) throws Exception {
         try (InputStream inputStream = new ClassPathResource(path).getInputStream()) {
+            if (path.endsWith(".txt")) {
+                return new VocabStore.VocabBookSeed(code, variant, name, "2026.1", loadTxtEntries(inputStream));
+            }
             List<Map<String, Object>> raw = objectMapper.readValue(inputStream, new TypeReference<>() {});
             List<VocabStore.VocabEntrySeed> entries = new ArrayList<>();
             int seq = 1;
@@ -118,8 +124,27 @@ public class VocabService {
                 String phonetic = text(item, "phonetic", "usphone", "ukphone");
                 entries.add(new VocabStore.VocabEntrySeed(seq++, word.trim(), blankToNull(phonetic), meaning.trim()));
             }
-            return new VocabStore.VocabBookSeed(code, name, "2026.1", entries);
+            return new VocabStore.VocabBookSeed(code, variant, name, "2026.1", entries);
         }
+    }
+
+    private List<VocabStore.VocabEntrySeed> loadTxtEntries(InputStream inputStream) throws Exception {
+        List<VocabStore.VocabEntrySeed> entries = new ArrayList<>();
+        try (java.io.BufferedReader reader = new java.io.BufferedReader(new java.io.InputStreamReader(inputStream, java.nio.charset.StandardCharsets.UTF_8))) {
+            String line;
+            int seq = 1;
+            while ((line = reader.readLine()) != null) {
+                if (line.isBlank()) {
+                    continue;
+                }
+                String[] parts = line.split("\t", 2);
+                if (parts.length < 2 || parts[0].isBlank() || parts[1].isBlank()) {
+                    continue;
+                }
+                entries.add(new VocabStore.VocabEntrySeed(seq++, parts[0].trim(), null, parts[1].trim()));
+            }
+        }
+        return entries;
     }
 
     private String text(Map<String, Object> item, String... keys) {
@@ -147,8 +172,12 @@ public class VocabService {
         return value == null || value.isBlank() ? null : value.trim();
     }
 
-    private VocabBook findBook(String code) {
-        return store.findBookByCode(code)
-                .orElseThrow(() -> new VocabException("NOT_FOUND", "词书不存在: " + code));
+    private String normalizeVariant(String variant) {
+        return (variant == null || variant.isBlank()) ? "ordered" : variant.trim();
+    }
+
+    private VocabBook findBook(String code, String variant) {
+        return store.findBookByCodeAndVariant(code, variant)
+                .orElseThrow(() -> new VocabException("NOT_FOUND", "词书不存在: " + code + " / " + variant));
     }
 }

@@ -24,8 +24,8 @@ public class InMemoryVocabStore implements VocabStore {
     }
 
     @Override
-    public Optional<VocabBook> findBookByCode(String code) {
-        return books.stream().filter(book -> book.getCode().equals(code)).findFirst();
+    public Optional<VocabBook> findBookByCodeAndVariant(String code, String variant) {
+        return books.stream().filter(book -> book.getCode().equals(code) && book.getVariant().equals(variant)).findFirst();
     }
 
     @Override
@@ -65,6 +65,7 @@ public class InMemoryVocabStore implements VocabStore {
             VocabBook book = new VocabBook();
             book.setId(UUID.randomUUID().toString());
             book.setCode(seed.code());
+            book.setVariant(seed.variant());
             book.setName(seed.name());
             book.setVersion(seed.version());
             book.setWordCount(seed.entries().size());

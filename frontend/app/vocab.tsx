@@ -10,6 +10,7 @@ const PAGE_SIZE = 30;
 export default function VocabScreen() {
   const [books, setBooks] = useState<VocabBook[]>([]);
   const [selectedBookCode, setSelectedBookCode] = useState('cet4');
+  const [selectedVariant, setSelectedVariant] = useState<'ordered' | 'shuffled'>('ordered');
   const [entries, setEntries] = useState<VocabEntry[]>([]);
   const [offset, setOffset] = useState(0);
   const [total, setTotal] = useState(0);
@@ -17,8 +18,8 @@ export default function VocabScreen() {
   const [loading, setLoading] = useState(false);
 
   const selectedBook = useMemo(
-    () => books.find((book) => book.code === selectedBookCode) ?? null,
-    [books, selectedBookCode]
+    () => books.find((book) => book.code === selectedBookCode && book.variant === selectedVariant) ?? null,
+    [books, selectedBookCode, selectedVariant]
   );
 
   const loadBooks = useCallback(async () => {
@@ -27,17 +28,18 @@ export default function VocabScreen() {
       throw new Error(response.error?.message || '加载词书失败');
     }
     setBooks(response.data);
-    if (!response.data.some((book) => book.code === selectedBookCode) && response.data[0]) {
+    if (!response.data.some((book) => book.code === selectedBookCode && book.variant === selectedVariant) && response.data[0]) {
       setSelectedBookCode(response.data[0].code);
+      setSelectedVariant((response.data[0].variant as 'ordered' | 'shuffled') ?? 'ordered');
     }
-  }, [selectedBookCode]);
+  }, [selectedBookCode, selectedVariant]);
 
   const loadPage = useCallback(async (bookCode: string, nextOffset: number) => {
     setLoading(true);
     try {
       const [pageResponse, progressResponse] = await Promise.all([
-        vocabService.getPage(bookCode, nextOffset, PAGE_SIZE),
-        vocabService.getProgress(bookCode),
+        vocabService.getPage(bookCode, selectedVariant, nextOffset, PAGE_SIZE),
+        vocabService.getProgress(bookCode, selectedVariant),
       ]);
       if (!pageResponse.success || !pageResponse.data) {
         throw new Error(pageResponse.error?.message || '加载单词失败');
@@ -51,7 +53,7 @@ export default function VocabScreen() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [selectedVariant]);
 
   const bootstrap = useCallback(async () => {
     try {
@@ -70,21 +72,21 @@ export default function VocabScreen() {
     loadPage(selectedBookCode, 0).catch((error) => {
       Alert.alert('加载失败', error instanceof Error ? error.message : '请稍后重试');
     });
-  }, [selectedBookCode, books.length, loadPage]);
+  }, [selectedBookCode, selectedVariant, books.length, loadPage]);
 
   useFocusEffect(
     useCallback(() => {
       if (!selectedBookCode || books.length === 0) return;
       loadPage(selectedBookCode, offset).catch(() => {});
-    }, [selectedBookCode, offset, loadPage, books.length])
+    }, [selectedBookCode, selectedVariant, offset, loadPage, books.length])
   );
 
   const persistProgress = useCallback(async (next: { lastSeqNo?: number; hideMeaning?: boolean }) => {
-    const response = await vocabService.updateProgress(selectedBookCode, next as any);
+    const response = await vocabService.updateProgress(selectedBookCode, { variant: selectedVariant, ...next } as any);
     if (!response?.success) {
       throw new Error(response?.error?.message || '保存进度失败');
     }
-  }, [selectedBookCode]);
+  }, [selectedBookCode, selectedVariant]);
 
   const handleToggleHideMeaning = async () => {
     const next = !hideMeaning;
@@ -112,7 +114,7 @@ export default function VocabScreen() {
       <View style={styles.headerCard}>
         <View style={styles.bookTabs}>
           {books.map((book) => {
-            const active = book.code === selectedBookCode;
+            const active = book.code === selectedBookCode && book.variant === selectedVariant;
             return (
               <TouchableOpacity
                 key={book.code}
@@ -120,6 +122,7 @@ export default function VocabScreen() {
                 onPress={() => {
                   setOffset(0);
                   setSelectedBookCode(book.code);
+                  setSelectedVariant((book.variant as 'ordered' | 'shuffled') ?? 'ordered');
                 }}
               >
                 <Text style={[styles.bookTabText, active && styles.bookTabTextActive]}>{book.name}</Text>

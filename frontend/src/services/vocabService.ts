@@ -3,6 +3,7 @@ import { apiClient } from './apiClient';
 export interface VocabBook {
   code: string;
   name: string;
+  variant: string;
   version: string;
   wordCount: number;
 }
@@ -16,6 +17,7 @@ export interface VocabEntry {
 
 export interface VocabPage {
   bookCode: string;
+  variant: string;
   bookName: string;
   offset: number;
   limit: number;
@@ -25,6 +27,7 @@ export interface VocabPage {
 
 export interface VocabProgress {
   bookCode: string;
+  variant: string;
   lastSeqNo: number;
   hideMeaning: boolean;
 }
@@ -33,15 +36,15 @@ export const vocabService = {
   listBooks() {
     return apiClient.get<VocabBook[]>('/vocab/books');
   },
-  getPage(bookCode: string, offset = 0, limit = 30) {
-    const query = new URLSearchParams({ bookCode, offset: String(offset), limit: String(limit) });
+  getPage(bookCode: string, variant = "ordered", offset = 0, limit = 30) {
+    const query = new URLSearchParams({ bookCode, variant, offset: String(offset), limit: String(limit) });
     return apiClient.get<VocabPage>(`/vocab/page?${query.toString()}`);
   },
-  getProgress(bookCode: string) {
-    const query = new URLSearchParams({ bookCode });
+  getProgress(bookCode: string, variant = "ordered") {
+    const query = new URLSearchParams({ bookCode, variant });
     return apiClient.get<VocabProgress>(`/vocab/progress?${query.toString()}`);
   },
-  updateProgress(bookCode: string, payload: { lastSeqNo?: number; hideMeaning?: boolean }) {
+  updateProgress(bookCode: string, payload: { variant?: string; lastSeqNo?: number; hideMeaning?: boolean }) {
     return apiClient.put<VocabProgress>('/vocab/progress', { bookCode, ...payload });
   },
 };

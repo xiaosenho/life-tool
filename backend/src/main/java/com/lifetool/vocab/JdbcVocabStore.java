@@ -27,7 +27,7 @@ public class JdbcVocabStore implements VocabStore {
 
     @Override
     public List<VocabBook> listBooks() {
-        String sql = "SELECT id, code, name, version, word_count, created_at, updated_at FROM vocab_books ORDER BY id";
+        String sql = "SELECT id, code, variant, name, version, word_count, created_at, updated_at FROM vocab_books ORDER BY code, variant";
         try (Connection conn = dataSource.getConnection(); var stmt = conn.prepareStatement(sql); ResultSet rs = stmt.executeQuery()) {
             List<VocabBook> items = new ArrayList<>();
             while (rs.next()) items.add(mapBook(rs));
@@ -38,10 +38,11 @@ public class JdbcVocabStore implements VocabStore {
     }
 
     @Override
-    public Optional<VocabBook> findBookByCode(String code) {
-        String sql = "SELECT id, code, name, version, word_count, created_at, updated_at FROM vocab_books WHERE code = ?";
+    public Optional<VocabBook> findBookByCodeAndVariant(String code, String variant) {
+        String sql = "SELECT id, code, variant, name, version, word_count, created_at, updated_at FROM vocab_books WHERE code = ? AND variant = ?";
         try (Connection conn = dataSource.getConnection(); var stmt = conn.prepareStatement(sql)) {
             stmt.setString(1, code);
+            stmt.setString(2, variant);
             try (ResultSet rs = stmt.executeQuery()) {
                 return rs.next() ? Optional.of(mapBook(rs)) : Optional.empty();
             }
@@ -127,7 +128,7 @@ public class JdbcVocabStore implements VocabStore {
             conn.setAutoCommit(false);
             try (var deleteEntries = conn.prepareStatement("DELETE FROM vocab_entries");
                  var deleteBooks = conn.prepareStatement("DELETE FROM vocab_books");
-                 var insertBook = conn.prepareStatement("INSERT INTO vocab_books (id, code, name, version, word_count, created_at, updated_at) VALUES (?::uuid, ?, ?, ?, ?, ?, ?)");
+                 var insertBook = conn.prepareStatement("INSERT INTO vocab_books (id, code, variant, name, version, word_count, created_at, updated_at) VALUES (?::uuid, ?, ?, ?, ?, ?, ?, ?)");
                  var insertEntry = conn.prepareStatement("INSERT INTO vocab_entries (id, book_id, seq_no, word, phonetic, meaning_zh, created_at, updated_at) VALUES (?::uuid, ?::uuid, ?, ?, ?, ?, ?, ?)") ) {
                 deleteEntries.executeUpdate();
                 deleteBooks.executeUpdate();
@@ -136,11 +137,12 @@ public class JdbcVocabStore implements VocabStore {
                     String bookId = UUID.randomUUID().toString();
                     insertBook.setString(1, bookId);
                     insertBook.setString(2, book.code());
-                    insertBook.setString(3, book.name());
-                    insertBook.setString(4, book.version());
-                    insertBook.setInt(5, book.entries().size());
-                    insertBook.setTimestamp(6, Timestamp.from(now));
+                    insertBook.setString(3, book.variant());
+                    insertBook.setString(4, book.name());
+                    insertBook.setString(5, book.version());
+                    insertBook.setInt(6, book.entries().size());
                     insertBook.setTimestamp(7, Timestamp.from(now));
+                    insertBook.setTimestamp(8, Timestamp.from(now));
                     insertBook.executeUpdate();
                     for (VocabEntrySeed entry : book.entries()) {
                         insertEntry.setString(1, UUID.randomUUID().toString());
@@ -171,6 +173,7 @@ public class JdbcVocabStore implements VocabStore {
         VocabBook book = new VocabBook();
         book.setId(rs.getString("id"));
         book.setCode(rs.getString("code"));
+        book.setVariant(rs.getString("variant"));
         book.setName(rs.getString("name"));
         book.setVersion(rs.getString("version"));
         book.setWordCount(rs.getInt("word_count"));

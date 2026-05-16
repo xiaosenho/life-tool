@@ -35,16 +35,18 @@ public class VocabController {
     @GetMapping("/page")
     public ResponseEntity<ApiResponse<VocabPageResponse>> getPage(
             @RequestParam String bookCode,
+            @RequestParam(defaultValue = "ordered") String variant,
             @RequestParam(defaultValue = "0") int offset,
             @RequestParam(defaultValue = "30") int limit) {
-        return ResponseEntity.ok(ApiResponse.ok(service.getPage(bookCode, offset, limit)));
+        return ResponseEntity.ok(ApiResponse.ok(service.getPage(bookCode, variant, offset, limit)));
     }
 
     @GetMapping("/progress")
     public ResponseEntity<ApiResponse<VocabProgressResponse>> getProgress(
             @AuthenticationPrincipal String userId,
-            @RequestParam String bookCode) {
-        return ResponseEntity.ok(ApiResponse.ok(service.getProgress(userId, bookCode)));
+            @RequestParam String bookCode,
+            @RequestParam(defaultValue = "ordered") String variant) {
+        return ResponseEntity.ok(ApiResponse.ok(service.getProgress(userId, bookCode, variant)));
     }
 
     @PutMapping("/progress")

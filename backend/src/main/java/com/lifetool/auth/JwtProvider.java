@@ -8,6 +8,8 @@ import java.util.concurrent.ConcurrentHashMap;
 
 import javax.crypto.SecretKey;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -19,6 +21,7 @@ import io.jsonwebtoken.security.Keys;
 
 @Component
 public class JwtProvider {
+    private static final Logger log = LoggerFactory.getLogger(JwtProvider.class);
 
     private final SecretKey key;
     private final long accessTtlMs;
@@ -55,6 +58,7 @@ public class JwtProvider {
             Claims claims = parseClaims(token);
             return !revokedTokens.contains(claims.getId());
         } catch (JwtException | IllegalArgumentException e) {
+            log.warn("JWT validation failed: {}", e.getMessage());
             return false;
         }
     }

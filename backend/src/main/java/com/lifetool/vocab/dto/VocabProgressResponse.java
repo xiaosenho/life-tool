@@ -1,4 +1,4 @@
 package com.lifetool.vocab.dto;
 
-public record VocabProgressResponse(String bookCode, int lastSeqNo, boolean hideMeaning) {
+public record VocabProgressResponse(String bookCode, String variant, int lastSeqNo, boolean hideMeaning) {
 }

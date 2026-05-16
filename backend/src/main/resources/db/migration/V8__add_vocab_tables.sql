@@ -1,6 +1,7 @@
 CREATE TABLE vocab_books (
     id              uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
     code            text        NOT NULL,
+    variant         text        NOT NULL DEFAULT 'ordered',
     name            text        NOT NULL,
     version         text        NOT NULL DEFAULT '2026.1',
     word_count      int         NOT NULL DEFAULT 0,
@@ -8,7 +9,7 @@ CREATE TABLE vocab_books (
     updated_at      timestamptz NOT NULL DEFAULT now()
 );
 
-CREATE UNIQUE INDEX uq_vocab_books_code ON vocab_books (code);
+CREATE UNIQUE INDEX uq_vocab_books_code_variant ON vocab_books (code, variant);
 
 CREATE TABLE vocab_entries (
     id              uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
