@@ -1,6 +1,6 @@
 package com.lifetool.news;
 
-import java.io.StringReader;
+import java.io.ByteArrayInputStream;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -22,9 +22,10 @@ import com.lifetool.news.dto.NewsItemResponse;
 public class NewsService {
     private static final Logger log = LoggerFactory.getLogger(NewsService.class);
     private static final List<FeedConfig> FEEDS = List.of(
-            new FeedConfig("中新网", "https://www.chinanews.com.cn/rss/importnews.xml"),
-            new FeedConfig("中新网", "https://www.chinanews.com.cn/rss/china.xml"),
-            new FeedConfig("中新网", "https://www.chinanews.com.cn/rss/finance.xml"));
+            new FeedConfig("CGTN", "https://www.cgtn.com/subscribe/rss/section/china.xml"),
+            new FeedConfig("CGTN", "https://www.cgtn.com/subscribe/rss/section/world.xml"),
+            new FeedConfig("CGTN", "https://www.cgtn.com/subscribe/rss/section/business.xml"),
+            new FeedConfig("CGTN", "https://www.cgtn.com/subscribe/rss/section/tech-sci.xml"));
     private static final int MAX_ITEMS = 12;
 
     private final RestClient restClient;
@@ -47,11 +48,11 @@ public class NewsService {
                     break;
                 }
                 log.info("Fetching top news feed from {}", feed.url());
-                String xml = restClient.get()
+                byte[] xmlBytes = restClient.get()
                         .uri(feed.url())
                         .retrieve()
-                        .body(String.class);
-                mergeFeedItems(results, parseRss(xml, feed.source()));
+                        .body(byte[].class);
+                mergeFeedItems(results, parseRss(xmlBytes, feed.source()));
             }
             log.info("Fetched domestic top news successfully, count={}", results.size());
             return results;
@@ -73,8 +74,8 @@ public class NewsService {
         }
     }
 
-    private List<NewsItemResponse> parseRss(String xml, String defaultSource) throws Exception {
-        if (xml == null || xml.isBlank()) {
+    private List<NewsItemResponse> parseRss(byte[] xmlBytes, String defaultSource) throws Exception {
+        if (xmlBytes == null || xmlBytes.length == 0) {
             return List.of();
         }
         DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
@@ -83,7 +84,7 @@ public class NewsService {
         factory.setFeature("http://xml.org/sax/features/external-parameter-entities", false);
         factory.setExpandEntityReferences(false);
 
-        Document document = factory.newDocumentBuilder().parse(new InputSource(new StringReader(xml)));
+        Document document = factory.newDocumentBuilder().parse(new InputSource(new ByteArrayInputStream(xmlBytes)));
         NodeList items = document.getElementsByTagName("item");
         List<NewsItemResponse> results = new ArrayList<>();
         for (int index = 0; index < Math.min(items.getLength(), MAX_ITEMS); index++) {
@@ -99,7 +100,7 @@ public class NewsService {
                     link,
                     pubDate,
                     description,
-                    extractImageUrl(rawDescription)));
+                    extractImageUrl(item, rawDescription)));
         }
         return results;
     }
@@ -134,17 +135,46 @@ public class NewsService {
                 .trim();
     }
 
-    private String extractImageUrl(String input) {
-        if (input == null || input.isBlank()) {
+    private String extractImageUrl(Element item, String rawDescription) {
+        String mediaContent = attributeOf(item, "media:content", "url");
+        if (hasText(mediaContent)) {
+            return mediaContent;
+        }
+
+        String mediaThumbnail = attributeOf(item, "media:thumbnail", "url");
+        if (hasText(mediaThumbnail)) {
+            return mediaThumbnail;
+        }
+
+        String enclosure = attributeOf(item, "enclosure", "url");
+        if (hasText(enclosure)) {
+            return enclosure;
+        }
+
+        if (rawDescription == null || rawDescription.isBlank()) {
             return null;
         }
+
         java.util.regex.Matcher matcher = java.util.regex.Pattern
                 .compile("<img[^>]+src=[\"']([^\"']+)[\"']", java.util.regex.Pattern.CASE_INSENSITIVE)
-                .matcher(input);
+                .matcher(rawDescription);
         if (matcher.find()) {
             return matcher.group(1);
         }
         return null;
+    }
+
+    private String attributeOf(Element element, String tagName, String attrName) {
+        NodeList nodes = element.getElementsByTagName(tagName);
+        if (nodes.getLength() == 0 || !(nodes.item(0) instanceof Element child)) {
+            return null;
+        }
+        String value = child.getAttribute(attrName);
+        return hasText(value) ? value.trim() : null;
+    }
+
+    private boolean hasText(String value) {
+        return value != null && !value.isBlank();
     }
 
     private record FeedConfig(String source, String url) {
