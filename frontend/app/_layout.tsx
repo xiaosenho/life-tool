@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { Text, TextInput } from "react-native";
 import { Stack, useRouter, useSegments } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useAuthStore } from "@/store/authStore";
@@ -10,6 +11,30 @@ export default function RootLayout() {
   const { isAuthenticated, isLoading, setLoading, restoreAuth, setAuth } = useAuthStore();
   const segments = useSegments();
   const router = useRouter();
+
+  const TextComponent = Text as typeof Text & {
+    defaultProps?: {
+      allowFontScaling?: boolean;
+      maxFontSizeMultiplier?: number;
+    };
+  };
+  TextComponent.defaultProps = {
+    ...TextComponent.defaultProps,
+    allowFontScaling: false,
+    maxFontSizeMultiplier: 1,
+  };
+
+  const TextInputComponent = TextInput as typeof TextInput & {
+    defaultProps?: {
+      allowFontScaling?: boolean;
+      maxFontSizeMultiplier?: number;
+    };
+  };
+  TextInputComponent.defaultProps = {
+    ...TextInputComponent.defaultProps,
+    allowFontScaling: false,
+    maxFontSizeMultiplier: 1,
+  };
 
   useEffect(() => {
     let cancelled = false;

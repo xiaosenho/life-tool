@@ -102,6 +102,12 @@ export async function stopAudioRecording(recording: Audio.Recording) {
   };
 }
 
+export async function cancelAudioRecording(recording: Audio.Recording) {
+  try {
+    await recording.stopAndUnloadAsync();
+  } catch {}
+}
+
 export function toAttachmentPayload(attachment?: UploadedChatAttachment | null) {
   if (!attachment) {
     return undefined;

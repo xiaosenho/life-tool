@@ -1,14 +1,15 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  PanResponder,
   ActivityIndicator,
   Alert,
   Image,
-  Keyboard,
   KeyboardAvoidingView,
   Modal,
   Platform,
   Pressable,
+  GestureResponderEvent,
   ScrollView,
   StyleSheet,
   Text,
@@ -27,6 +28,7 @@ import {
   requestAudioPermission,
   startAudioRecording,
   stopAudioRecording,
+  cancelAudioRecording,
   toAttachmentPayload,
   uploadChatAudio,
   uploadChatImage
@@ -52,6 +54,11 @@ const defaultEnabledTools = [
   "get_user_profile_context"
 ];
 
+function shouldRenderMessageText(content: string | null | undefined) {
+  const normalized = content?.trim();
+  return !!normalized && normalized !== "[语音消息]" && normalized !== "[图片消息]";
+}
+
 export default function AiChatScreen() {
   const [session, setSession] = useState<ChatSession | null>(cachedAiSession);
   const [messages, setMessages] = useState<ChatMessage[]>(cachedAiMessages);
@@ -64,8 +71,11 @@ export default function AiChatScreen() {
   const [audioProgress, setAudioProgress] = useState<Record<string, number>>({});
   const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
   const [activeTools, setActiveTools] = useState<string[]>([]);
-  const [keyboardVisible, setKeyboardVisible] = useState(false);
+  const [recordGestureActive, setRecordGestureActive] = useState(false);
+  const [recordWillCancel, setRecordWillCancel] = useState(false);
   const scrollViewRef = useRef<ScrollView | null>(null);
+  const recordFinalizingRef = useRef(false);
+  const recordStartingRef = useRef(false);
   const hasInitialScrolledRef = useRef(false);
   const soundRef = useRef<Audio.Sound | null>(null);
   const headerHeight = useHeaderHeight();
@@ -79,17 +89,6 @@ export default function AiChatScreen() {
 
   useEffect(() => {
     void bootstrap();
-  }, []);
-
-  useEffect(() => {
-    const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
-    const hideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
-    const showSub = Keyboard.addListener(showEvent, () => setKeyboardVisible(true));
-    const hideSub = Keyboard.addListener(hideEvent, () => setKeyboardVisible(false));
-    return () => {
-      showSub.remove();
-      hideSub.remove();
-    };
   }, []);
 
   const bootstrap = async () => {
@@ -224,74 +223,135 @@ export default function AiChatScreen() {
   };
 
   const toggleRecordAudio = async () => {
-    if (!session || loading || sending || uploadingMedia) return;
-    if (recording) {
-      try {
-        setUploadingMedia(true);
-        const result = await stopAudioRecording(recording);
-        setRecording(null);
-        const uploaded = await uploadChatAudio({
-          uri: result.uri,
-          fileSize: result.fileSize,
-          durationSeconds: result.durationSeconds,
-          mimeType: Platform.OS === "ios" ? "audio/m4a" : "audio/mp4"
-        });
-
-        const optimistic: ChatMessage = {
-          id: `local-audio-${Date.now()}`,
-          role: "user",
-          content: "[语音消息]",
-          attachment: {
-            assetId: uploaded.assetId,
-            kind: "audio",
-            contentType: uploaded.contentType,
-            url: uploaded.url || "",
-            durationSeconds: uploaded.durationSeconds
-          },
-          createdAt: new Date().toISOString()
-        };
-
-        setMessages((current) => {
-          const next = [...current, optimistic];
-          setCachedAiMessages(next);
-          return next;
-        });
-        setSending(true);
-        setActiveTools(defaultEnabledTools);
-        scrollToBottom(true);
-        const response = await aiService.sendMessage(session.id, "", defaultEnabledTools, toAttachmentPayload(uploaded));
-        if (response.success && response.data) {
-          setMessages((current) => {
-            const next = [...current, response.data as ChatMessage];
-            setCachedAiMessages(next);
-            return next;
-          });
-          scrollToBottom(true);
-        } else {
-          Alert.alert("发送失败", response.error?.message ?? "请稍后重试。");
-        }
-      } catch (error) {
-        Alert.alert("语音发送失败", error instanceof Error ? error.message : "请稍后重试。");
-      } finally {
-        setActiveTools([]);
-        setUploadingMedia(false);
-        setSending(false);
-      }
-      return;
-    }
-
+    if (!session || loading || sending || uploadingMedia || recording || recordStartingRef.current) return;
+    recordStartingRef.current = true;
     try {
       const granted = await requestAudioPermission();
       if (!granted) {
+        setRecordGestureActive(false);
         Alert.alert("需要权限", "请先允许麦克风权限");
         return;
       }
       const nextRecording = await startAudioRecording();
       setRecording(nextRecording);
     } catch (error) {
+      setRecordGestureActive(false);
       Alert.alert("录音失败", error instanceof Error ? error.message : "请稍后重试");
+    } finally {
+      recordStartingRef.current = false;
     }
   };
+
+  const finishRecordAudio = async (currentRecording: Audio.Recording) => {
+    if (!session) return;
+    try {
+      setUploadingMedia(true);
+      const result = await stopAudioRecording(currentRecording);
+      const uploaded = await uploadChatAudio({
+        uri: result.uri,
+        fileSize: result.fileSize,
+        durationSeconds: result.durationSeconds,
+        mimeType: Platform.OS === "ios" ? "audio/m4a" : "audio/mp4"
+      });
+
+      const optimistic: ChatMessage = {
+        id: `local-audio-${Date.now()}`,
+        role: "user",
+        content: "[语音消息]",
+        attachment: {
+          assetId: uploaded.assetId,
+          kind: "audio",
+          contentType: uploaded.contentType,
+          url: uploaded.url || "",
+          durationSeconds: uploaded.durationSeconds
+        },
+        createdAt: new Date().toISOString()
+      };
+
+      setMessages((current) => {
+        const next = [...current, optimistic];
+        setCachedAiMessages(next);
+        return next;
+      });
+      setSending(true);
+      setActiveTools(defaultEnabledTools);
+      scrollToBottom(true);
+      const response = await aiService.sendMessage(session.id, "", defaultEnabledTools, toAttachmentPayload(uploaded));
+      if (response.success && response.data) {
+        setMessages((current) => {
+          const next = [...current, response.data as ChatMessage];
+          setCachedAiMessages(next);
+          return next;
+        });
+        scrollToBottom(true);
+      } else {
+        Alert.alert("发送失败", response.error?.message ?? "请稍后重试。");
+      }
+    } catch (error) {
+      Alert.alert("语音发送失败", error instanceof Error ? error.message : "请稍后重试。");
+    } finally {
+      setActiveTools([]);
+      setUploadingMedia(false);
+      setSending(false);
+    }
+  };
+
+  const finalizeRecord = async (send: boolean) => {
+    if (recordStartingRef.current) {
+      setTimeout(() => {
+        void finalizeRecord(send);
+      }, 80);
+      return;
+    }
+    if (!recording || recordFinalizingRef.current) {
+      setRecordGestureActive(false);
+      setRecordWillCancel(false);
+      return;
+    }
+    recordFinalizingRef.current = true;
+    const currentRecording = recording;
+    setRecording(null);
+    try {
+      if (send) {
+        await finishRecordAudio(currentRecording);
+      } else {
+        await cancelAudioRecording(currentRecording);
+      }
+    } finally {
+      setRecordGestureActive(false);
+      setRecordWillCancel(false);
+      recordFinalizingRef.current = false;
+    }
+  };
+
+  const handleRecordPressOut = async (_: GestureResponderEvent) => {
+    if (!recording) return;
+    await finalizeRecord(!recordWillCancel);
+  };
+
+  const recordPanResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => false,
+      onMoveShouldSetPanResponder: () => !!recordGestureActive,
+      onPanResponderMove: (_, gestureState) => {
+        if (!recordGestureActive) return;
+        setRecordWillCancel(gestureState.dy < -50);
+      },
+      onPanResponderRelease: async () => {
+        if (!recording) {
+          setRecordGestureActive(false);
+          setRecordWillCancel(false);
+          return;
+        }
+        await finalizeRecord(!recordWillCancel);
+      },
+      onPanResponderTerminate: async () => {
+        if (recording) {
+          await finalizeRecord(false);
+        }
+      }
+    })
+  ).current;
 
   const playAudio = async (message: ChatMessage) => {
     if (!message.attachment?.url) {
@@ -334,7 +394,7 @@ export default function AiChatScreen() {
       <KeyboardAvoidingView
         style={styles.container}
         behavior={Platform.OS === "ios" ? "padding" : "height"}
-        keyboardVerticalOffset={headerHeight}
+        keyboardVerticalOffset={Platform.OS === "ios" ? headerHeight : 0}
       >
         <Screen title="AI 对话" scrollable={false} style={styles.screen} contentContainerStyle={styles.screenContent}>
         <View style={styles.sectionHeader}>
@@ -355,7 +415,7 @@ export default function AiChatScreen() {
               ref={scrollViewRef}
               contentContainerStyle={[
                 styles.messageList,
-                { paddingBottom: keyboardVisible ? 24 : Math.max(insets.bottom + 24, 36) }
+                { paddingBottom: Math.max(insets.bottom + 24, 36) }
               ]}
               keyboardShouldPersistTaps="handled"
             >
@@ -402,7 +462,9 @@ export default function AiChatScreen() {
                         </View>
                       </TouchableOpacity>
                     ) : null}
-                    <Text style={message.role === "user" ? styles.userText : styles.aiText}>{message.content}</Text>
+                    {shouldRenderMessageText(message.content) ? (
+                      <Text style={message.role === "user" ? styles.userText : styles.aiText}>{message.content}</Text>
+                    ) : null}
                   </View>
                   {message.role === "assistant" && message.longTermMemorySaved ? (
                     <View style={styles.memoryHint}>
@@ -427,18 +489,54 @@ export default function AiChatScreen() {
         </View>
       </Screen>
 
-      <View style={[styles.composer, { paddingBottom: keyboardVisible ? 12 : Math.max(insets.bottom, 12) }]}>
-        <TouchableOpacity
-          style={[styles.mediaButton, (sending || uploadingMedia) && styles.disabledButton]}
-          onPress={toggleRecordAudio}
+      {recordGestureActive ? (
+        <View style={styles.recordHintOverlay} pointerEvents="none">
+          <View style={[styles.recordHintCard, recordWillCancel && styles.recordHintCardCancel]}>
+            <Ionicons
+              name={recordWillCancel ? "close-circle" : "arrow-up-circle"}
+              size={18}
+              color={colors.surface}
+            />
+            <Text style={styles.recordHintTitle}>
+              {recordWillCancel ? "松开取消发送" : "上滑取消发送"}
+            </Text>
+            <Text style={styles.recordHintSubtitle}>
+              {recordWillCancel ? "当前松手将不会发送语音" : "继续按住，向上滑动可取消"}
+            </Text>
+          </View>
+        </View>
+      ) : null}
+
+      <View style={[styles.composer, { paddingBottom: Math.max(insets.bottom, 12) }]}>
+        <Pressable
+          style={({ pressed }) => [
+            styles.recordButton,
+            recordGestureActive && styles.recordButtonExpanded,
+            recording && styles.recordButtonActive,
+            pressed && !recording && styles.recordButtonPressed,
+            (sending || uploadingMedia) && styles.disabledButton
+          ]}
+          onLongPress={async () => {
+            setRecordGestureActive(true);
+            setRecordWillCancel(false);
+            await toggleRecordAudio();
+          }}
+          onPressOut={handleRecordPressOut}
+          delayLongPress={180}
           disabled={sending || uploadingMedia}
+          {...recordPanResponder.panHandlers}
         >
           <Ionicons
-            name={recording ? "stop-circle-outline" : "mic-outline"}
-            size={20}
-            color={recording ? colors.error : colors.accent}
+            name={recording ? "radio-button-on" : "mic-outline"}
+            size={18}
+            color={recording ? colors.surface : colors.accent}
           />
-        </TouchableOpacity>
+          {recordGestureActive ? (
+            <Text style={[styles.recordButtonText, recording && styles.recordButtonTextActive]}>
+              {recordWillCancel ? "松开取消" : "松开发送"}
+            </Text>
+          ) : null}
+        </Pressable>
         <TouchableOpacity
           style={[styles.mediaButton, (sending || uploadingMedia) && styles.disabledButton]}
           onPress={sendImage}
@@ -506,6 +604,9 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 8,
     marginBottom: 8,
+    maxWidth: "100%",
+    minWidth: 0,
+    overflow: "hidden",
     paddingHorizontal: 12,
     paddingVertical: 10
   },
@@ -515,12 +616,14 @@ const styles = StyleSheet.create({
   audioText: {
     color: colors.text,
     fontSize: 13,
-    fontWeight: "600"
+    fontWeight: "600",
+    flexShrink: 1
   },
   audioTextMine: {
     color: colors.surface,
     fontSize: 13,
-    fontWeight: "600"
+    fontWeight: "600",
+    flexShrink: 1
   },
   aiBubble: {
     alignSelf: "flex-start",
@@ -584,6 +687,39 @@ const styles = StyleSheet.create({
     height: 48,
     justifyContent: "center",
     width: 48
+  },
+  recordButton: {
+    alignItems: "center",
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: 12,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 0,
+    height: 48,
+    justifyContent: "center",
+    width: 48
+  },
+  recordButtonActive: {
+    backgroundColor: colors.error,
+    borderColor: colors.error
+  },
+  recordButtonExpanded: {
+    gap: 8,
+    paddingHorizontal: 18,
+    transform: [{ scale: 1.06 }],
+    width: 126
+  },
+  recordButtonPressed: {
+    backgroundColor: "#F8FAFC"
+  },
+  recordButtonText: {
+    color: colors.text,
+    fontSize: 13,
+    fontWeight: "700"
+  },
+  recordButtonTextActive: {
+    color: colors.surface
   },
   loadingBlock: {
     alignItems: "center",
@@ -652,6 +788,33 @@ const styles = StyleSheet.create({
   previewOverlay: {
     backgroundColor: "rgba(15, 23, 42, 0.96)",
     flex: 1
+  },
+  recordHintOverlay: {
+    alignItems: "center",
+    paddingHorizontal: 18,
+    paddingTop: 10
+  },
+  recordHintCard: {
+    alignItems: "center",
+    backgroundColor: "#D1FAE5",
+    borderRadius: 16,
+    gap: 6,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    width: "100%"
+  },
+  recordHintCardCancel: {
+    backgroundColor: "rgba(220, 38, 38, 0.92)"
+  },
+  recordHintTitle: {
+    color: "#065F46",
+    fontSize: 14,
+    fontWeight: "800"
+  },
+  recordHintSubtitle: {
+    color: "#047857",
+    fontSize: 12,
+    textAlign: "center"
   },
   previewScrollContent: {
     alignItems: "center",
@@ -730,7 +893,9 @@ const styles = StyleSheet.create({
   waveTrack: {
     flexDirection: "row",
     flexWrap: "nowrap",
-    gap: 4
+    gap: 4,
+    maxWidth: "100%",
+    minWidth: 0
   },
   waveTrackMine: {
     opacity: 0.95

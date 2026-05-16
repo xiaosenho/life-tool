@@ -4,7 +4,9 @@ import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.function.Function;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -76,12 +78,15 @@ public class VocabService {
         }
         try {
             List<VocabStore.VocabBookSeed> seeds = new ArrayList<>();
-            seeds.add(loadSeed("cet4", "ordered", "英语四级", "vocab/cet4.json"));
-            seeds.add(loadSeed("cet4", "shuffled", "英语四级（乱序）", "vocab/cet4-shuffled.txt"));
-            seeds.add(loadSeed("cet6", "ordered", "英语六级", "vocab/cet6.json"));
-            seeds.add(loadSeed("cet6", "shuffled", "英语六级（乱序）", "vocab/cet6-shuffled.txt"));
-            seeds.add(loadSeed("kaoyan", "ordered", "考研英语", "vocab/kaoyan.json"));
-            seeds.add(loadSeed("kaoyan", "shuffled", "考研英语（乱序）", "vocab/kaoyan-shuffled.txt"));
+            VocabStore.VocabBookSeed cet4Ordered = loadSeed("cet4", "ordered", "英语四级", "vocab/cet4.json");
+            VocabStore.VocabBookSeed cet6Ordered = loadSeed("cet6", "ordered", "英语六级", "vocab/cet6.json");
+            VocabStore.VocabBookSeed kaoyanOrdered = loadSeed("kaoyan", "ordered", "考研英语", "vocab/kaoyan.json");
+            seeds.add(cet4Ordered);
+            seeds.add(loadSeed("cet4", "shuffled", "英语四级（乱序）", "vocab/cet4-shuffled.txt", indexPhonetics(cet4Ordered.entries())));
+            seeds.add(cet6Ordered);
+            seeds.add(loadSeed("cet6", "shuffled", "英语六级（乱序）", "vocab/cet6-shuffled.txt", indexPhonetics(cet6Ordered.entries())));
+            seeds.add(kaoyanOrdered);
+            seeds.add(loadSeed("kaoyan", "shuffled", "考研英语（乱序）", "vocab/kaoyan-shuffled.txt", indexPhonetics(kaoyanOrdered.entries())));
             store.replaceBookData(seeds);
             log.info("Seeded vocab books successfully, count={}", seeds.size());
         } catch (Exception ex) {
@@ -90,9 +95,13 @@ public class VocabService {
     }
 
     private VocabStore.VocabBookSeed loadSeed(String code, String variant, String name, String path) throws Exception {
+        return loadSeed(code, variant, name, path, Map.of());
+    }
+
+    private VocabStore.VocabBookSeed loadSeed(String code, String variant, String name, String path, Map<String, String> phoneticByWord) throws Exception {
         try (InputStream inputStream = new ClassPathResource(path).getInputStream()) {
             if (path.endsWith(".txt")) {
-                return new VocabStore.VocabBookSeed(code, variant, name, "2026.1", loadTxtEntries(inputStream));
+                return new VocabStore.VocabBookSeed(code, variant, name, "2026.1", loadTxtEntries(inputStream, phoneticByWord));
             }
             List<Map<String, Object>> raw = objectMapper.readValue(inputStream, new TypeReference<>() {});
             List<VocabStore.VocabEntrySeed> entries = new ArrayList<>();
@@ -128,7 +137,7 @@ public class VocabService {
         }
     }
 
-    private List<VocabStore.VocabEntrySeed> loadTxtEntries(InputStream inputStream) throws Exception {
+    private List<VocabStore.VocabEntrySeed> loadTxtEntries(InputStream inputStream, Map<String, String> phoneticByWord) throws Exception {
         List<VocabStore.VocabEntrySeed> entries = new ArrayList<>();
         try (java.io.BufferedReader reader = new java.io.BufferedReader(new java.io.InputStreamReader(inputStream, java.nio.charset.StandardCharsets.UTF_8))) {
             String line;
@@ -141,10 +150,26 @@ public class VocabService {
                 if (parts.length < 2 || parts[0].isBlank() || parts[1].isBlank()) {
                     continue;
                 }
-                entries.add(new VocabStore.VocabEntrySeed(seq++, parts[0].trim(), null, parts[1].trim()));
+                String word = parts[0].trim();
+                entries.add(new VocabStore.VocabEntrySeed(
+                        seq++,
+                        word,
+                        blankToNull(phoneticByWord.get(normalizeWord(word))),
+                        parts[1].trim()));
             }
         }
         return entries;
+    }
+
+    private Map<String, String> indexPhonetics(List<VocabStore.VocabEntrySeed> entries) {
+        return entries.stream()
+                .filter(entry -> entry.word() != null && !entry.word().isBlank())
+                .filter(entry -> entry.phonetic() != null && !entry.phonetic().isBlank())
+                .collect(java.util.stream.Collectors.toMap(
+                        entry -> normalizeWord(entry.word()),
+                        VocabStore.VocabEntrySeed::phonetic,
+                        (left, right) -> left,
+                        java.util.LinkedHashMap::new));
     }
 
     private String text(Map<String, Object> item, String... keys) {
@@ -170,6 +195,10 @@ public class VocabService {
 
     private static String blankToNull(String value) {
         return value == null || value.isBlank() ? null : value.trim();
+    }
+
+    private String normalizeWord(String word) {
+        return word == null ? "" : word.trim().toLowerCase(Locale.ROOT);
     }
 
     private String normalizeVariant(String variant) {

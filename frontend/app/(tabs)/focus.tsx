@@ -258,14 +258,6 @@ export default function FocusScreen() {
           </TouchableOpacity>
         </View>
 
-        <TouchableOpacity style={styles.vocabCard} onPress={() => router.push('/vocab')}>
-          <View style={styles.vocabCardTextWrap}>
-            <Text style={styles.vocabCardTitle}>背单词 · 今日30词</Text>
-            <Text style={styles.vocabCardSubtitle}>像英语书一样顺序背，支持一键隐藏中文</Text>
-          </View>
-          <Text style={styles.vocabCardAction}>开始</Text>
-        </TouchableOpacity>
-
         <View style={styles.preferencePanel}>
           <View style={styles.preferenceHeader}>
             <View>
@@ -333,6 +325,14 @@ export default function FocusScreen() {
             <Text style={styles.lockHint}>计时开始后，本次目标时长会锁定。</Text>
           )}
         </View>
+
+        <TouchableOpacity style={styles.vocabCard} onPress={() => router.push('/vocab')}>
+          <View style={styles.vocabCardTextWrap}>
+            <Text style={styles.vocabCardTitle}>背单词 · 今日30词</Text>
+            <Text style={styles.vocabCardSubtitle}>像英语书一样顺序背，支持一键隐藏中文</Text>
+          </View>
+          <Text style={styles.vocabCardAction}>开始</Text>
+        </TouchableOpacity>
 
       </ScrollView>
     </Screen>
