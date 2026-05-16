@@ -6,7 +6,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.function.Function;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -30,6 +29,7 @@ public class VocabService {
 
     private final VocabStore store;
     private final ObjectMapper objectMapper;
+    private final Map<String, String> phoneticFallbackByBookCode = new LinkedHashMap<>();
 
     public VocabService(VocabStore store, ObjectMapper objectMapper) {
         this.store = store;
@@ -45,7 +45,7 @@ public class VocabService {
         int normalizedLimit = limit <= 0 ? DEFAULT_LIMIT : Math.min(limit, 100);
         int normalizedOffset = Math.max(offset, 0);
         List<VocabEntryResponse> entries = store.listEntries(book.getId(), normalizedOffset, normalizedLimit).stream()
-                .map(VocabEntryResponse::from)
+                .map(entry -> VocabEntryResponse.from(entry, resolvePhonetic(book.getCode(), entry.getWord(), entry.getPhonetic())))
                 .toList();
         return new VocabPageResponse(book.getCode(), book.getVariant(), book.getName(), normalizedOffset, normalizedLimit, book.getWordCount(), entries);
     }
@@ -87,6 +87,9 @@ public class VocabService {
             seeds.add(loadSeed("cet6", "shuffled", "英语六级（乱序）", "vocab/cet6-shuffled.txt", indexPhonetics(cet6Ordered.entries())));
             seeds.add(kaoyanOrdered);
             seeds.add(loadSeed("kaoyan", "shuffled", "考研英语（乱序）", "vocab/kaoyan-shuffled.txt", indexPhonetics(kaoyanOrdered.entries())));
+            phoneticFallbackByBookCode.put("cet4", encodePhoneticIndex(indexPhonetics(cet4Ordered.entries())));
+            phoneticFallbackByBookCode.put("cet6", encodePhoneticIndex(indexPhonetics(cet6Ordered.entries())));
+            phoneticFallbackByBookCode.put("kaoyan", encodePhoneticIndex(indexPhonetics(kaoyanOrdered.entries())));
             store.replaceBookData(seeds);
             log.info("Seeded vocab books successfully, count={}", seeds.size());
         } catch (Exception ex) {
@@ -170,6 +173,58 @@ public class VocabService {
                         VocabStore.VocabEntrySeed::phonetic,
                         (left, right) -> left,
                         java.util.LinkedHashMap::new));
+    }
+
+    private String encodePhoneticIndex(Map<String, String> index) {
+        try {
+            return objectMapper.writeValueAsString(index);
+        } catch (Exception ex) {
+            return "{}";
+        }
+    }
+
+    private String resolvePhonetic(String bookCode, String word, String phonetic) {
+        if (phonetic != null && !phonetic.isBlank()) {
+            return phonetic;
+        }
+        try {
+            String encodedIndex = phoneticFallbackByBookCode.computeIfAbsent(bookCode, this::loadPhoneticFallback);
+            if (encodedIndex == null || encodedIndex.isBlank()) {
+                return null;
+            }
+            Map<String, String> decoded = objectMapper.readValue(encodedIndex, new TypeReference<Map<String, String>>() {});
+            return blankToNull(decoded.get(normalizeWord(word)));
+        } catch (Exception ex) {
+            return null;
+        }
+    }
+
+    private String loadPhoneticFallback(String bookCode) {
+        String path = switch (bookCode) {
+            case "cet4" -> "vocab/cet4.json";
+            case "cet6" -> "vocab/cet6.json";
+            case "kaoyan" -> "vocab/kaoyan.json";
+            default -> null;
+        };
+        if (path == null) {
+            return "{}";
+        }
+        try (InputStream inputStream = new ClassPathResource(path).getInputStream()) {
+            List<Map<String, Object>> raw = objectMapper.readValue(inputStream, new TypeReference<>() {});
+            List<VocabStore.VocabEntrySeed> entries = new ArrayList<>();
+            for (Map<String, Object> item : raw) {
+                String word = text(item, "word", "name", "headWord");
+                if (word == null || word.isBlank()) {
+                    continue;
+                }
+                String phonetic = text(item, "phonetic", "usphone", "ukphone");
+                entries.add(new VocabStore.VocabEntrySeed(0, word.trim(), blankToNull(phonetic), ""));
+            }
+            return encodePhoneticIndex(indexPhonetics(entries));
+        } catch (Exception ex) {
+            log.warn("Failed to load phonetic fallback for {}", bookCode, ex);
+            return "{}";
+        }
     }
 
     private String text(Map<String, Object> item, String... keys) {

@@ -1,7 +1,6 @@
 import { getDb } from '@/db/database';
-import { syncService } from './syncService';
-import { createLocalId } from '@/utils/id';
 import { useAuthStore } from '@/store/authStore';
+import { apiClient } from './apiClient';
 
 export type EventType = 'anniversary' | 'birthday' | 'important_day' | 'todo_reminder';
 export type RepeatRule = 'none' | 'yearly' | 'monthly' | 'weekly';
@@ -31,6 +30,21 @@ export interface EventInput {
   remindDaysBefore?: number[];
   note?: string | null;
   mediaAssetId?: string | null;
+}
+
+interface ServerEvent {
+  id: string;
+  type: EventType;
+  title: string;
+  eventDate: string;
+  repeatRule: RepeatRule;
+  remindDaysBefore: number[];
+  daysUntil: number;
+  nextOccurrenceDate: string;
+  note: string | null;
+  mediaAssetId: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 const EVENT_TYPES: EventType[] = ['anniversary', 'birthday', 'important_day', 'todo_reminder'];
@@ -116,101 +130,133 @@ function hydrate(row: any): AnniversaryEvent {
   } as AnniversaryEvent;
 }
 
+function fromServerEvent(server: ServerEvent, userId: string): AnniversaryEvent {
+  return {
+    id: server.id,
+    user_id: userId,
+    type: server.type,
+    title: server.title,
+    event_date: server.eventDate,
+    repeat_rule: server.repeatRule,
+    remind_days_before: server.remindDaysBefore ?? [],
+    note: server.note,
+    media_asset_id: server.mediaAssetId,
+    created_at: server.createdAt,
+    updated_at: server.updatedAt,
+    deleted_at: null,
+    daysUntil: server.daysUntil,
+    nextOccurrenceDate: server.nextOccurrenceDate,
+  };
+}
+
+async function upsertLocalEvent(event: AnniversaryEvent) {
+  const db = await getDb();
+  await db.runAsync(
+    `INSERT INTO anniversary_events (
+      id, user_id, type, title, event_date, repeat_rule, remind_days_before,
+      note, media_asset_id, created_at, updated_at, deleted_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(id) DO UPDATE SET
+      user_id = excluded.user_id,
+      type = excluded.type,
+      title = excluded.title,
+      event_date = excluded.event_date,
+      repeat_rule = excluded.repeat_rule,
+      remind_days_before = excluded.remind_days_before,
+      note = excluded.note,
+      media_asset_id = excluded.media_asset_id,
+      created_at = excluded.created_at,
+      updated_at = excluded.updated_at,
+      deleted_at = excluded.deleted_at`,
+    [
+      event.id,
+      event.user_id,
+      event.type,
+      event.title,
+      event.event_date,
+      event.repeat_rule,
+      JSON.stringify(event.remind_days_before ?? []),
+      event.note,
+      event.media_asset_id,
+      event.created_at,
+      event.updated_at,
+      event.deleted_at,
+    ]
+  );
+}
+
+async function markLocalEventDeleted(id: string) {
+  const db = await getDb();
+  const now = new Date().toISOString();
+  await db.runAsync(
+    'UPDATE anniversary_events SET deleted_at = ?, updated_at = ? WHERE id = ?',
+    [now, now, id]
+  );
+}
+
 export const eventService = {
   async createEvent(input: EventInput) {
-    const db = await getDb();
     const userId = getUserId();
     validateInput(input);
 
-    const now = new Date().toISOString();
-    const event: Omit<AnniversaryEvent, 'daysUntil' | 'nextOccurrenceDate'> = {
-      id: createLocalId('event'),
-      user_id: userId,
+    const response = await apiClient.post<ServerEvent>('/events', {
       type: input.type,
       title: input.title.trim(),
-      event_date: input.eventDate,
-      repeat_rule: input.repeatRule || 'none',
-      remind_days_before: [...(input.remindDaysBefore || [])].sort((a, b) => b - a),
+      eventDate: input.eventDate,
+      repeatRule: input.repeatRule || 'none',
+      remindDaysBefore: [...(input.remindDaysBefore || [])].sort((a, b) => b - a),
       note: input.note?.trim() || null,
-      media_asset_id: input.mediaAssetId?.trim() || null,
-      created_at: now,
-      updated_at: now,
-      deleted_at: null,
-    };
-
-    await db.runAsync(
-      `INSERT INTO anniversary_events (
-        id, user_id, type, title, event_date, repeat_rule, remind_days_before,
-        note, media_asset_id, created_at, updated_at, deleted_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        event.id, event.user_id, event.type, event.title, event.event_date,
-        event.repeat_rule, JSON.stringify(event.remind_days_before), event.note,
-        event.media_asset_id, event.created_at, event.updated_at, event.deleted_at,
-      ]
-    );
-
-    await syncService.enqueueMutation('anniversary_event', event.id, 'create', event);
-    return hydrate({ ...event, remind_days_before: JSON.stringify(event.remind_days_before) });
+      mediaAssetId: input.mediaAssetId?.trim() || null,
+    });
+    if (!response.success || !response.data) {
+      throw new Error(response.error?.message || '纪念日保存失败');
+    }
+    const event = fromServerEvent(response.data, userId);
+    await upsertLocalEvent(event);
+    return event;
   },
 
   async updateEvent(id: string, input: Partial<EventInput>) {
-    const db = await getDb();
     const userId = getUserId();
-    const existing = await db.getFirstAsync<any>(
-      'SELECT * FROM anniversary_events WHERE id = ? AND user_id = ? AND deleted_at IS NULL',
-      [id, userId]
-    );
-    if (!existing) throw new Error('事件不存在');
+    const payload: Record<string, unknown> = {};
+    if (input.type !== undefined) payload.type = input.type;
+    if (input.title !== undefined) payload.title = input.title.trim();
+    if (input.eventDate !== undefined) payload.eventDate = input.eventDate;
+    if (input.repeatRule !== undefined) payload.repeatRule = input.repeatRule;
+    if (input.remindDaysBefore !== undefined) payload.remindDaysBefore = [...input.remindDaysBefore].sort((a, b) => b - a);
+    if (input.note !== undefined) payload.note = input.note?.trim() || null;
+    if (input.mediaAssetId !== undefined) payload.mediaAssetId = input.mediaAssetId?.trim() || null;
 
-    const merged: EventInput = {
-      type: input.type ?? existing.type,
-      title: input.title ?? existing.title,
-      eventDate: input.eventDate ?? existing.event_date,
-      repeatRule: input.repeatRule ?? existing.repeat_rule,
-      remindDaysBefore: input.remindDaysBefore ?? JSON.parse(existing.remind_days_before || '[]'),
-      note: input.note ?? existing.note,
-      mediaAssetId: input.mediaAssetId ?? existing.media_asset_id,
-    };
-    validateInput(merged);
-
-    const now = new Date().toISOString();
-    await db.runAsync(
-      `UPDATE anniversary_events SET
-        type = ?, title = ?, event_date = ?, repeat_rule = ?, remind_days_before = ?,
-        note = ?, media_asset_id = ?, updated_at = ?
-       WHERE id = ?`,
-      [
-        merged.type, merged.title.trim(), merged.eventDate, merged.repeatRule || 'none',
-        JSON.stringify(merged.remindDaysBefore || []), merged.note ?? null,
-        merged.mediaAssetId ?? null, now, id,
-      ]
-    );
-
-    await syncService.enqueueMutation('anniversary_event', id, 'update', { id, ...merged });
-    return this.getEvent(id);
+    const response = await apiClient.patch<ServerEvent>(`/events/${id}`, payload);
+    if (!response.success || !response.data) {
+      throw new Error(response.error?.message || '纪念日更新失败');
+    }
+    const event = fromServerEvent(response.data, userId);
+    await upsertLocalEvent(event);
+    return event;
   },
 
   async deleteEvent(id: string) {
-    const db = await getDb();
-    const userId = getUserId();
-    const existing = await db.getFirstAsync<any>(
-      'SELECT * FROM anniversary_events WHERE id = ? AND user_id = ? AND deleted_at IS NULL',
-      [id, userId]
-    );
-    if (!existing) throw new Error('事件不存在');
-
-    const now = new Date().toISOString();
-    await db.runAsync(
-      'UPDATE anniversary_events SET deleted_at = ?, updated_at = ? WHERE id = ?',
-      [now, now, id]
-    );
-    await syncService.enqueueMutation('anniversary_event', id, 'delete', { id });
+    const response = await apiClient.delete<void>(`/events/${id}`);
+    if (!response.success) {
+      throw new Error(response.error?.message || '纪念日删除失败');
+    }
+    await markLocalEventDeleted(id);
   },
 
   async getEvent(id: string) {
-    const db = await getDb();
     const userId = getUserId();
+    const response = await apiClient.get<ServerEvent[]>(`/events?from=1970-01-01&to=2100-12-31`);
+    if (response.success && response.data) {
+      const event = response.data.find((item) => item.id === id);
+      if (!event) {
+        return null;
+      }
+      const mapped = fromServerEvent(event, userId);
+      await upsertLocalEvent(mapped);
+      return mapped;
+    }
+    const db = await getDb();
     const row = await db.getFirstAsync<any>(
       'SELECT * FROM anniversary_events WHERE id = ? AND user_id = ? AND deleted_at IS NULL',
       [id, userId]
@@ -219,8 +265,14 @@ export const eventService = {
   },
 
   async getEvents(from: string, to: string) {
-    const db = await getDb();
     const userId = getUserId();
+    const response = await apiClient.get<ServerEvent[]>(`/events?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`);
+    if (response.success && response.data) {
+      const events = response.data.map((item) => fromServerEvent(item, userId));
+      await Promise.all(events.map((event) => upsertLocalEvent(event)));
+      return events.sort((a, b) => a.nextOccurrenceDate.localeCompare(b.nextOccurrenceDate));
+    }
+    const db = await getDb();
     const rows = await db.getAllAsync<any>(
       'SELECT * FROM anniversary_events WHERE user_id = ? AND deleted_at IS NULL',
       [userId]
@@ -232,6 +284,13 @@ export const eventService = {
   },
 
   async getUpcoming(days: number = 30) {
+    const response = await apiClient.get<ServerEvent[]>(`/events/upcoming?days=${days}`);
+    if (response.success && response.data) {
+      const userId = getUserId();
+      const events = response.data.map((item) => fromServerEvent(item, userId));
+      await Promise.all(events.map((event) => upsertLocalEvent(event)));
+      return events.sort((a, b) => a.nextOccurrenceDate.localeCompare(b.nextOccurrenceDate));
+    }
     const from = new Date().toISOString().slice(0, 10);
     const end = new Date();
     end.setUTCDate(end.getUTCDate() + days);

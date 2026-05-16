@@ -129,16 +129,16 @@ export default function VocabScreen() {
   const progressRatio = total > 0 ? Math.min(Math.max(currentSeqNo / total, 0), 1) : 0;
 
   return (
-    <Screen title="背单词" scrollable={false}>
+    <Screen title="背单词" scrollable={false} contentContainerStyle={styles.screenContent}>
       <View style={styles.screenBody}>
         <ScrollView contentContainerStyle={styles.scrollContent}>
           <View style={styles.headerCard}>
         <TouchableOpacity style={styles.selectBox} onPress={() => setBookPickerVisible(true)} activeOpacity={0.85}>
-          <View style={styles.selectBoxContent}>
-            <Text style={styles.selectLabel}>当前词书</Text>
-            <Text style={styles.selectValue}>{selectedBook?.name ?? '请选择词书'}</Text>
+          <Text style={styles.selectLabel}>当前词书</Text>
+          <View style={styles.selectRow}>
+            <Text style={styles.selectValue} numberOfLines={1}>{selectedBook?.name ?? '请选择词书'}</Text>
+            <Text style={styles.selectArrow}>▾</Text>
           </View>
-          <Text style={styles.selectArrow}>▾</Text>
         </TouchableOpacity>
         <View style={styles.metaRow}>
           <Text style={styles.metaText}>{selectedBook?.name ?? '词书'} · {offset + 1}-{Math.min(offset + entries.length, total)}</Text>
@@ -171,7 +171,9 @@ export default function VocabScreen() {
                       <Text style={styles.word}>{entry.word}</Text>
                       {entry.phonetic ? <Text style={styles.phonetic}>{entry.phonetic}</Text> : null}
                     </View>
-                    {!hideMeaning ? <Text style={styles.meaning}>{entry.meaningZh}</Text> : null}
+                    <View style={styles.meaningWrap}>
+                      {!hideMeaning ? <Text style={styles.meaning}>{entry.meaningZh}</Text> : null}
+                    </View>
                   </View>
                 </View>
               ))}
@@ -248,6 +250,9 @@ const styles = StyleSheet.create({
     flex: 1,
     position: 'relative',
   },
+  screenContent: {
+    paddingTop: 8,
+  },
   scrollContent: {
     paddingBottom: 120,
   },
@@ -268,18 +273,21 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     marginBottom: 12,
   },
-  selectBoxContent: {
-    flex: 1,
-  },
   selectLabel: {
     color: colors.muted,
     fontSize: 12,
-    marginBottom: 4,
+    marginBottom: 6,
+  },
+  selectRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
   },
   selectValue: {
     color: colors.text,
     fontSize: 16,
     fontWeight: '700',
+    flex: 1,
   },
   selectArrow: {
     color: colors.muted,
@@ -382,8 +390,12 @@ const styles = StyleSheet.create({
     textAlign: 'right',
     maxWidth: '45%',
   },
-  meaning: {
+  meaningWrap: {
+    minHeight: 28,
+    justifyContent: 'center',
     marginTop: 6,
+  },
+  meaning: {
     color: colors.text,
     fontSize: 15,
     lineHeight: 22,

@@ -5,21 +5,20 @@ import {
   ActivityIndicator,
   Alert,
   Image,
-  KeyboardAvoidingView,
+  Keyboard,
   Modal,
   Platform,
   Pressable,
-  GestureResponderEvent,
   RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
+  Vibration,
   View
 } from "react-native";
 import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
-import { useHeaderHeight } from "@react-navigation/elements";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Audio } from "expo-av";
 
@@ -137,15 +136,21 @@ export default function FriendChatScreen() {
   const [audioProgress, setAudioProgress] = useState<Record<string, number>>({});
   const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
   const [composerFocused, setComposerFocused] = useState(false);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const [recordTouchActive, setRecordTouchActive] = useState(false);
   const [recordGestureActive, setRecordGestureActive] = useState(false);
   const [recordWillCancel, setRecordWillCancel] = useState(false);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const recordFinalizingRef = useRef(false);
   const recordStartingRef = useRef(false);
+  const recordHoldTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cancelZoneViewRef = useRef<View | null>(null);
+  const cancelZoneRef = useRef<{ x: number; y: number; width: number; height: number } | null>(null);
+  const hasEnteredCancelZoneRef = useRef(false);
+  const recordWillCancelRef = useRef(false);
   const scrollViewRef = useRef<ScrollView | null>(null);
   const soundRef = useRef<Audio.Sound | null>(null);
   const hasInitialScrolledRef = useRef(false);
-  const headerHeight = useHeaderHeight();
   const insets = useSafeAreaInsets();
 
   const title = useMemo(() => friendName || "聊天", [friendName]);
@@ -202,6 +207,23 @@ export default function FriendChatScreen() {
   useEffect(() => {
     void loadMessages();
   }, [loadMessages]);
+
+  useEffect(() => {
+    const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const hideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+    const showSub = Keyboard.addListener(showEvent, (event) => {
+      const nextHeight = Math.max(0, (event.endCoordinates?.height ?? 0) - insets.bottom);
+      setKeyboardHeight(nextHeight);
+      setTimeout(() => scrollToBottom(false), 80);
+    });
+    const hideSub = Keyboard.addListener(hideEvent, () => {
+      setKeyboardHeight(0);
+    });
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, [insets.bottom, scrollToBottom]);
 
   useFocusEffect(
     useCallback(() => {
@@ -354,6 +376,7 @@ export default function FriendChatScreen() {
       return;
     }
     if (!recording || recordFinalizingRef.current) {
+      setRecordTouchActive(false);
       setRecordGestureActive(false);
       setRecordWillCancel(false);
       return;
@@ -368,44 +391,95 @@ export default function FriendChatScreen() {
         await cancelAudioRecording(currentRecording);
       }
     } finally {
+      hasEnteredCancelZoneRef.current = false;
+      setRecordTouchActive(false);
       setRecordGestureActive(false);
       setRecordWillCancel(false);
       recordFinalizingRef.current = false;
     }
   }
 
-  async function handleRecordPressOut(_: GestureResponderEvent) {
-    if (!recording) {
-      return;
+  const clearRecordHoldTimer = useCallback(() => {
+    if (recordHoldTimerRef.current) {
+      clearTimeout(recordHoldTimerRef.current);
+      recordHoldTimerRef.current = null;
     }
-    await finalizeRecord(!recordWillCancel);
-  }
+  }, []);
 
-  const recordPanResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => false,
-      onMoveShouldSetPanResponder: () => !!recordGestureActive,
-      onPanResponderMove: (_, gestureState) => {
-        if (!recordGestureActive) {
-          return;
-        }
-        setRecordWillCancel(gestureState.dy < -50);
-      },
-      onPanResponderRelease: async () => {
-        if (!recording) {
-          setRecordGestureActive(false);
+  const updateCancelZoneState = useCallback((pageX: number, pageY: number) => {
+    const zone = cancelZoneRef.current;
+    if (!zone) {
+      recordWillCancelRef.current = false;
+      setRecordWillCancel(false);
+      return false;
+    }
+    const inside =
+      pageX >= zone.x &&
+      pageX <= zone.x + zone.width &&
+      pageY >= zone.y &&
+      pageY <= zone.y + zone.height;
+
+    recordWillCancelRef.current = inside;
+    setRecordWillCancel(inside);
+    if (inside && !hasEnteredCancelZoneRef.current) {
+      hasEnteredCancelZoneRef.current = true;
+      Vibration.vibrate(10);
+    } else if (!inside) {
+      hasEnteredCancelZoneRef.current = false;
+    }
+    return inside;
+  }, []);
+
+  const recordPanResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => !(sending || uploadingMedia),
+        onStartShouldSetPanResponderCapture: () => recordTouchActive,
+        onMoveShouldSetPanResponderCapture: () => recordTouchActive,
+        onPanResponderTerminationRequest: () => false,
+        onShouldBlockNativeResponder: () => true,
+        onPanResponderGrant: () => {
+          setRecordTouchActive(true);
           setRecordWillCancel(false);
-          return;
+          hasEnteredCancelZoneRef.current = false;
+          clearRecordHoldTimer();
+          recordHoldTimerRef.current = setTimeout(() => {
+            setRecordGestureActive(true);
+            void toggleRecordAudio();
+          }, 180);
+        },
+        onPanResponderMove: (event) => {
+          if (!recordGestureActive) {
+            return;
+          }
+          updateCancelZoneState(event.nativeEvent.pageX, event.nativeEvent.pageY);
+        },
+        onPanResponderRelease: (event) => {
+          clearRecordHoldTimer();
+          if (!recordGestureActive && !recordStartingRef.current && !recording) {
+            setRecordTouchActive(false);
+            setRecordWillCancel(false);
+            recordWillCancelRef.current = false;
+            return;
+          }
+          const shouldCancel = recordGestureActive
+            ? updateCancelZoneState(event.nativeEvent.pageX, event.nativeEvent.pageY)
+            : recordWillCancelRef.current;
+          void finalizeRecord(!shouldCancel);
+        },
+        onPanResponderTerminate: () => {
+          clearRecordHoldTimer();
+          if (!recordGestureActive && !recordStartingRef.current && !recording) {
+            setRecordTouchActive(false);
+            setRecordWillCancel(false);
+            recordWillCancelRef.current = false;
+            return;
+          }
+          void finalizeRecord(false);
         }
-        await finalizeRecord(!recordWillCancel);
-      },
-      onPanResponderTerminate: async () => {
-        if (recording) {
-          await finalizeRecord(false);
-        }
-      }
-    })
-  ).current;
+      }),
+    [clearRecordHoldTimer, recordGestureActive, recording, sending, updateCancelZoneState, uploadingMedia]
+  );
 
   async function playAudio(message: FriendMessage) {
     if (!message.attachment?.url) {
@@ -453,11 +527,7 @@ export default function FriendChatScreen() {
           )
         }}
       />
-      <KeyboardAvoidingView
-        style={styles.container}
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        keyboardVerticalOffset={Platform.OS === "ios" ? headerHeight : 0}
-      >
+      <View style={[styles.container, { paddingBottom: keyboardHeight }]}>
         <Screen scrollable={false} style={styles.screen} contentContainerStyle={styles.screenContent}>
           {loading ? (
             <View style={styles.centerBlock}>
@@ -559,7 +629,17 @@ export default function FriendChatScreen() {
 
         {recordGestureActive ? (
           <View style={styles.recordHintOverlay} pointerEvents="none">
-            <View style={[styles.recordHintCard, recordWillCancel && styles.recordHintCardCancel]}>
+            <View
+              ref={cancelZoneViewRef}
+              style={[styles.recordHintCard, recordWillCancel && styles.recordHintCardCancel]}
+              onLayout={() => {
+                requestAnimationFrame(() => {
+                  cancelZoneViewRef.current?.measureInWindow((x, y, width, height) => {
+                    cancelZoneRef.current = { x, y, width, height };
+                  });
+                });
+              }}
+            >
               <Ionicons
                 name={recordWillCancel ? "close-circle" : "arrow-up-circle"}
                 size={18}
@@ -576,22 +656,14 @@ export default function FriendChatScreen() {
         ) : null}
 
         <View style={[styles.composer, { paddingBottom: Math.max(insets.bottom, 12) }]}>
-          <Pressable
-            style={({ pressed }) => [
+          <View
+            style={[
               styles.recordButton,
+              recordTouchActive && styles.recordButtonPressed,
               recordGestureActive && styles.recordButtonExpanded,
               recording && styles.recordButtonActive,
-              pressed && !recording && styles.recordButtonPressed,
               (sending || uploadingMedia) && styles.disabledButton
             ]}
-            onLongPress={async () => {
-              setRecordGestureActive(true);
-              setRecordWillCancel(false);
-              await toggleRecordAudio();
-            }}
-            onPressOut={handleRecordPressOut}
-            delayLongPress={180}
-            disabled={sending || uploadingMedia}
             {...recordPanResponder.panHandlers}
           >
             <Ionicons
@@ -604,7 +676,7 @@ export default function FriendChatScreen() {
                 {recordWillCancel ? "松开取消" : "松开发送"}
               </Text>
             ) : null}
-          </Pressable>
+          </View>
           <TouchableOpacity
             style={[styles.mediaButton, (sending || uploadingMedia) && styles.disabledButton]}
             onPress={sendImage}
@@ -620,7 +692,10 @@ export default function FriendChatScreen() {
             style={styles.input}
             value={draft}
             onChangeText={setDraft}
-            onFocus={() => setComposerFocused(true)}
+            onFocus={() => {
+              setComposerFocused(true);
+              setTimeout(() => scrollToBottom(false), 80);
+            }}
             onBlur={() => setComposerFocused(false)}
             placeholder="发消息..."
             placeholderTextColor={colors.muted}
@@ -633,7 +708,7 @@ export default function FriendChatScreen() {
             <Ionicons name="send-outline" size={18} color={colors.surface} />
           </TouchableOpacity>
         </View>
-      </KeyboardAvoidingView>
+      </View>
       <Modal
         visible={!!previewImageUrl}
         transparent

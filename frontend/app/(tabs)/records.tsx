@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import type { ReactNode } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -130,6 +131,12 @@ export default function RecordsScreen() {
   const [calendarDays, setCalendarDays] = useState<CalendarDayState[]>([]);
   const [calendarDetail, setCalendarDetail] = useState<CalendarDayDetail | null>(null);
   const [calendarDetailLoading, setCalendarDetailLoading] = useState(false);
+  const [calendarSectionsExpanded, setCalendarSectionsExpanded] = useState({
+    focus: true,
+    habits: true,
+    meals: true,
+    transactions: true,
+  });
 
   const budgetProgress = useMemo(() => {
     if (summary.budget <= 0) return 0;
@@ -186,6 +193,15 @@ export default function RecordsScreen() {
       void loadCalendarDetail(selectedDate);
     }
   }, [activeTab, selectedDate]);
+
+  useEffect(() => {
+    setCalendarSectionsExpanded({
+      focus: true,
+      habits: true,
+      meals: true,
+      transactions: true,
+    });
+  }, [selectedDate]);
 
   async function loadLedger() {
     try {
@@ -934,69 +950,6 @@ export default function RecordsScreen() {
               <Text style={styles.emptyText}>请选择日期查看详情。</Text>
             ) : (
               <>
-                <Text style={styles.detailLabel}>专注</Text>
-                <View style={styles.transactionRow}>
-                  <View style={styles.transactionMain}>
-                    <Text style={styles.transactionTitle}>专注记录</Text>
-                    <Text style={styles.transactionMeta}>已完成 {calendarDetail.focus.sessionCount} 次</Text>
-                  </View>
-                  <Text style={[styles.transactionAmount, styles.eventCountdown]}>
-                    {Math.floor(calendarDetail.focus.totalSeconds / 60)} 分钟
-                  </Text>
-                </View>
-
-                <Text style={styles.detailLabel}>习惯</Text>
-                {calendarDetail.habits.all.length === 0 ? (
-                  <Text style={styles.emptyText}>当天没有习惯项目。</Text>
-                ) : (
-                  calendarDetail.habits.all.map((habit) => {
-                    const done = calendarDetail.habits.checkins.some((checkin) => checkin.habit_id === habit.id && checkin.count > 0);
-                    return (
-                      <View key={habit.id} style={styles.transactionRow}>
-                        <View style={styles.transactionMain}>
-                          <Text style={styles.transactionTitle}>{habit.name}</Text>
-                          <Text style={styles.transactionMeta}>{done ? "已打卡" : "未打卡"}</Text>
-                        </View>
-                        <Text style={[styles.transactionAmount, done && styles.incomeAmount]}>
-                          {done ? "已完成" : "未完成"}
-                        </Text>
-                      </View>
-                    );
-                  })
-                )}
-
-                <Text style={styles.detailLabel}>饮食</Text>
-                {calendarDetail.meals.length === 0 ? (
-                  <Text style={styles.emptyText}>当天没有饮食记录。</Text>
-                ) : (
-                  calendarDetail.meals.map((meal) => (
-                    <Pressable key={meal.id} style={styles.transactionRow} onPress={() => loadMealDetail(meal.id)}>
-                      <View style={styles.transactionMain}>
-                        <Text style={styles.transactionTitle}>{formatMealType(meal.mealType)}</Text>
-                        <Text style={styles.transactionMeta}>{formatDateTimeCn(meal.occurredAt)}</Text>
-                      </View>
-                      <Text style={[styles.transactionAmount, styles.eventCountdown]}>{meal.totalCalories ?? 0} 千卡</Text>
-                    </Pressable>
-                  ))
-                )}
-
-                <Text style={styles.detailLabel}>记账</Text>
-                {calendarDetail.transactions.length === 0 ? (
-                  <Text style={styles.emptyText}>当天没有流水记录。</Text>
-                ) : (
-                  calendarDetail.transactions.map((transaction) => (
-                    <View key={transaction.id} style={styles.transactionRow}>
-                      <View style={styles.transactionMain}>
-                        <Text style={styles.transactionTitle}>{transaction.category || "未分类"}</Text>
-                        <Text style={styles.transactionMeta}>{transaction.account || "默认账户"}</Text>
-                      </View>
-                      <Text style={[styles.transactionAmount, transaction.type === "income" && styles.incomeAmount]}>
-                        {transaction.type === "income" ? "+" : "-"}{formatMoney(transaction.amount)}
-                      </Text>
-                    </View>
-                  ))
-                )}
-
                 <Text style={styles.detailLabel}>纪念日 / 提醒</Text>
                 {calendarDetail.events.length === 0 ? (
                   <Text style={styles.emptyText}>当天没有纪念日或提醒。</Text>
@@ -1011,6 +964,97 @@ export default function RecordsScreen() {
                     </View>
                   ))
                 )}
+
+                <DetailSection
+                  label="专注"
+                  expanded={calendarSectionsExpanded.focus}
+                  onToggle={() =>
+                    setCalendarSectionsExpanded((current) => ({ ...current, focus: !current.focus }))
+                  }
+                >
+                  <View style={styles.transactionRow}>
+                    <View style={styles.transactionMain}>
+                      <Text style={styles.transactionTitle}>专注记录</Text>
+                      <Text style={styles.transactionMeta}>已完成 {calendarDetail.focus.sessionCount} 次</Text>
+                    </View>
+                    <Text style={[styles.transactionAmount, styles.eventCountdown]}>
+                      {Math.floor(calendarDetail.focus.totalSeconds / 60)} 分钟
+                    </Text>
+                  </View>
+                </DetailSection>
+
+                <DetailSection
+                  label="习惯"
+                  expanded={calendarSectionsExpanded.habits}
+                  onToggle={() =>
+                    setCalendarSectionsExpanded((current) => ({ ...current, habits: !current.habits }))
+                  }
+                >
+                  {calendarDetail.habits.all.length === 0 ? (
+                    <Text style={styles.emptyText}>当天没有习惯项目。</Text>
+                  ) : (
+                    calendarDetail.habits.all.map((habit) => {
+                      const done = calendarDetail.habits.checkins.some((checkin) => checkin.habit_id === habit.id && checkin.count > 0);
+                      return (
+                        <View key={habit.id} style={styles.transactionRow}>
+                          <View style={styles.transactionMain}>
+                            <Text style={styles.transactionTitle}>{habit.name}</Text>
+                            <Text style={styles.transactionMeta}>{done ? "已打卡" : "未打卡"}</Text>
+                          </View>
+                          <Text style={[styles.transactionAmount, done && styles.incomeAmount]}>
+                            {done ? "已完成" : "未完成"}
+                          </Text>
+                        </View>
+                      );
+                    })
+                  )}
+                </DetailSection>
+
+                <DetailSection
+                  label="饮食"
+                  expanded={calendarSectionsExpanded.meals}
+                  onToggle={() =>
+                    setCalendarSectionsExpanded((current) => ({ ...current, meals: !current.meals }))
+                  }
+                >
+                  {calendarDetail.meals.length === 0 ? (
+                    <Text style={styles.emptyText}>当天没有饮食记录。</Text>
+                  ) : (
+                    calendarDetail.meals.map((meal) => (
+                      <Pressable key={meal.id} style={styles.transactionRow} onPress={() => loadMealDetail(meal.id)}>
+                        <View style={styles.transactionMain}>
+                          <Text style={styles.transactionTitle}>{formatMealType(meal.mealType)}</Text>
+                          <Text style={styles.transactionMeta}>{formatDateTimeCn(meal.occurredAt)}</Text>
+                        </View>
+                        <Text style={[styles.transactionAmount, styles.eventCountdown]}>{meal.totalCalories ?? 0} 千卡</Text>
+                      </Pressable>
+                    ))
+                  )}
+                </DetailSection>
+
+                <DetailSection
+                  label="记账"
+                  expanded={calendarSectionsExpanded.transactions}
+                  onToggle={() =>
+                    setCalendarSectionsExpanded((current) => ({ ...current, transactions: !current.transactions }))
+                  }
+                >
+                  {calendarDetail.transactions.length === 0 ? (
+                    <Text style={styles.emptyText}>当天没有流水记录。</Text>
+                  ) : (
+                    calendarDetail.transactions.map((transaction) => (
+                      <View key={transaction.id} style={styles.transactionRow}>
+                        <View style={styles.transactionMain}>
+                          <Text style={styles.transactionTitle}>{transaction.category || "未分类"}</Text>
+                          <Text style={styles.transactionMeta}>{transaction.account || "默认账户"}</Text>
+                        </View>
+                        <Text style={[styles.transactionAmount, transaction.type === "income" && styles.incomeAmount]}>
+                          {transaction.type === "income" ? "+" : "-"}{formatMoney(transaction.amount)}
+                        </Text>
+                      </View>
+                    ))
+                  )}
+                </DetailSection>
               </>
             )}
           </View>
@@ -1049,6 +1093,35 @@ function TabButton({ label, active, onPress }: { label: string; active: boolean;
     <Pressable onPress={onPress} style={[styles.tabButton, active && styles.tabButtonActive]}>
       <Text style={[styles.tabButtonText, active && styles.tabButtonTextActive]}>{label}</Text>
     </Pressable>
+  );
+}
+
+function DetailSection({
+  label,
+  expanded,
+  onToggle,
+  children,
+}: {
+  label: string;
+  expanded: boolean;
+  onToggle: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <View style={styles.detailSection}>
+      <TouchableOpacity style={styles.detailSectionHeader} onPress={onToggle} activeOpacity={0.85}>
+        <Text style={styles.detailLabel}>{label}</Text>
+        <View style={styles.detailSectionAction}>
+          <Text style={styles.detailSectionActionText}>{expanded ? "收起" : "展开查看"}</Text>
+          <MaterialCommunityIcons
+            name={expanded ? "chevron-up" : "chevron-down"}
+            size={18}
+            color={colors.muted}
+          />
+        </View>
+      </TouchableOpacity>
+      {expanded ? children : null}
+    </View>
   );
 }
 
@@ -1200,6 +1273,24 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "700",
     marginTop: 6,
+  },
+  detailSection: {
+    gap: 8,
+  },
+  detailSectionAction: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 2,
+  },
+  detailSectionActionText: {
+    color: colors.muted,
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  detailSectionHeader: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "space-between",
   },
   detailMeta: {
     color: colors.muted,

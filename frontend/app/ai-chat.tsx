@@ -1,23 +1,22 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   PanResponder,
   ActivityIndicator,
   Alert,
   Image,
-  KeyboardAvoidingView,
+  Keyboard,
   Modal,
   Platform,
   Pressable,
-  GestureResponderEvent,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
+  Vibration,
   View
 } from "react-native";
-import { useHeaderHeight } from "@react-navigation/elements";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Audio } from "expo-av";
 
@@ -71,14 +70,20 @@ export default function AiChatScreen() {
   const [audioProgress, setAudioProgress] = useState<Record<string, number>>({});
   const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
   const [activeTools, setActiveTools] = useState<string[]>([]);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const [recordTouchActive, setRecordTouchActive] = useState(false);
   const [recordGestureActive, setRecordGestureActive] = useState(false);
   const [recordWillCancel, setRecordWillCancel] = useState(false);
   const scrollViewRef = useRef<ScrollView | null>(null);
   const recordFinalizingRef = useRef(false);
   const recordStartingRef = useRef(false);
+  const recordHoldTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cancelZoneViewRef = useRef<View | null>(null);
+  const cancelZoneRef = useRef<{ x: number; y: number; width: number; height: number } | null>(null);
+  const hasEnteredCancelZoneRef = useRef(false);
+  const recordWillCancelRef = useRef(false);
   const hasInitialScrolledRef = useRef(false);
   const soundRef = useRef<Audio.Sound | null>(null);
-  const headerHeight = useHeaderHeight();
   const insets = useSafeAreaInsets();
 
   const scrollToBottom = useCallback((animated = true) => {
@@ -90,6 +95,23 @@ export default function AiChatScreen() {
   useEffect(() => {
     void bootstrap();
   }, []);
+
+  useEffect(() => {
+    const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const hideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+    const showSub = Keyboard.addListener(showEvent, (event) => {
+      const nextHeight = Math.max(0, (event.endCoordinates?.height ?? 0) - insets.bottom);
+      setKeyboardHeight(nextHeight);
+      setTimeout(() => scrollToBottom(false), 80);
+    });
+    const hideSub = Keyboard.addListener(hideEvent, () => {
+      setKeyboardHeight(0);
+    });
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, [insets.bottom, scrollToBottom]);
 
   const bootstrap = async () => {
     setLoading(true);
@@ -304,6 +326,7 @@ export default function AiChatScreen() {
       return;
     }
     if (!recording || recordFinalizingRef.current) {
+      setRecordTouchActive(false);
       setRecordGestureActive(false);
       setRecordWillCancel(false);
       return;
@@ -318,40 +341,93 @@ export default function AiChatScreen() {
         await cancelAudioRecording(currentRecording);
       }
     } finally {
+      hasEnteredCancelZoneRef.current = false;
+      setRecordTouchActive(false);
       setRecordGestureActive(false);
       setRecordWillCancel(false);
       recordFinalizingRef.current = false;
     }
   };
 
-  const handleRecordPressOut = async (_: GestureResponderEvent) => {
-    if (!recording) return;
-    await finalizeRecord(!recordWillCancel);
-  };
+  const clearRecordHoldTimer = useCallback(() => {
+    if (recordHoldTimerRef.current) {
+      clearTimeout(recordHoldTimerRef.current);
+      recordHoldTimerRef.current = null;
+    }
+  }, []);
 
-  const recordPanResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => false,
-      onMoveShouldSetPanResponder: () => !!recordGestureActive,
-      onPanResponderMove: (_, gestureState) => {
-        if (!recordGestureActive) return;
-        setRecordWillCancel(gestureState.dy < -50);
-      },
-      onPanResponderRelease: async () => {
-        if (!recording) {
-          setRecordGestureActive(false);
+  const updateCancelZoneState = useCallback((pageX: number, pageY: number) => {
+    const zone = cancelZoneRef.current;
+    if (!zone) {
+      recordWillCancelRef.current = false;
+      setRecordWillCancel(false);
+      return false;
+    }
+    const inside =
+      pageX >= zone.x &&
+      pageX <= zone.x + zone.width &&
+      pageY >= zone.y &&
+      pageY <= zone.y + zone.height;
+
+    recordWillCancelRef.current = inside;
+    setRecordWillCancel(inside);
+    if (inside && !hasEnteredCancelZoneRef.current) {
+      hasEnteredCancelZoneRef.current = true;
+      Vibration.vibrate(10);
+    } else if (!inside) {
+      hasEnteredCancelZoneRef.current = false;
+    }
+    return inside;
+  }, []);
+
+  const recordPanResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => !(sending || uploadingMedia),
+        onStartShouldSetPanResponderCapture: () => recordTouchActive,
+        onMoveShouldSetPanResponderCapture: () => recordTouchActive,
+        onPanResponderTerminationRequest: () => false,
+        onShouldBlockNativeResponder: () => true,
+        onPanResponderGrant: () => {
+          setRecordTouchActive(true);
           setRecordWillCancel(false);
-          return;
+          hasEnteredCancelZoneRef.current = false;
+          clearRecordHoldTimer();
+          recordHoldTimerRef.current = setTimeout(() => {
+            setRecordGestureActive(true);
+            void toggleRecordAudio();
+          }, 180);
+        },
+        onPanResponderMove: (event) => {
+          if (!recordGestureActive) return;
+          updateCancelZoneState(event.nativeEvent.pageX, event.nativeEvent.pageY);
+        },
+        onPanResponderRelease: (event) => {
+          clearRecordHoldTimer();
+          if (!recordGestureActive && !recordStartingRef.current && !recording) {
+            setRecordTouchActive(false);
+            setRecordWillCancel(false);
+            recordWillCancelRef.current = false;
+            return;
+          }
+          const shouldCancel = recordGestureActive
+            ? updateCancelZoneState(event.nativeEvent.pageX, event.nativeEvent.pageY)
+            : recordWillCancelRef.current;
+          void finalizeRecord(!shouldCancel);
+        },
+        onPanResponderTerminate: () => {
+          clearRecordHoldTimer();
+          if (!recordGestureActive && !recordStartingRef.current && !recording) {
+            setRecordTouchActive(false);
+            setRecordWillCancel(false);
+            recordWillCancelRef.current = false;
+            return;
+          }
+          void finalizeRecord(false);
         }
-        await finalizeRecord(!recordWillCancel);
-      },
-      onPanResponderTerminate: async () => {
-        if (recording) {
-          await finalizeRecord(false);
-        }
-      }
-    })
-  ).current;
+      }),
+    [clearRecordHoldTimer, recordGestureActive, recording, sending, updateCancelZoneState, uploadingMedia]
+  );
 
   const playAudio = async (message: ChatMessage) => {
     if (!message.attachment?.url) {
@@ -391,11 +467,7 @@ export default function AiChatScreen() {
 
   return (
     <>
-      <KeyboardAvoidingView
-        style={styles.container}
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        keyboardVerticalOffset={Platform.OS === "ios" ? headerHeight : 0}
-      >
+      <View style={[styles.container, { paddingBottom: keyboardHeight }]}>
         <Screen title="AI 对话" scrollable={false} style={styles.screen} contentContainerStyle={styles.screenContent}>
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>对话</Text>
@@ -491,7 +563,17 @@ export default function AiChatScreen() {
 
       {recordGestureActive ? (
         <View style={styles.recordHintOverlay} pointerEvents="none">
-          <View style={[styles.recordHintCard, recordWillCancel && styles.recordHintCardCancel]}>
+          <View
+            ref={cancelZoneViewRef}
+            style={[styles.recordHintCard, recordWillCancel && styles.recordHintCardCancel]}
+            onLayout={() => {
+              requestAnimationFrame(() => {
+                cancelZoneViewRef.current?.measureInWindow((x, y, width, height) => {
+                  cancelZoneRef.current = { x, y, width, height };
+                });
+              });
+            }}
+          >
             <Ionicons
               name={recordWillCancel ? "close-circle" : "arrow-up-circle"}
               size={18}
@@ -508,22 +590,14 @@ export default function AiChatScreen() {
       ) : null}
 
       <View style={[styles.composer, { paddingBottom: Math.max(insets.bottom, 12) }]}>
-        <Pressable
-          style={({ pressed }) => [
+        <View
+          style={[
             styles.recordButton,
+            recordTouchActive && styles.recordButtonPressed,
             recordGestureActive && styles.recordButtonExpanded,
             recording && styles.recordButtonActive,
-            pressed && !recording && styles.recordButtonPressed,
             (sending || uploadingMedia) && styles.disabledButton
           ]}
-          onLongPress={async () => {
-            setRecordGestureActive(true);
-            setRecordWillCancel(false);
-            await toggleRecordAudio();
-          }}
-          onPressOut={handleRecordPressOut}
-          delayLongPress={180}
-          disabled={sending || uploadingMedia}
           {...recordPanResponder.panHandlers}
         >
           <Ionicons
@@ -536,7 +610,7 @@ export default function AiChatScreen() {
               {recordWillCancel ? "松开取消" : "松开发送"}
             </Text>
           ) : null}
-        </Pressable>
+        </View>
         <TouchableOpacity
           style={[styles.mediaButton, (sending || uploadingMedia) && styles.disabledButton]}
           onPress={sendImage}
@@ -552,15 +626,15 @@ export default function AiChatScreen() {
           style={styles.input}
           value={input}
           onChangeText={setInput}
+          onFocus={() => setTimeout(() => scrollToBottom(false), 80)}
           placeholder="问点什么..."
           placeholderTextColor={colors.muted}
-          multiline
         />
         <TouchableOpacity style={[styles.sendButton, sending && styles.disabledButton]} onPress={sendMessage}>
           <Ionicons name="send" size={18} color={colors.surface} />
         </TouchableOpacity>
         </View>
-      </KeyboardAvoidingView>
+      </View>
       <Modal
         visible={!!previewImageUrl}
         transparent
@@ -643,7 +717,7 @@ const styles = StyleSheet.create({
     minHeight: 0
   },
   composer: {
-    alignItems: "flex-end",
+    alignItems: "center",
     backgroundColor: colors.background,
     borderTopColor: colors.border,
     borderTopWidth: 1,
@@ -667,38 +741,36 @@ const styles = StyleSheet.create({
   input: {
     backgroundColor: colors.surface,
     borderColor: colors.border,
-    borderRadius: 12,
+    borderRadius: 14,
     borderWidth: 1,
     color: colors.text,
     flex: 1,
     fontSize: 14,
-    maxHeight: 120,
-    minHeight: 48,
+    height: 46,
     minWidth: 0,
     paddingHorizontal: 12,
-    paddingVertical: 12
   },
   mediaButton: {
     alignItems: "center",
     backgroundColor: colors.surface,
     borderColor: colors.border,
-    borderRadius: 12,
+    borderRadius: 14,
     borderWidth: 1,
-    height: 48,
+    height: 46,
     justifyContent: "center",
-    width: 48
+    width: 46
   },
   recordButton: {
     alignItems: "center",
     backgroundColor: colors.surface,
     borderColor: colors.border,
-    borderRadius: 12,
+    borderRadius: 14,
     borderWidth: 1,
     flexDirection: "row",
     gap: 0,
-    height: 48,
+    height: 46,
     justifyContent: "center",
-    width: 48
+    width: 46
   },
   recordButtonActive: {
     backgroundColor: colors.error,
@@ -708,7 +780,7 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingHorizontal: 18,
     transform: [{ scale: 1.06 }],
-    width: 126
+    width: 124
   },
   recordButtonPressed: {
     backgroundColor: "#F8FAFC"
@@ -846,10 +918,10 @@ const styles = StyleSheet.create({
   sendButton: {
     alignItems: "center",
     backgroundColor: colors.accent,
-    borderRadius: 12,
-    height: 48,
+    borderRadius: 14,
+    height: 46,
     justifyContent: "center",
-    width: 48
+    width: 46
   },
   toolPanel: {
     backgroundColor: "#F8FAFC",

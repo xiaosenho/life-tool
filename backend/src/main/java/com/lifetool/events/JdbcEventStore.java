@@ -36,11 +36,11 @@ public class JdbcEventStore implements EventStore {
     @Override
     public AnniversaryEvent save(AnniversaryEvent event) {
         String sql = """
-                INSERT INTO anniversary_events (id, user_id, event_type, title, event_date, \
+                INSERT INTO anniversary_events (id, user_id, type, title, event_date, \
                 repeat_rule, remind_days_before, note, media_asset_id, created_at, updated_at)
                 VALUES (?::uuid, ?::uuid, ?, ?, ?, ?, ?::jsonb, ?, ?::uuid, ?, ?)
                 ON CONFLICT (id) DO UPDATE SET
-                  event_type = EXCLUDED.event_type,
+                  type = EXCLUDED.type,
                   title = EXCLUDED.title,
                   event_date = EXCLUDED.event_date,
                   repeat_rule = EXCLUDED.repeat_rule,
@@ -72,7 +72,7 @@ public class JdbcEventStore implements EventStore {
     @Override
     public Optional<AnniversaryEvent> findById(String id) {
         String sql = """
-                SELECT id, user_id, event_type, title, event_date, repeat_rule, \
+                SELECT id, user_id, type, title, event_date, repeat_rule, \
                 remind_days_before, note, media_asset_id, created_at, updated_at
                 FROM anniversary_events
                 WHERE id = ?::uuid AND deleted_at IS NULL
@@ -94,7 +94,7 @@ public class JdbcEventStore implements EventStore {
     @Override
     public List<AnniversaryEvent> findByUserId(String userId) {
         String sql = """
-                SELECT id, user_id, event_type, title, event_date, repeat_rule, \
+                SELECT id, user_id, type, title, event_date, repeat_rule, \
                 remind_days_before, note, media_asset_id, created_at, updated_at
                 FROM anniversary_events
                 WHERE user_id = ?::uuid AND deleted_at IS NULL
@@ -118,7 +118,7 @@ public class JdbcEventStore implements EventStore {
         AnniversaryEvent event = new AnniversaryEvent();
         event.setId(rs.getString("id"));
         event.setUserId(rs.getString("user_id"));
-        event.setType(rs.getString("event_type"));
+        event.setType(rs.getString("type"));
         event.setTitle(rs.getString("title"));
         event.setEventDate(rs.getDate("event_date") != null ? rs.getDate("event_date").toLocalDate() : null);
         event.setRepeatRule(rs.getString("repeat_rule"));
