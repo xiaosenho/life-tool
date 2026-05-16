@@ -74,6 +74,7 @@ export default function RootLayout() {
         <Stack.Screen name="ai-chat" options={{ headerShown: false }} />
         <Stack.Screen name="meal-upload" options={{ headerShown: true, headerTitle: "饮食拍照" }} />
         <Stack.Screen name="friend-chat" options={{ headerShown: true, headerTitle: "好友互动" }} />
+        <Stack.Screen name="news-webview" options={{ headerShown: true, headerTitle: "新闻" }} />
       </Stack>
       <StatusBar style="dark" />
     </>

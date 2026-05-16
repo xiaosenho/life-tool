@@ -116,7 +116,8 @@ public class AiService {
                         new AiAssistantClient.MediaInput(
                                 requestAttachment.kind(),
                                 requestAttachment.url(),
-                                requestAttachment.contentType()));
+                                requestAttachment.contentType(),
+                                requestAttachment.assetId()));
             } else {
                 assistantContent = assistantClient.chat(sessionId, systemPrompt, history, toolResults);
             }
@@ -278,16 +279,26 @@ public class AiService {
             UserDataTools.clearCurrentUserId();
         }
 
-        MealLog mealLog = mealService.recordAiRecognition(
-                userId,
-                response,
-                request.mealType(),
-                request.mediaAssetId());
+        MealLog mealLog = null;
+        if (MealService.shouldPersistAiRecognition(response)) {
+            mealLog = mealService.recordAiRecognition(
+                    userId,
+                    response,
+                    request.mealType(),
+                    request.mediaAssetId());
+        } else {
+            log.info(
+                    "AI food recognition skipped meal persistence. userId={}, mediaAssetId={}, mealType={}, totalCalories={}",
+                    userId,
+                    request.mediaAssetId(),
+                    request.mealType(),
+                    MealService.extractTotalCalories(response).map(Object::toString).orElse("<unknown>"));
+        }
         return new FoodRecognitionResponse(
                 response,
                 properties.getDisclaimer(),
-                mealLog.getId(),
-                mealLog.getTotalCalories());
+                mealLog == null ? null : mealLog.getId(),
+                mealLog == null ? MealService.extractTotalCalories(response).orElse(null) : mealLog.getTotalCalories());
     }
 
     private String chatWithImageRetryOnExpiredSignedUrl(

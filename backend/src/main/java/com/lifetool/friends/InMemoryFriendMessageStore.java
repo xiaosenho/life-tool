@@ -3,7 +3,9 @@ package com.lifetool.friends;
 import java.time.Instant;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.stream.Collectors;
 
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Repository;
@@ -34,6 +36,38 @@ public class InMemoryFriendMessageStore implements FriendMessageStore {
         return messages.stream()
                 .filter(message -> message.getFromUserId().equals(userId) || message.getToUserId().equals(userId))
                 .sorted(Comparator.comparing(FriendMessage::getCreatedAt).reversed())
+                .toList();
+    }
+
+    @Override
+    public List<ConversationSummary> listConversationSummaries(String userId) {
+        Map<String, List<FriendMessage>> grouped = messages.stream()
+                .filter(message -> message.getFromUserId().equals(userId) || message.getToUserId().equals(userId))
+                .collect(Collectors.groupingBy(message -> message.getFromUserId().equals(userId)
+                        ? message.getToUserId()
+                        : message.getFromUserId()));
+
+        return grouped.entrySet().stream()
+                .map(entry -> {
+                    List<FriendMessage> conversation = entry.getValue();
+                    FriendMessage latest = conversation.stream()
+                            .max(Comparator.comparing(FriendMessage::getCreatedAt))
+                            .orElse(null);
+                    if (latest == null) {
+                        return null;
+                    }
+                    int unreadCount = (int) conversation.stream()
+                            .filter(message -> message.getToUserId().equals(userId) && !message.isRead())
+                            .count();
+                    return new ConversationSummary(
+                            entry.getKey(),
+                            latest.getContent(),
+                            latest.getType().name().toLowerCase(),
+                            latest.getCreatedAt(),
+                            unreadCount);
+                })
+                .filter(summary -> summary != null)
+                .sorted((left, right) -> right.lastMessageAt().compareTo(left.lastMessageAt()))
                 .toList();
     }
 

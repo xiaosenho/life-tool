@@ -81,54 +81,91 @@ export default function FriendsScreen() {
 
   const activeBoardData = leaderboards[activeBoard];
 
-  const loadData = useCallback(async (silent = false) => {
+  const loadFriendData = useCallback(async (silent = false) => {
     if (!silent) {
       setLoading(true);
     }
     try {
-      const [
-        friendRes,
-        requestRes,
-        focusTodayRes,
-        focusWeekRes,
-        habitTodayRes,
-        streakRes,
-        conversationRes
-      ] = await Promise.all([
+      const [friendRes, requestRes, conversationRes] = await Promise.all([
         friendService.listFriends(),
         friendService.listRequests(),
-        leaderboardService.getFocusDetail("today"),
-        leaderboardService.getFocusDetail("week"),
-        leaderboardService.getHabitsTodayDetail(),
-        leaderboardService.getStreaksDetail(),
         friendService.listConversations()
       ]);
 
       if (friendRes.success && friendRes.data) setFriends(friendRes.data);
       if (requestRes.success && requestRes.data) setRequests(requestRes.data);
       if (conversationRes.success && conversationRes.data) setConversations(conversationRes.data);
-      setLeaderboards({
-        focus_today: focusTodayRes.success ? focusTodayRes.data ?? null : null,
-        focus_week: focusWeekRes.success ? focusWeekRes.data ?? null : null,
-        habits_today: habitTodayRes.success ? habitTodayRes.data ?? null : null,
-        streaks: streakRes.success ? streakRes.data ?? null : null
-      });
     } catch (error) {
       Alert.alert("加载失败", error instanceof Error ? error.message : "请稍后重试");
     } finally {
       setLoading(false);
-      setRefreshing(false);
     }
   }, []);
 
-  useEffect(() => {
-    void loadData();
-  }, [loadData]);
+  const loadMessagesData = useCallback(async (silent = false) => {
+    if (!silent) {
+      setLoading(true);
+    }
+    try {
+      const [friendRes, conversationRes] = await Promise.all([
+        friendService.listFriends(),
+        friendService.listConversations()
+      ]);
+      if (friendRes.success && friendRes.data) setFriends(friendRes.data);
+      if (conversationRes.success && conversationRes.data) setConversations(conversationRes.data);
+    } catch (error) {
+      Alert.alert("加载失败", error instanceof Error ? error.message : "请稍后重试");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const loadLeaderboardData = useCallback(async (boardKey: BoardKey, silent = false) => {
+    if (!silent) {
+      setLoading(true);
+    }
+    try {
+      const response = await (async () => {
+        switch (boardKey) {
+          case "focus_today":
+            return leaderboardService.getFocusDetail("today");
+          case "focus_week":
+            return leaderboardService.getFocusDetail("week");
+          case "habits_today":
+            return leaderboardService.getHabitsTodayDetail();
+          case "streaks":
+            return leaderboardService.getStreaksDetail();
+        }
+      })();
+      setLeaderboards((current) => ({
+        ...current,
+        [boardKey]: response.success ? response.data ?? null : null
+      }));
+    } catch (error) {
+      Alert.alert("加载失败", error instanceof Error ? error.message : "请稍后重试");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const loadActiveTabData = useCallback(async (tab: TabKey, silent = false, boardKey = activeBoard) => {
+    try {
+      if (tab === "leaderboards") {
+        await loadLeaderboardData(boardKey, silent);
+      } else if (tab === "messages") {
+        await loadMessagesData(silent);
+      } else {
+        await loadFriendData(silent);
+      }
+    } finally {
+      setRefreshing(false);
+    }
+  }, [activeBoard, loadFriendData, loadLeaderboardData, loadMessagesData]);
 
   useFocusEffect(
     useCallback(() => {
-      void loadData(true);
-    }, [loadData])
+      void loadActiveTabData(activeTab, true, activeBoard);
+    }, [activeBoard, activeTab, loadActiveTabData])
   );
 
   useEffect(() => {
@@ -136,18 +173,22 @@ export default function FriendsScreen() {
       hasMountedRef.current = true;
       return;
     }
-    void loadData(true);
-  }, [activeTab, loadData]);
+    void loadActiveTabData(activeTab, true, activeBoard);
+  }, [activeBoard, activeTab, loadActiveTabData]);
 
   async function handleRefresh() {
     setRefreshing(true);
-    await loadData(true);
+    await loadActiveTabData(activeTab, true, activeBoard);
   }
 
   async function handleBoardPress(boardKey: BoardKey) {
+    if (boardKey === activeBoard) {
+      setRefreshing(true);
+      await loadLeaderboardData(boardKey, true);
+      setRefreshing(false);
+      return;
+    }
     setActiveBoard(boardKey);
-    setRefreshing(true);
-    await loadData(true);
   }
 
   async function handleSendRequest() {
@@ -159,7 +200,7 @@ export default function FriendsScreen() {
       const response = await friendService.sendRequest(targetEmail);
       if (response.success) {
         setEmail("");
-        await loadData(true);
+        await loadFriendData(true);
       } else {
         Alert.alert("添加失败", response.error?.message ?? "请稍后重试");
       }
@@ -173,7 +214,7 @@ export default function FriendsScreen() {
       ? await friendService.acceptRequest(id)
       : await friendService.rejectRequest(id);
     if (response.success) {
-      await loadData(true);
+      await loadFriendData(true);
     } else {
       Alert.alert("处理失败", response.error?.message ?? "请稍后重试");
     }
@@ -182,7 +223,7 @@ export default function FriendsScreen() {
   async function handleRemoveFriend(friend: FriendInfo) {
     const response = await friendService.removeFriend(friend.userId);
     if (response.success) {
-      await loadData(true);
+      await loadFriendData(true);
     } else {
       Alert.alert("删除失败", response.error?.message ?? "请稍后重试");
     }

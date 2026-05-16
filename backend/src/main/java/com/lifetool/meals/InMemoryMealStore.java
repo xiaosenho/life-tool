@@ -1,6 +1,7 @@
 package com.lifetool.meals;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -59,6 +60,27 @@ public class InMemoryMealStore implements MealStore {
             return null;
         }
         return mealLog;
+    }
+
+    @Override
+    public List<MealLog> findByUserIdAndDate(String userId, LocalDate date) {
+        return byId.values().stream()
+                .filter(mealLog -> userId.equals(mealLog.getUserId()))
+                .filter(mealLog -> date.equals(TimeSupport.toBusinessDate(mealLog.getOccurredAt())))
+                .sorted(Comparator.comparing(MealLog::getOccurredAt).reversed())
+                .toList();
+    }
+
+    @Override
+    public List<MealLog> findByUserIdAndDateRange(String userId, LocalDate from, LocalDate to) {
+        return byId.values().stream()
+                .filter(mealLog -> userId.equals(mealLog.getUserId()))
+                .filter(mealLog -> {
+                    LocalDate businessDate = TimeSupport.toBusinessDate(mealLog.getOccurredAt());
+                    return !businessDate.isBefore(from) && !businessDate.isAfter(to);
+                })
+                .sorted(Comparator.comparing(MealLog::getOccurredAt).reversed())
+                .toList();
     }
 
     @Override

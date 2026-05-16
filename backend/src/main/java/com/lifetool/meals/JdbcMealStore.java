@@ -2,16 +2,17 @@ package com.lifetool.meals;
 
 import java.math.BigDecimal;
 import java.sql.Connection;
-import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.sql.Types;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
-import org.springframework.beans.factory.annotation.Value;
+import javax.sql.DataSource;
+
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Repository;
 
@@ -20,17 +21,11 @@ import com.lifetool.common.TimeSupport;
 @Repository
 @Profile("postgres")
 public class JdbcMealStore implements MealStore {
-    private final String url;
-    private final String username;
-    private final String password;
+    private final DataSource dataSource;
 
     public JdbcMealStore(
-            @Value("${spring.datasource.url}") String url,
-            @Value("${spring.datasource.username}") String username,
-            @Value("${spring.datasource.password}") String password) {
-        this.url = url;
-        this.username = username;
-        this.password = password;
+            DataSource dataSource) {
+        this.dataSource = dataSource;
     }
 
     @Override
@@ -158,6 +153,62 @@ public class JdbcMealStore implements MealStore {
             }
         } catch (SQLException ex) {
             throw new IllegalStateException("Failed to find meal log", ex);
+        }
+    }
+
+    @Override
+    public List<MealLog> findByUserIdAndDate(String userId, LocalDate date) {
+        String sql = """
+                SELECT id, user_id, meal_type, occurred_at, total_calories, note, media_asset_id,
+                       is_ai_generated, created_at, updated_at
+                FROM meal_logs
+                WHERE user_id = ?::uuid
+                  AND occurred_at >= (?::timestamp AT TIME ZONE 'Asia/Shanghai')
+                  AND occurred_at < ((?::timestamp + INTERVAL '1 day') AT TIME ZONE 'Asia/Shanghai')
+                ORDER BY occurred_at DESC
+                """;
+        try (Connection conn = getConnection();
+             var stmt = conn.prepareStatement(sql)) {
+            stmt.setString(1, userId);
+            stmt.setString(2, date.toString());
+            stmt.setString(3, date.toString());
+            try (ResultSet rs = stmt.executeQuery()) {
+                List<MealLog> mealLogs = new ArrayList<>();
+                while (rs.next()) {
+                    mealLogs.add(mapMealLog(rs));
+                }
+                return mealLogs;
+            }
+        } catch (SQLException ex) {
+            throw new IllegalStateException("Failed to find meal logs by date", ex);
+        }
+    }
+
+    @Override
+    public List<MealLog> findByUserIdAndDateRange(String userId, LocalDate from, LocalDate to) {
+        String sql = """
+                SELECT id, user_id, meal_type, occurred_at, total_calories, note, media_asset_id,
+                       is_ai_generated, created_at, updated_at
+                FROM meal_logs
+                WHERE user_id = ?::uuid
+                  AND occurred_at >= (?::timestamp AT TIME ZONE 'Asia/Shanghai')
+                  AND occurred_at < ((?::timestamp + INTERVAL '1 day') AT TIME ZONE 'Asia/Shanghai')
+                ORDER BY occurred_at DESC
+                """;
+        try (Connection conn = getConnection();
+             var stmt = conn.prepareStatement(sql)) {
+            stmt.setString(1, userId);
+            stmt.setString(2, from.toString());
+            stmt.setString(3, to.toString());
+            try (ResultSet rs = stmt.executeQuery()) {
+                List<MealLog> mealLogs = new ArrayList<>();
+                while (rs.next()) {
+                    mealLogs.add(mapMealLog(rs));
+                }
+                return mealLogs;
+            }
+        } catch (SQLException ex) {
+            throw new IllegalStateException("Failed to find meal logs by date range", ex);
         }
     }
 
@@ -309,6 +360,6 @@ public class JdbcMealStore implements MealStore {
     }
 
     private Connection getConnection() throws SQLException {
-        return DriverManager.getConnection(url, username, password);
+        return dataSource.getConnection();
     }
 }

@@ -1,7 +1,6 @@
 package com.lifetool.friends;
 
 import java.sql.Connection;
-import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
@@ -10,7 +9,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
-import org.springframework.beans.factory.annotation.Value;
+import javax.sql.DataSource;
+
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Repository;
 
@@ -22,17 +22,11 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 public class JdbcFriendMessageStore implements FriendMessageStore {
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
-    private final String url;
-    private final String username;
-    private final String password;
+    private final DataSource dataSource;
 
     public JdbcFriendMessageStore(
-            @Value("${spring.datasource.url}") String url,
-            @Value("${spring.datasource.username}") String username,
-            @Value("${spring.datasource.password}") String password) {
-        this.url = url;
-        this.username = username;
-        this.password = password;
+            DataSource dataSource) {
+        this.dataSource = dataSource;
     }
 
     @Override
@@ -85,6 +79,78 @@ public class JdbcFriendMessageStore implements FriendMessageStore {
                 ORDER BY created_at DESC
                 """;
         return queryMessages(sql, userId, userId);
+    }
+
+    @Override
+    public List<ConversationSummary> listConversationSummaries(String userId) {
+        String sql = """
+                WITH scoped AS (
+                    SELECT
+                        CASE
+                            WHEN from_user_id = ?::uuid THEN to_user_id
+                            ELSE from_user_id
+                        END AS friend_user_id,
+                        from_user_id,
+                        to_user_id,
+                        message_type,
+                        content,
+                        created_at,
+                        read_at
+                    FROM friend_messages
+                    WHERE (from_user_id = ?::uuid OR to_user_id = ?::uuid)
+                      AND deleted_at IS NULL
+                ),
+                ranked AS (
+                    SELECT
+                        friend_user_id,
+                        content,
+                        message_type,
+                        created_at,
+                        ROW_NUMBER() OVER (PARTITION BY friend_user_id ORDER BY created_at DESC, content DESC) AS row_num
+                    FROM scoped
+                ),
+                unread AS (
+                    SELECT
+                        friend_user_id,
+                        COUNT(*)::int AS unread_count
+                    FROM scoped
+                    WHERE to_user_id = ?::uuid
+                      AND read_at IS NULL
+                    GROUP BY friend_user_id
+                )
+                SELECT
+                    ranked.friend_user_id,
+                    ranked.content,
+                    ranked.message_type,
+                    ranked.created_at,
+                    COALESCE(unread.unread_count, 0) AS unread_count
+                FROM ranked
+                LEFT JOIN unread ON unread.friend_user_id = ranked.friend_user_id
+                WHERE ranked.row_num = 1
+                ORDER BY ranked.created_at DESC
+                """;
+
+        List<ConversationSummary> results = new ArrayList<>();
+        try (Connection conn = getConnection();
+             var stmt = conn.prepareStatement(sql)) {
+            stmt.setString(1, userId);
+            stmt.setString(2, userId);
+            stmt.setString(3, userId);
+            stmt.setString(4, userId);
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    results.add(new ConversationSummary(
+                            rs.getString("friend_user_id"),
+                            rs.getString("content"),
+                            rs.getString("message_type"),
+                            rs.getTimestamp("created_at").toInstant(),
+                            rs.getInt("unread_count")));
+                }
+            }
+            return results;
+        } catch (SQLException ex) {
+            throw new IllegalStateException("Failed to query friend conversation summaries", ex);
+        }
     }
 
     @Override
@@ -169,6 +235,6 @@ public class JdbcFriendMessageStore implements FriendMessageStore {
     }
 
     private Connection getConnection() throws SQLException {
-        return DriverManager.getConnection(url, username, password);
+        return dataSource.getConnection();
     }
 }

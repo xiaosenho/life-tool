@@ -4,6 +4,7 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  Keyboard,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -129,6 +130,7 @@ export default function FriendChatScreen() {
   const [audioProgress, setAudioProgress] = useState<Record<string, number>>({});
   const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
   const [composerFocused, setComposerFocused] = useState(false);
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const scrollViewRef = useRef<ScrollView | null>(null);
   const soundRef = useRef<Audio.Sound | null>(null);
@@ -190,6 +192,17 @@ export default function FriendChatScreen() {
   useEffect(() => {
     void loadMessages();
   }, [loadMessages]);
+
+  useEffect(() => {
+    const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const hideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+    const showSub = Keyboard.addListener(showEvent, () => setKeyboardVisible(true));
+    const hideSub = Keyboard.addListener(hideEvent, () => setKeyboardVisible(false));
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
@@ -387,7 +400,10 @@ export default function FriendChatScreen() {
           ) : (
             <ScrollView
               ref={scrollViewRef}
-              contentContainerStyle={styles.messageList}
+              contentContainerStyle={[
+                styles.messageList,
+                { paddingBottom: keyboardVisible ? 24 : Math.max(insets.bottom + 24, 36) }
+              ]}
               keyboardShouldPersistTaps="handled"
               refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />}
             >
@@ -473,7 +489,7 @@ export default function FriendChatScreen() {
           </ScrollView>
         </View>
 
-        <View style={[styles.composer, { paddingBottom: Math.max(insets.bottom, 12) }]}>
+        <View style={[styles.composer, { paddingBottom: keyboardVisible ? 12 : Math.max(insets.bottom, 12) }]}>
           <TouchableOpacity
             style={[styles.mediaButton, (sending || uploadingMedia) && styles.disabledButton]}
             onPress={toggleRecordAudio}
@@ -547,7 +563,8 @@ export default function FriendChatScreen() {
 const styles = StyleSheet.create({
   audioInfo: {
     flex: 1,
-    gap: 6
+    gap: 6,
+    minWidth: 0
   },
   audioBubble: {
     alignItems: "center",
@@ -579,6 +596,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     backgroundColor: colors.background,
     borderTopColor: colors.border,
+    borderTopWidth: 1,
     flexDirection: "row",
     gap: 10,
     paddingHorizontal: 18,
@@ -607,6 +625,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 14,
     height: 46,
+    minWidth: 0,
     paddingHorizontal: 12
   },
   mediaButton: {
@@ -684,6 +703,7 @@ const styles = StyleSheet.create({
   messageText: {
     color: colors.text,
     fontSize: 14,
+    flexShrink: 1,
     lineHeight: 20
   },
   messageTextMine: {
@@ -750,6 +770,7 @@ const styles = StyleSheet.create({
   },
   waveTrack: {
     flexDirection: "row",
+    flexWrap: "nowrap",
     gap: 4
   },
   waveTrackMine: {

@@ -8,6 +8,14 @@ export interface RecentMeal {
   aiGenerated: boolean;
 }
 
+export interface MealRecord {
+  id: string;
+  mealType: string;
+  occurredAt: string;
+  totalCalories: number | null;
+  aiGenerated: boolean;
+}
+
 export interface MealSummary {
   todayTotalCalories: number;
   todayMealCount: number;
@@ -30,6 +38,14 @@ export interface MealDetail {
 export const mealService = {
   getSummary() {
     return apiClient.get<MealSummary>("/meals/summary");
+  },
+
+  listMealsByDate(date: string) {
+    return apiClient.get<MealRecord[]>(`/meals?date=${encodeURIComponent(date)}`);
+  },
+
+  listMealsByRange(from: string, to: string) {
+    return apiClient.get<MealRecord[]>(`/meals?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`);
   },
 
   getMeal(id: string) {

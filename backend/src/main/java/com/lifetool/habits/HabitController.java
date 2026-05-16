@@ -19,6 +19,7 @@ import org.springframework.web.bind.annotation.RestController;
 import com.lifetool.common.ApiResponse;
 import com.lifetool.habits.dto.CreateCheckinRequest;
 import com.lifetool.habits.dto.CreateHabitRequest;
+import com.lifetool.habits.dto.HabitCalendarResponse;
 import com.lifetool.habits.dto.HabitCheckinResponse;
 import com.lifetool.habits.dto.HabitResponse;
 import com.lifetool.habits.dto.UpdateHabitRequest;
@@ -48,6 +49,14 @@ public class HabitController {
             @AuthenticationPrincipal String userId) {
         List<HabitResponse> response = service.listHabits(userId);
         return ResponseEntity.ok(ApiResponse.ok(response));
+    }
+
+    @GetMapping("/calendar")
+    public ResponseEntity<ApiResponse<HabitCalendarResponse>> getCalendarData(
+            @AuthenticationPrincipal String userId,
+            @RequestParam LocalDate from,
+            @RequestParam LocalDate to) {
+        return ResponseEntity.ok(ApiResponse.ok(service.getCalendarData(userId, from, to)));
     }
 
     @PatchMapping("/{id}")

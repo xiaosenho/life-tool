@@ -17,6 +17,7 @@ import { Screen } from "@/components/Screen";
 import { colors } from "@/theme/colors";
 import { aiService } from "@/services/aiService";
 import { mediaService, AssetResponse } from "@/services/mediaService";
+import { formatMealRecognitionText } from "@/utils/mealRecognition";
 
 type UploadStatus = "idle" | "uploading" | "success" | "error";
 
@@ -29,6 +30,7 @@ export default function MealUploadScreen() {
   const [recognizing, setRecognizing] = useState(false);
   const [recognition, setRecognition] = useState<string | null>(null);
   const [recognitionError, setRecognitionError] = useState<string | null>(null);
+  const [recognitionSaved, setRecognitionSaved] = useState<boolean | null>(null);
 
   const pickImage = async (useCamera: boolean) => {
     try {
@@ -111,10 +113,12 @@ export default function MealUploadScreen() {
       if (!response.success || !response.data) {
         throw new Error(response.error?.message || "识别失败");
       }
-      setRecognition(response.data.result);
+      setRecognition(formatMealRecognitionText(response.data.result));
+      setRecognitionSaved(Boolean(response.data.mealLogId));
     } catch (err) {
       console.error("AI 饮食识别失败：", err);
       setRecognitionError(err instanceof Error ? err.message : "识别失败，请稍后重试");
+      setRecognitionSaved(null);
     } finally {
       setRecognizing(false);
     }
@@ -128,6 +132,7 @@ export default function MealUploadScreen() {
     setRecognizing(false);
     setRecognition(null);
     setRecognitionError(null);
+    setRecognitionSaved(null);
   };
 
   return (
@@ -225,7 +230,9 @@ export default function MealUploadScreen() {
                 )}
                 {recognition && !recognizing && (
                   <>
-                    <Text style={styles.aiSavedText}>已同步到今日饮食记录</Text>
+                    <Text style={styles.aiSavedText}>
+                      {recognitionSaved ? "已同步到今日饮食记录" : "本次识别未写入饮食记录"}
+                    </Text>
                     <Text style={styles.aiResultText}>{recognition}</Text>
                   </>
                 )}

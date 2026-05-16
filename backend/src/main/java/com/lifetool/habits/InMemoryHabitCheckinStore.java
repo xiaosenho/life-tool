@@ -47,4 +47,12 @@ public class InMemoryHabitCheckinStore implements HabitCheckinStore {
                 .filter(c -> userId.equals(c.getUserId()) && date.equals(c.getCheckinDate()))
                 .toList();
     }
+
+    @Override
+    public List<HabitCheckin> findByUserIdAndDateRange(String userId, LocalDate from, LocalDate to) {
+        return byId.values().stream()
+                .filter(c -> userId.equals(c.getUserId()))
+                .filter(c -> !c.getCheckinDate().isBefore(from) && !c.getCheckinDate().isAfter(to))
+                .toList();
+    }
 }

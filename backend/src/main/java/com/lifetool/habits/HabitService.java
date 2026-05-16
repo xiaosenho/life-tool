@@ -9,6 +9,7 @@ import org.springframework.stereotype.Service;
 import com.lifetool.common.TimeSupport;
 import com.lifetool.habits.dto.CreateCheckinRequest;
 import com.lifetool.habits.dto.CreateHabitRequest;
+import com.lifetool.habits.dto.HabitCalendarResponse;
 import com.lifetool.habits.dto.HabitCheckinResponse;
 import com.lifetool.habits.dto.HabitResponse;
 import com.lifetool.habits.dto.UpdateHabitRequest;
@@ -149,6 +150,19 @@ public class HabitService {
                 .filter(c -> to == null || !c.getCheckinDate().isAfter(to))
                 .map(HabitCheckinResponse::from)
                 .toList();
+    }
+
+    public HabitCalendarResponse getCalendarData(String userId, LocalDate from, LocalDate to) {
+        if (from.isAfter(to)) {
+            throw new HabitException("VALIDATION_ERROR", "from must be before or equal to to");
+        }
+        List<HabitResponse> habits = habitStore.findByUserId(userId).stream()
+                .map(HabitResponse::from)
+                .toList();
+        List<HabitCheckinResponse> checkins = checkinStore.findByUserIdAndDateRange(userId, from, to).stream()
+                .map(HabitCheckinResponse::from)
+                .toList();
+        return new HabitCalendarResponse(habits, checkins);
     }
 
     private Habit findOwnedHabit(String userId, String id) {

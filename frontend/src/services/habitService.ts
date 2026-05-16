@@ -57,6 +57,11 @@ export interface ServerHabitCheckin {
   updatedAt: string;
 }
 
+export interface HabitCalendarPayload {
+  habits: ServerHabit[];
+  checkins: ServerHabitCheckin[];
+}
+
 export interface ServerCheckinInput {
   count?: number;
   note?: string | null;
@@ -235,6 +240,29 @@ export const habitService = {
     return rows as HabitCheckin[];
   },
 
+  async getCheckinsForDate(date: string) {
+    const db = await getDb();
+    const userId = useAuthStore.getState().user?.id;
+    if (!userId) return [];
+
+    const rows = await db.getAllAsync<any>(
+      'SELECT * FROM habit_checkins WHERE user_id = ? AND checkin_date = ?',
+      [userId, date]
+    );
+    return rows as HabitCheckin[];
+  },
+
+  async getCheckinsForRange(from: string, to: string) {
+    const db = await getDb();
+    const userId = useAuthStore.getState().user?.id;
+    if (!userId) return [];
+
+    const rows = await db.getAllAsync<any>('SELECT * FROM habit_checkins');
+    return (rows as HabitCheckin[])
+      .filter((row) => row.user_id === userId)
+      .filter((row) => row.checkin_date >= from && row.checkin_date <= to);
+  },
+
   // Direct API methods (call backend)
   async createHabitOnServer(data: {
     name: string;
@@ -279,5 +307,10 @@ export const habitService = {
     if (to) query.set('to', to);
     const suffix = query.toString() ? `?${query.toString()}` : '';
     return apiClient.get<ServerHabitCheckin[]>(`/habits/${habitId}/checkins${suffix}`);
+  },
+
+  async getCalendarDataFromServer(from: string, to: string) {
+    const query = new URLSearchParams({ from, to });
+    return apiClient.get<HabitCalendarPayload>(`/habits/calendar?${query.toString()}`);
   },
 };

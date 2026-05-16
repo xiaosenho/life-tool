@@ -235,9 +235,26 @@ export default function FocusScreen() {
           </View>
         </View>
 
-        <View style={styles.timerContainer}>
+        <TouchableOpacity
+          activeOpacity={0.9}
+          style={[styles.timerContainer, isActive && styles.timerContainerActive]}
+          onPress={toggleTimer}
+        >
           <Text style={styles.timerText}>{formatTime(timeLeft)}</Text>
-          <Text style={styles.modeText}>番茄钟 ({targetMinutes} 分钟)</Text>
+          <Text style={styles.modeText}>番茄钟 · {targetMinutes} 分钟</Text>
+          <Text style={styles.timerHint}>{isActive ? "轻触暂停" : "轻触开始"}</Text>
+        </TouchableOpacity>
+
+        <View style={styles.controls}>
+          {startedAt && (
+            <TouchableOpacity style={[styles.button, styles.finishButton]} onPress={handleComplete}>
+              <Text style={styles.buttonText}>完成</Text>
+            </TouchableOpacity>
+          )}
+
+          <TouchableOpacity style={[styles.button, styles.resetButton]} onPress={resetTimer}>
+            <Text style={styles.buttonText}>重置</Text>
+          </TouchableOpacity>
         </View>
 
         <View style={styles.preferencePanel}>
@@ -308,24 +325,6 @@ export default function FocusScreen() {
           )}
         </View>
 
-        <View style={styles.controls}>
-          <TouchableOpacity
-            style={[styles.button, isActive ? styles.pauseButton : styles.startButton]}
-            onPress={toggleTimer}
-          >
-            <Text style={styles.buttonText}>{isActive ? "暂停" : "开始"}</Text>
-          </TouchableOpacity>
-
-          {startedAt && (
-            <TouchableOpacity style={[styles.button, styles.finishButton]} onPress={handleComplete}>
-              <Text style={styles.buttonText}>完成</Text>
-            </TouchableOpacity>
-          )}
-
-          <TouchableOpacity style={[styles.button, styles.resetButton]} onPress={resetTimer}>
-            <Text style={styles.buttonText}>重置</Text>
-          </TouchableOpacity>
-        </View>
       </ScrollView>
     </Screen>
   );
@@ -334,22 +333,25 @@ export default function FocusScreen() {
 const styles = StyleSheet.create({
   container: {
     flexGrow: 1,
-    padding: 20,
+    paddingHorizontal: 16,
+    paddingTop: 12,
     alignItems: "center",
-    paddingBottom: 36,
+    paddingBottom: 24,
   },
   statsRow: {
     flexDirection: "row",
     justifyContent: "space-around",
     width: "100%",
-    marginBottom: 40,
+    gap: 10,
+    marginBottom: 18,
   },
   statBox: {
     alignItems: "center",
     backgroundColor: colors.surface,
-    padding: 15,
-    borderRadius: 8,
-    width: "45%",
+    paddingVertical: 12,
+    paddingHorizontal: 10,
+    borderRadius: 12,
+    flex: 1,
     elevation: 2,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 1 },
@@ -367,42 +369,53 @@ const styles = StyleSheet.create({
     color: colors.text,
   },
   timerContainer: {
-    width: 240,
-    height: 240,
-    borderRadius: 120,
+    width: 220,
+    height: 220,
+    borderRadius: 110,
     borderWidth: 10,
     borderColor: colors.accent,
     justifyContent: "center",
     alignItems: "center",
-    marginBottom: 40,
+    marginBottom: 18,
+    backgroundColor: colors.surface,
+    paddingHorizontal: 20,
+  },
+  timerContainerActive: {
+    borderColor: "#F59E0B",
   },
   timerText: {
-    fontSize: 60,
+    fontSize: 52,
     fontWeight: "bold",
     color: colors.text,
   },
   modeText: {
-    fontSize: 16,
+    fontSize: 15,
     color: colors.muted,
-    marginTop: 10,
+    marginTop: 8,
+  },
+  timerHint: {
+    fontSize: 13,
+    color: colors.accent,
+    marginTop: 8,
+    fontWeight: "600",
   },
   preferencePanel: {
     width: "100%",
     backgroundColor: colors.surface,
-    borderRadius: 8,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: colors.border,
-    padding: 16,
-    marginBottom: 28,
+    padding: 14,
+    marginBottom: 12,
   },
   preferenceHeader: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: 14,
+    marginBottom: 12,
   },
   sectionTitle: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: "700",
     color: colors.text,
   },
@@ -426,13 +439,16 @@ const styles = StyleSheet.create({
   presets: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 10,
-    marginBottom: 14,
+    justifyContent: "space-between",
+    rowGap: 8,
+    marginBottom: 12,
+    width: "100%",
   },
   presetButton: {
-    minWidth: 76,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    width: "48%",
+    minWidth: 0,
+    paddingHorizontal: 10,
+    paddingVertical: 9,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: colors.border,
@@ -454,10 +470,11 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
+    flexWrap: "wrap",
   },
   customInput: {
-    width: 90,
-    minHeight: 42,
+    width: 82,
+    minHeight: 40,
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: 8,
@@ -475,7 +492,7 @@ const styles = StyleSheet.create({
     color: colors.muted,
   },
   applyButton: {
-    minHeight: 42,
+    minHeight: 40,
     paddingHorizontal: 16,
     borderRadius: 8,
     backgroundColor: colors.text,
@@ -499,7 +516,8 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "center",
     flexWrap: "wrap",
-    gap: 15,
+    gap: 10,
+    marginBottom: 14,
   },
   offlineBanner: {
     backgroundColor: "#FFF7ED",
@@ -522,22 +540,16 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   button: {
-    paddingHorizontal: 30,
-    paddingVertical: 12,
-    borderRadius: 8,
-    minWidth: 100,
+    paddingHorizontal: 22,
+    paddingVertical: 10,
+    borderRadius: 999,
+    minWidth: 88,
     alignItems: "center",
   },
   buttonText: {
     color: colors.surface,
     fontSize: 16,
     fontWeight: "600",
-  },
-  startButton: {
-    backgroundColor: colors.accent,
-  },
-  pauseButton: {
-    backgroundColor: "#F59E0B",
   },
   finishButton: {
     backgroundColor: colors.text,

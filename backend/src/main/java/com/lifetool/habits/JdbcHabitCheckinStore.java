@@ -2,7 +2,6 @@ package com.lifetool.habits;
 
 import java.sql.Connection;
 import java.sql.Date;
-import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
@@ -12,7 +11,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
-import org.springframework.beans.factory.annotation.Value;
+import javax.sql.DataSource;
+
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Repository;
 
@@ -20,17 +20,11 @@ import org.springframework.stereotype.Repository;
 @Profile("postgres")
 public class JdbcHabitCheckinStore implements HabitCheckinStore {
 
-    private final String url;
-    private final String username;
-    private final String password;
+    private final DataSource dataSource;
 
     public JdbcHabitCheckinStore(
-            @Value("${spring.datasource.url}") String url,
-            @Value("${spring.datasource.username}") String username,
-            @Value("${spring.datasource.password}") String password) {
-        this.url = url;
-        this.username = username;
-        this.password = password;
+            DataSource dataSource) {
+        this.dataSource = dataSource;
     }
 
     @Override
@@ -146,6 +140,33 @@ public class JdbcHabitCheckinStore implements HabitCheckinStore {
         }
     }
 
+    @Override
+    public List<HabitCheckin> findByUserIdAndDateRange(String userId, LocalDate from, LocalDate to) {
+        String sql = """
+                SELECT id, user_id, habit_id, checkin_date, count, note, created_at, updated_at
+                FROM habit_checkins
+                WHERE user_id = ?::uuid
+                  AND checkin_date >= ?
+                  AND checkin_date <= ?
+                ORDER BY checkin_date DESC, created_at DESC
+                """;
+        try (Connection conn = getConnection();
+             var stmt = conn.prepareStatement(sql)) {
+            stmt.setString(1, userId);
+            stmt.setDate(2, Date.valueOf(from));
+            stmt.setDate(3, Date.valueOf(to));
+            try (ResultSet rs = stmt.executeQuery()) {
+                List<HabitCheckin> checkins = new ArrayList<>();
+                while (rs.next()) {
+                    checkins.add(mapCheckin(rs));
+                }
+                return checkins;
+            }
+        } catch (SQLException ex) {
+            throw new IllegalStateException("Failed to find habit checkins by date range", ex);
+        }
+    }
+
     private HabitCheckin mapCheckin(ResultSet rs) throws SQLException {
         HabitCheckin checkin = new HabitCheckin();
         checkin.setId(rs.getString("id"));
@@ -160,6 +181,6 @@ public class JdbcHabitCheckinStore implements HabitCheckinStore {
     }
 
     private Connection getConnection() throws SQLException {
-        return DriverManager.getConnection(url, username, password);
+        return dataSource.getConnection();
     }
 }

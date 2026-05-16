@@ -59,6 +59,14 @@ public class UserDataTools {
         CURRENT_USER_ID.remove();
     }
 
+    public static String requireCurrentUserId() {
+        String userId = CURRENT_USER_ID.get();
+        if (userId == null || userId.isBlank()) {
+            throw new AiException("VALIDATION_ERROR", "No current user context for AI tool execution");
+        }
+        return userId;
+    }
+
     public static void resetSavedMemoryEvents() {
         SAVED_MEMORY_EVENTS.get().clear();
     }
@@ -70,11 +78,7 @@ public class UserDataTools {
     }
 
     private String requireUserId() {
-        String userId = CURRENT_USER_ID.get();
-        if (userId == null || userId.isBlank()) {
-            throw new AiException("VALIDATION_ERROR", "No current user context for AI tool execution");
-        }
-        return userId;
+        return requireCurrentUserId();
     }
 
     public Map<String, Object> execute(String toolName, String userId) {

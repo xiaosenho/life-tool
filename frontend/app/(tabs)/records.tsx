@@ -20,11 +20,34 @@ import { MetricCard } from "@/components/MetricCard";
 import { Screen } from "@/components/Screen";
 import { AnniversaryEvent, eventService, EventType, RepeatRule } from "@/services/eventService";
 import { LedgerTransaction, LedgerTransactionType, ledgerService } from "@/services/ledgerService";
-import { MealDetail, MealSummary, mealService } from "@/services/mealService";
+import { MealDetail, MealRecord, MealSummary, mealService } from "@/services/mealService";
+import { focusService } from "@/services/focusService";
+import { Habit, HabitCheckin, habitService, serverCheckinToLocal, serverHabitToLocal } from "@/services/habitService";
 import { colors } from "@/theme/colors";
+import { formatMealRecognitionText } from "@/utils/mealRecognition";
 import { currentMonthInShanghai, formatDateCn, formatDateTimeCn, todayInShanghai } from "@/utils/time";
 
-type RecordsTab = "diet" | "ledger" | "events";
+type RecordsTab = "diet" | "ledger" | "events" | "calendar";
+
+type CalendarDayState = {
+  date: string;
+  dayNumber: number;
+  inMonth: boolean;
+  isToday: boolean;
+  allHabitsDone: boolean;
+  hasFocus: boolean;
+  hasMeal: boolean;
+  hasLedger: boolean;
+  hasEvent: boolean;
+};
+
+type CalendarDayDetail = {
+  focus: { totalSeconds: number; sessionCount: number };
+  habits: { all: Habit[]; checkins: HabitCheckin[] };
+  meals: MealRecord[];
+  transactions: LedgerTransaction[];
+  events: AnniversaryEvent[];
+};
 
 const CATEGORIES = ["餐饮", "交通", "购物", "住房", "娱乐", "医疗", "工资", "其他"];
 const EVENT_TYPES: { value: EventType; label: string }[] = [
@@ -66,7 +89,7 @@ function formatMealType(value: string) {
 export default function RecordsScreen() {
   const router = useRouter();
   const pathname = usePathname();
-  const [activeTab, setActiveTab] = useState<RecordsTab>("diet");
+  const [activeTab, setActiveTab] = useState<RecordsTab>("calendar");
   const [month] = useState(currentMonth());
 
   const [dietSummary, setDietSummary] = useState<MealSummary | null>(null);
@@ -101,6 +124,12 @@ export default function RecordsScreen() {
   const [remindDays, setRemindDays] = useState<number[]>([7, 1]);
   const [eventNote, setEventNote] = useState("");
   const [upcomingEvents, setUpcomingEvents] = useState<AnniversaryEvent[]>([]);
+  const [calendarMonth, setCalendarMonth] = useState(currentMonth());
+  const [selectedDate, setSelectedDate] = useState(today());
+  const [calendarLoading, setCalendarLoading] = useState(false);
+  const [calendarDays, setCalendarDays] = useState<CalendarDayState[]>([]);
+  const [calendarDetail, setCalendarDetail] = useState<CalendarDayDetail | null>(null);
+  const [calendarDetailLoading, setCalendarDetailLoading] = useState(false);
 
   const budgetProgress = useMemo(() => {
     if (summary.budget <= 0) return 0;
@@ -145,6 +174,18 @@ export default function RecordsScreen() {
     void loadLedger();
     void loadEvents();
   }, []);
+
+  useEffect(() => {
+    if (activeTab === "calendar") {
+      void loadCalendarMonth(calendarMonth);
+    }
+  }, [activeTab, calendarMonth]);
+
+  useEffect(() => {
+    if (activeTab === "calendar") {
+      void loadCalendarDetail(selectedDate);
+    }
+  }, [activeTab, selectedDate]);
 
   async function loadLedger() {
     try {
@@ -226,6 +267,184 @@ export default function RecordsScreen() {
     } catch (error) {
       console.warn("加载纪念日失败", error);
     }
+  }
+
+  async function fetchHabitsForDate(date: string) {
+    try {
+      const habitsRes = await habitService.getHabitsFromServer();
+      if (!habitsRes.success || !habitsRes.data) {
+        throw new Error(habitsRes.error?.message || "获取习惯失败");
+      }
+      const habits = habitsRes.data.map(serverHabitToLocal);
+      const checkinResults = await Promise.all(
+        habitsRes.data.map((habit) => habitService.getCheckinsFromServer(habit.id, date, date))
+      );
+      const checkins = checkinResults.flatMap((res) => (
+        res.success && res.data ? res.data.map(serverCheckinToLocal) : []
+      ));
+      return { habits, checkins };
+    } catch {
+      const [habits, checkins] = await Promise.all([
+        habitService.getHabits(),
+        habitService.getCheckinsForDate(date),
+      ]);
+      return { habits, checkins };
+    }
+  }
+
+  async function fetchHabitsForRange(from: string, to: string) {
+    try {
+      const response = await habitService.getCalendarDataFromServer(from, to);
+      if (!response.success || !response.data) {
+        throw new Error(response.error?.message || "获取习惯失败");
+      }
+      const habits = response.data.habits.map(serverHabitToLocal);
+      const checkins = response.data.checkins.map(serverCheckinToLocal);
+      return { habits, checkins };
+    } catch {
+      const [habits, checkins] = await Promise.all([
+        habitService.getHabits(),
+        habitService.getCheckinsForRange(from, to),
+      ]);
+      return { habits, checkins };
+    }
+  }
+
+  async function fetchFocusForDate(date: string) {
+    try {
+      return await focusService.getStatsForDateFromServer(date);
+    } catch {
+      return await focusService.getStatsForDate(date);
+    }
+  }
+
+  async function loadCalendarMonth(monthValue: string) {
+    setCalendarLoading(true);
+    try {
+      const year = Number(monthValue.slice(0, 4));
+      const monthIndex = Number(monthValue.slice(5, 7)) - 1;
+      const firstDay = new Date(year, monthIndex, 1);
+      const startWeekday = (firstDay.getDay() + 6) % 7;
+      const gridStart = new Date(year, monthIndex, 1 - startWeekday);
+      const gridEnd = new Date(gridStart);
+      gridEnd.setDate(gridStart.getDate() + 41);
+      const from = formatDateCn(gridStart);
+      const to = formatDateCn(gridEnd);
+
+      const [monthFocusSessions, monthHabitData, monthTransactions, monthEvents, monthMeals] = await Promise.all([
+        focusService.getMonthSessionsFromServer(monthValue).catch(async () => {
+          const all = await focusService.getSessions();
+          return all
+            .filter((session) => session.status === "completed")
+            .filter((session) => String(session.started_at).slice(0, 7) === monthValue)
+            .map((session) => ({
+              actualSeconds: session.actual_seconds,
+              startedAt: session.started_at,
+              status: session.status,
+            }));
+        }),
+        fetchHabitsForRange(from, to),
+        ledgerService.getTransactions(monthValue),
+        eventService.getEvents(from, to),
+        mealService.listMealsByRange(from, to).then((res) => (res.success && res.data ? res.data : [])),
+      ]);
+
+      const focusCountByDate = new Map<string, number>();
+      monthFocusSessions.forEach((session) => {
+        const date = String(session.startedAt).slice(0, 10);
+        focusCountByDate.set(date, (focusCountByDate.get(date) || 0) + 1);
+      });
+
+      const transactionCountByDate = new Map<string, number>();
+      monthTransactions.forEach((transaction) => {
+        const date = String(transaction.occurred_at).slice(0, 10);
+        transactionCountByDate.set(date, (transactionCountByDate.get(date) || 0) + 1);
+      });
+
+      const eventCountByDate = new Map<string, number>();
+      monthEvents.forEach((event) => {
+        const date = event.nextOccurrenceDate;
+        eventCountByDate.set(date, (eventCountByDate.get(date) || 0) + 1);
+      });
+
+      const mealCountByDate = new Map<string, number>();
+      monthMeals.forEach((meal) => {
+        const date = String(meal.occurredAt).slice(0, 10);
+        mealCountByDate.set(date, (mealCountByDate.get(date) || 0) + 1);
+      });
+
+      const activeHabits = monthHabitData.habits.filter((habit) => !habit.is_archived);
+      const completedHabitIdsByDate = new Map<string, Set<string>>();
+      monthHabitData.checkins.forEach((checkin) => {
+        if (checkin.count <= 0) return;
+        const existing = completedHabitIdsByDate.get(checkin.checkin_date) ?? new Set<string>();
+        existing.add(checkin.habit_id);
+        completedHabitIdsByDate.set(checkin.checkin_date, existing);
+      });
+
+      const days = Array.from({ length: 42 }, (_, index) => {
+          const current = new Date(gridStart);
+          current.setDate(gridStart.getDate() + index);
+          const date = formatDateCn(current);
+          const inMonth = current.getMonth() === monthIndex;
+
+          const completedHabitIds = completedHabitIdsByDate.get(date) ?? new Set<string>();
+          const allHabitsDone = activeHabits.length > 0 && activeHabits.every((habit) => completedHabitIds.has(habit.id));
+
+          return {
+            date,
+            dayNumber: current.getDate(),
+            inMonth,
+            isToday: date === today(),
+            allHabitsDone,
+            hasFocus: (focusCountByDate.get(date) || 0) > 0,
+            hasMeal: (mealCountByDate.get(date) || 0) > 0,
+            hasLedger: (transactionCountByDate.get(date) || 0) > 0,
+            hasEvent: (eventCountByDate.get(date) || 0) > 0,
+          } satisfies CalendarDayState;
+        });
+
+      setCalendarDays(days);
+    } catch (error) {
+      console.warn("加载日历失败", error);
+    } finally {
+      setCalendarLoading(false);
+    }
+  }
+
+  async function loadCalendarDetail(date: string) {
+    setCalendarDetailLoading(true);
+    try {
+      const [focus, habitData, mealsRes, transactions, events] = await Promise.all([
+        fetchFocusForDate(date),
+        fetchHabitsForDate(date),
+        mealService.listMealsByDate(date),
+        ledgerService.getTransactionsForDate(date),
+        eventService.getEvents(date, date),
+      ]);
+
+      setCalendarDetail({
+        focus,
+        habits: {
+          all: habitData.habits.filter((habit) => !habit.is_archived),
+          checkins: habitData.checkins,
+        },
+        meals: mealsRes.success && mealsRes.data ? mealsRes.data : [],
+        transactions,
+        events,
+      });
+    } catch (error) {
+      console.warn("加载日期详情失败", error);
+    } finally {
+      setCalendarDetailLoading(false);
+    }
+  }
+
+  function shiftCalendarMonth(offset: number) {
+    const year = Number(calendarMonth.slice(0, 4));
+    const monthIndex = Number(calendarMonth.slice(5, 7)) - 1;
+    const next = new Date(year, monthIndex + offset, 1);
+    setCalendarMonth(`${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, "0")}`);
   }
 
   async function submitEvent() {
@@ -313,6 +532,7 @@ export default function RecordsScreen() {
   return (
     <Screen title="记录">
       <View style={styles.tabRow}>
+        <TabButton label="日期" active={activeTab === "calendar"} onPress={() => setActiveTab("calendar")} />
         <TabButton label="饮食" active={activeTab === "diet"} onPress={() => setActiveTab("diet")} />
         <TabButton label="记账" active={activeTab === "ledger"} onPress={() => setActiveTab("ledger")} />
         <TabButton label="纪念日" active={activeTab === "events"} onPress={() => setActiveTab("events")} />
@@ -407,7 +627,7 @@ export default function RecordsScreen() {
                 )}
                 <Text style={styles.detailLabel}>识别结果</Text>
                 <Text style={styles.detailBody}>
-                  {selectedMeal.note ?? "暂无识别结果说明。"}
+                  {formatMealRecognitionText(selectedMeal.note) || "暂无识别结果说明。"}
                 </Text>
                 <Text style={styles.disclaimer}>
                   AI 识别结果仅供参考，不构成医学或营养建议。
@@ -649,6 +869,159 @@ export default function RecordsScreen() {
         </View>
       )}
 
+      {activeTab === "calendar" && (
+        <View style={styles.section}>
+          <View style={styles.panel}>
+            <View style={styles.panelHeader}>
+              <TouchableOpacity style={styles.iconButton} onPress={() => shiftCalendarMonth(-1)}>
+                <MaterialCommunityIcons name="chevron-left" size={20} color={colors.text} />
+              </TouchableOpacity>
+              <Text style={styles.panelTitle}>{calendarMonth}</Text>
+              <TouchableOpacity style={styles.iconButton} onPress={() => shiftCalendarMonth(1)}>
+                <MaterialCommunityIcons name="chevron-right" size={20} color={colors.text} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.calendarWeekHeader}>
+              {["一", "二", "三", "四", "五", "六", "日"].map((label) => (
+                <Text key={label} style={styles.calendarWeekLabel}>{label}</Text>
+              ))}
+            </View>
+
+            {calendarLoading ? (
+              <ActivityIndicator size="small" color={colors.accent} />
+            ) : (
+              <View style={styles.calendarGrid}>
+                {calendarDays.map((day) => (
+                  <TouchableOpacity
+                    key={day.date}
+                    style={[
+                      styles.calendarCell,
+                      !day.inMonth && styles.calendarCellMuted,
+                      day.isToday && styles.calendarCellToday,
+                      selectedDate === day.date && styles.calendarCellSelected,
+                    ]}
+                    onPress={() => setSelectedDate(day.date)}
+                  >
+                    <View style={styles.calendarCellTop}>
+                      <Text
+                        style={[
+                          styles.calendarDayText,
+                          !day.inMonth && styles.calendarDayTextMuted,
+                          selectedDate === day.date && styles.calendarDayTextSelected,
+                        ]}
+                      >
+                        {day.dayNumber}
+                      </Text>
+                      {day.allHabitsDone ? (
+                        <MaterialCommunityIcons name="check-circle" size={14} color={colors.accent} />
+                      ) : null}
+                    </View>
+                    <View style={styles.calendarDotRow}>
+                      {day.hasFocus ? <View style={[styles.calendarDot, styles.calendarDotFocus]} /> : null}
+                      {day.hasMeal ? <View style={[styles.calendarDot, styles.calendarDotMeal]} /> : null}
+                      {day.hasLedger ? <View style={[styles.calendarDot, styles.calendarDotLedger]} /> : null}
+                      {day.hasEvent ? <View style={[styles.calendarDot, styles.calendarDotEvent]} /> : null}
+                    </View>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+          </View>
+
+          <View style={styles.panel}>
+            <View style={styles.panelHeader}>
+              <Text style={styles.panelTitle}>{selectedDate} 记录</Text>
+              {calendarDetailLoading ? <ActivityIndicator size="small" color={colors.accent} /> : null}
+            </View>
+
+            {!calendarDetail ? (
+              <Text style={styles.emptyText}>请选择日期查看详情。</Text>
+            ) : (
+              <>
+                <Text style={styles.detailLabel}>专注</Text>
+                <View style={styles.transactionRow}>
+                  <View style={styles.transactionMain}>
+                    <Text style={styles.transactionTitle}>专注记录</Text>
+                    <Text style={styles.transactionMeta}>已完成 {calendarDetail.focus.sessionCount} 次</Text>
+                  </View>
+                  <Text style={[styles.transactionAmount, styles.eventCountdown]}>
+                    {Math.floor(calendarDetail.focus.totalSeconds / 60)} 分钟
+                  </Text>
+                </View>
+
+                <Text style={styles.detailLabel}>习惯</Text>
+                {calendarDetail.habits.all.length === 0 ? (
+                  <Text style={styles.emptyText}>当天没有习惯项目。</Text>
+                ) : (
+                  calendarDetail.habits.all.map((habit) => {
+                    const done = calendarDetail.habits.checkins.some((checkin) => checkin.habit_id === habit.id && checkin.count > 0);
+                    return (
+                      <View key={habit.id} style={styles.transactionRow}>
+                        <View style={styles.transactionMain}>
+                          <Text style={styles.transactionTitle}>{habit.name}</Text>
+                          <Text style={styles.transactionMeta}>{done ? "已打卡" : "未打卡"}</Text>
+                        </View>
+                        <Text style={[styles.transactionAmount, done && styles.incomeAmount]}>
+                          {done ? "已完成" : "未完成"}
+                        </Text>
+                      </View>
+                    );
+                  })
+                )}
+
+                <Text style={styles.detailLabel}>饮食</Text>
+                {calendarDetail.meals.length === 0 ? (
+                  <Text style={styles.emptyText}>当天没有饮食记录。</Text>
+                ) : (
+                  calendarDetail.meals.map((meal) => (
+                    <Pressable key={meal.id} style={styles.transactionRow} onPress={() => loadMealDetail(meal.id)}>
+                      <View style={styles.transactionMain}>
+                        <Text style={styles.transactionTitle}>{formatMealType(meal.mealType)}</Text>
+                        <Text style={styles.transactionMeta}>{formatDateTimeCn(meal.occurredAt)}</Text>
+                      </View>
+                      <Text style={[styles.transactionAmount, styles.eventCountdown]}>{meal.totalCalories ?? 0} 千卡</Text>
+                    </Pressable>
+                  ))
+                )}
+
+                <Text style={styles.detailLabel}>记账</Text>
+                {calendarDetail.transactions.length === 0 ? (
+                  <Text style={styles.emptyText}>当天没有流水记录。</Text>
+                ) : (
+                  calendarDetail.transactions.map((transaction) => (
+                    <View key={transaction.id} style={styles.transactionRow}>
+                      <View style={styles.transactionMain}>
+                        <Text style={styles.transactionTitle}>{transaction.category || "未分类"}</Text>
+                        <Text style={styles.transactionMeta}>{transaction.account || "默认账户"}</Text>
+                      </View>
+                      <Text style={[styles.transactionAmount, transaction.type === "income" && styles.incomeAmount]}>
+                        {transaction.type === "income" ? "+" : "-"}{formatMoney(transaction.amount)}
+                      </Text>
+                    </View>
+                  ))
+                )}
+
+                <Text style={styles.detailLabel}>纪念日 / 提醒</Text>
+                {calendarDetail.events.length === 0 ? (
+                  <Text style={styles.emptyText}>当天没有纪念日或提醒。</Text>
+                ) : (
+                  calendarDetail.events.map((event) => (
+                    <View key={event.id} style={styles.transactionRow}>
+                      <View style={styles.transactionMain}>
+                        <Text style={styles.transactionTitle}>{event.title}</Text>
+                        <Text style={styles.transactionMeta}>{event.type}</Text>
+                      </View>
+                      <Text style={[styles.transactionAmount, styles.eventCountdown]}>当天</Text>
+                    </View>
+                  ))
+                )}
+              </>
+            )}
+          </View>
+        </View>
+      )}
+
       <Modal
         visible={imagePreviewVisible}
         transparent
@@ -714,6 +1087,81 @@ const styles = StyleSheet.create({
   },
   categoryTextActive: {
     color: colors.surface,
+  },
+  calendarCell: {
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: 12,
+    borderWidth: 1,
+    minHeight: 68,
+    padding: 8,
+    width: "13.4%",
+  },
+  calendarCellMuted: {
+    opacity: 0.45,
+  },
+  calendarCellSelected: {
+    borderColor: colors.accent,
+    backgroundColor: `${colors.accent}10`,
+  },
+  calendarCellToday: {
+    borderColor: colors.text,
+  },
+  calendarCellTop: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
+  calendarDayText: {
+    color: colors.text,
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  calendarDayTextMuted: {
+    color: colors.muted,
+  },
+  calendarDayTextSelected: {
+    color: colors.accent,
+  },
+  calendarDot: {
+    borderRadius: 999,
+    height: 6,
+    width: 6,
+  },
+  calendarDotEvent: {
+    backgroundColor: "#8B5CF6",
+  },
+  calendarDotFocus: {
+    backgroundColor: "#3B82F6",
+  },
+  calendarDotLedger: {
+    backgroundColor: "#F59E0B",
+  },
+  calendarDotMeal: {
+    backgroundColor: "#10B981",
+  },
+  calendarDotRow: {
+    columnGap: 4,
+    flexDirection: "row",
+    flexWrap: "wrap",
+    marginTop: 8,
+  },
+  calendarGrid: {
+    columnGap: 6,
+    flexDirection: "row",
+    flexWrap: "wrap",
+    rowGap: 6,
+  },
+  calendarWeekHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
+  calendarWeekLabel: {
+    color: colors.muted,
+    fontSize: 12,
+    fontWeight: "700",
+    textAlign: "center",
+    width: "13.4%",
   },
   dangerButton: {
     alignItems: "center",

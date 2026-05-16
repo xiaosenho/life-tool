@@ -77,14 +77,17 @@ public class FriendService {
     public record FriendInfo(String userId, String email, String displayName) {}
 
     public List<FriendInfo> listFriends(String userId) {
-        return store.findFriendships(userId).stream()
-                .map(f -> {
-                    String friendId = f.getUserId().equals(userId) ? f.getFriendUserId() : f.getUserId();
-                    User friend = userRepo.findById(friendId).orElse(null);
-                    if (friend == null) return null;
-                    return new FriendInfo(friend.getId(), friend.getEmail(), friend.getDisplayName());
-                })
-                .filter(f -> f != null)
+        List<String> friendIds = store.findFriendships(userId).stream()
+                .map(friendship -> friendship.getUserId().equals(userId)
+                        ? friendship.getFriendUserId()
+                        : friendship.getUserId())
+                .distinct()
+                .toList();
+        Map<String, User> friendsById = userRepo.findByIds(friendIds);
+        return friendIds.stream()
+                .map(friendsById::get)
+                .filter(friend -> friend != null)
+                .map(friend -> new FriendInfo(friend.getId(), friend.getEmail(), friend.getDisplayName()))
                 .toList();
     }
 
@@ -122,35 +125,30 @@ public class FriendService {
     }
 
     public List<FriendConversationSummaryResponse> listConversations(String userId) {
-        Map<String, FriendInfo> friends = listFriends(userId).stream()
-                .collect(Collectors.toMap(FriendInfo::userId, info -> info));
-        return messageStore.listByUser(userId).stream()
-                .collect(Collectors.groupingBy(message -> conversationFriendId(userId, message)))
-                .entrySet().stream()
-                .map(entry -> {
-                    String friendId = entry.getKey();
-                    FriendInfo info = friends.get(friendId);
+        List<String> friendIds = store.findFriendships(userId).stream()
+                .map(friendship -> friendship.getUserId().equals(userId)
+                        ? friendship.getFriendUserId()
+                        : friendship.getUserId())
+                .distinct()
+                .toList();
+        Map<String, FriendInfo> friends = userRepo.findByIds(friendIds).values().stream()
+                .collect(Collectors.toMap(User::getId, user -> new FriendInfo(user.getId(), user.getEmail(), user.getDisplayName())));
+        return messageStore.listConversationSummaries(userId).stream()
+                .map(summary -> {
+                    FriendInfo info = friends.get(summary.friendUserId());
                     if (info == null) {
                         return null;
                     }
-                    List<FriendMessage> messages = entry.getValue();
-                    FriendMessage latest = messages.stream()
-                            .max(java.util.Comparator.comparing(FriendMessage::getCreatedAt))
-                            .orElse(null);
-                    int unreadCount = (int) messages.stream()
-                            .filter(message -> message.getToUserId().equals(userId) && !message.isRead())
-                            .count();
-                    return latest == null ? null : new FriendConversationSummaryResponse(
-                            friendId,
+                    return new FriendConversationSummaryResponse(
+                            summary.friendUserId(),
                             info.displayName(),
                             info.email(),
-                            latest.getContent(),
-                            latest.getType().name().toLowerCase(),
-                            latest.getCreatedAt(),
-                            unreadCount);
+                            summary.lastMessage(),
+                            summary.lastMessageType(),
+                            summary.lastMessageAt(),
+                            summary.unreadCount());
                 })
                 .filter(item -> item != null)
-                .sorted((left, right) -> right.lastMessageAt().compareTo(left.lastMessageAt()))
                 .toList();
     }
 
@@ -237,7 +235,4 @@ public class FriendService {
         }
     }
 
-    private String conversationFriendId(String userId, FriendMessage message) {
-        return message.getFromUserId().equals(userId) ? message.getToUserId() : message.getFromUserId();
-    }
 }

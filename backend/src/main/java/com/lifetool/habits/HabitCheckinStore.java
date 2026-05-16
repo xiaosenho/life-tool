@@ -14,4 +14,6 @@ public interface HabitCheckinStore {
     List<HabitCheckin> findByHabitId(String habitId);
 
     List<HabitCheckin> findByUserIdAndDate(String userId, LocalDate date);
+
+    List<HabitCheckin> findByUserIdAndDateRange(String userId, LocalDate from, LocalDate to);
 }

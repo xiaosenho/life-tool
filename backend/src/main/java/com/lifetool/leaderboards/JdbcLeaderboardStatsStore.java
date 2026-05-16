@@ -1,12 +1,12 @@
 package com.lifetool.leaderboards;
 
 import java.sql.Connection;
-import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.UUID;
 
-import org.springframework.beans.factory.annotation.Value;
+import javax.sql.DataSource;
+
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Repository;
 
@@ -16,17 +16,11 @@ import com.lifetool.common.TimeSupport;
 @Profile("postgres")
 public class JdbcLeaderboardStatsStore implements LeaderboardStatsStore {
 
-    private final String url;
-    private final String username;
-    private final String password;
+    private final DataSource dataSource;
 
     public JdbcLeaderboardStatsStore(
-            @Value("${spring.datasource.url}") String url,
-            @Value("${spring.datasource.username}") String username,
-            @Value("${spring.datasource.password}") String password) {
-        this.url = url;
-        this.username = username;
-        this.password = password;
+            DataSource dataSource) {
+        this.dataSource = dataSource;
     }
 
     @Override
@@ -287,6 +281,6 @@ public class JdbcLeaderboardStatsStore implements LeaderboardStatsStore {
     }
 
     private Connection getConnection() throws SQLException {
-        return DriverManager.getConnection(url, username, password);
+        return dataSource.getConnection();
     }
 }

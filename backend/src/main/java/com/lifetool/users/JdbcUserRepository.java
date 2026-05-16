@@ -1,14 +1,19 @@
 package com.lifetool.users;
 
+import java.util.Collection;
 import java.sql.Connection;
-import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
-import org.springframework.beans.factory.annotation.Value;
+import javax.sql.DataSource;
+
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Repository;
 
@@ -16,17 +21,11 @@ import org.springframework.stereotype.Repository;
 @Profile("postgres")
 public class JdbcUserRepository implements UserRepository {
 
-    private final String url;
-    private final String username;
-    private final String password;
+    private final DataSource dataSource;
 
     public JdbcUserRepository(
-            @Value("${spring.datasource.url}") String url,
-            @Value("${spring.datasource.username}") String username,
-            @Value("${spring.datasource.password}") String password) {
-        this.url = url;
-        this.username = username;
-        this.password = password;
+            DataSource dataSource) {
+        this.dataSource = dataSource;
     }
 
     @Override
@@ -37,6 +36,43 @@ public class JdbcUserRepository implements UserRepository {
                 WHERE id = ?::uuid AND deleted_at IS NULL
                 """;
         return findOne(sql, id);
+    }
+
+    @Override
+    public Map<String, User> findByIds(Collection<String> ids) {
+        List<String> uniqueIds = ids == null
+                ? List.of()
+                : ids.stream()
+                        .filter(id -> id != null && !id.isBlank())
+                        .distinct()
+                        .toList();
+        if (uniqueIds.isEmpty()) {
+            return Map.of();
+        }
+        String placeholders = uniqueIds.stream()
+                .map(id -> "?::uuid")
+                .collect(Collectors.joining(", "));
+        String sql = """
+                SELECT id, email, password_hash, display_name, created_at
+                FROM users
+                WHERE id IN (%s) AND deleted_at IS NULL
+                """.formatted(placeholders);
+        Map<String, User> results = new LinkedHashMap<>();
+        try (Connection conn = getConnection();
+             var stmt = conn.prepareStatement(sql)) {
+            for (int index = 0; index < uniqueIds.size(); index++) {
+                stmt.setString(index + 1, uniqueIds.get(index));
+            }
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    User user = mapUser(rs);
+                    results.put(user.getId(), user);
+                }
+            }
+            return results;
+        } catch (SQLException ex) {
+            throw new IllegalStateException("Failed to load users", ex);
+        }
     }
 
     @Override
@@ -114,6 +150,6 @@ public class JdbcUserRepository implements UserRepository {
     }
 
     private Connection getConnection() throws SQLException {
-        return DriverManager.getConnection(url, username, password);
+        return dataSource.getConnection();
     }
 }

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Alert } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Alert, Image } from "react-native";
 import { Screen } from "@/components/Screen";
 import { colors } from "@/theme/colors";
 import { focusService } from "@/services/focusService";
@@ -11,7 +11,8 @@ import {
   serverHabitToLocal,
 } from "@/services/habitService";
 import { useAuthStore } from "@/store/authStore";
-import { useFocusEffect } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
+import { newsService, NewsItem } from "@/services/newsService";
 
 export default function TodayScreen() {
   const { isAuthenticated } = useAuthStore();
@@ -20,6 +21,8 @@ export default function TodayScreen() {
   const [checkins, setCheckins] = useState<HabitCheckin[]>([]);
   const [newHabitName, setNewHabitName] = useState("");
   const [offlineNotice, setOfflineNotice] = useState<string | null>(null);
+  const [newsItems, setNewsItems] = useState<NewsItem[]>([]);
+  const [newsLoading, setNewsLoading] = useState(false);
 
   const todayKey = () => {
     const now = new Date();
@@ -75,11 +78,40 @@ export default function TodayScreen() {
     }
   }, [isAuthenticated]);
 
+  const loadNews = useCallback(async () => {
+    setNewsLoading(true);
+    try {
+      const response = await newsService.getTopNews();
+      if (response.success && response.data) {
+        setNewsItems(response.data);
+      }
+    } catch (error) {
+      console.warn("Failed to load top news", error);
+    } finally {
+      setNewsLoading(false);
+    }
+  }, []);
+
   useFocusEffect(
     useCallback(() => {
       loadData();
-    }, [loadData])
+      loadNews();
+    }, [loadData, loadNews])
   );
+
+  const openNews = async (item: NewsItem) => {
+    try {
+      router.push({
+        pathname: "/news-webview",
+        params: {
+          url: item.url,
+          title: item.source || "新闻",
+        },
+      });
+    } catch {
+      Alert.alert("打开失败", "暂时无法打开这条新闻链接。");
+    }
+  };
 
   const handleCreateHabit = async () => {
     if (!newHabitName.trim()) return;
@@ -187,6 +219,35 @@ export default function TodayScreen() {
   return (
     <Screen title="今日">
       <ScrollView contentContainerStyle={styles.container}>
+        <View style={styles.section}>
+          <View style={styles.newsHeader}>
+            <Text style={styles.sectionTitle}>今日精选</Text>
+            {newsLoading ? <Text style={styles.newsLoadingText}>加载中...</Text> : null}
+          </View>
+          {newsItems.length === 0 && !newsLoading ? (
+            <Text style={styles.emptyText}>暂时没有加载到新闻。</Text>
+          ) : (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.newsScrollContent}
+            >
+              {newsItems.slice(0, 6).map((item) => (
+                <TouchableOpacity key={`${item.url}-${item.title}`} style={styles.newsCard} onPress={() => openNews(item)}>
+                  {item.imageUrl ? (
+                    <Image source={{ uri: item.imageUrl }} style={styles.newsImage} resizeMode="cover" />
+                  ) : null}
+                  <Text style={styles.newsSource}>{item.source || "今日新闻"}</Text>
+                  <Text style={styles.newsTitle} numberOfLines={3}>{item.title}</Text>
+                  <Text style={styles.newsSummary} numberOfLines={3}>
+                    {item.summary || "点击查看原文"}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          )}
+        </View>
+
         {offlineNotice && (
           <View style={styles.offlineBanner}>
             <Text style={styles.offlineTitle}>离线模式</Text>
@@ -257,6 +318,54 @@ export default function TodayScreen() {
 const styles = StyleSheet.create({
   container: {
     padding: 16,
+  },
+  newsHeader: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 12,
+  },
+  newsLoadingText: {
+    color: colors.muted,
+    fontSize: 12,
+  },
+  newsScrollContent: {
+    gap: 12,
+    paddingRight: 4,
+  },
+  newsCard: {
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: 16,
+    borderWidth: 1,
+    overflow: "hidden",
+    padding: 14,
+    width: 260,
+  },
+  newsImage: {
+    backgroundColor: colors.background,
+    borderRadius: 12,
+    height: 132,
+    marginBottom: 12,
+    width: "100%",
+  },
+  newsSource: {
+    color: colors.accent,
+    fontSize: 12,
+    fontWeight: "700",
+    marginBottom: 8,
+  },
+  newsTitle: {
+    color: colors.text,
+    fontSize: 15,
+    fontWeight: "700",
+    lineHeight: 22,
+    marginBottom: 8,
+  },
+  newsSummary: {
+    color: colors.muted,
+    fontSize: 13,
+    lineHeight: 20,
   },
   statsCard: {
     backgroundColor: colors.surface,

@@ -12,6 +12,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 @Service
@@ -59,8 +60,7 @@ public class LeaderboardService {
         return buildDetail(userId, "all_time", "streak_days");
     }
 
-    private LeaderboardEntryDto buildEntry(String userId, long value, int rank) {
-        User user = userRepository.findById(userId).orElse(null);
+    private LeaderboardEntryDto buildEntry(String userId, User user, long value, int rank) {
         String displayName = user != null ? user.getDisplayName() : "Unknown";
         return new LeaderboardEntryDto(userId, displayName, null, value, rank);
     }
@@ -71,6 +71,7 @@ public class LeaderboardService {
 
     private LeaderboardDetailResponse buildDetail(String userId, String period, String metric) {
         List<String> participantIds = collectParticipantIds(userId);
+        Map<String, User> usersById = userRepository.findByIds(participantIds);
         List<UserMetric> metrics = participantIds.stream()
                 .map(id -> new UserMetric(id, metricValue(metric, id)))
                 .sorted(Comparator.comparingLong(UserMetric::value).reversed().thenComparing(UserMetric::userId))
@@ -85,13 +86,13 @@ public class LeaderboardService {
                 rank = index + 1;
                 previousValue = item.value();
             }
-            entries.add(buildEntry(item.userId(), item.value(), rank));
+            entries.add(buildEntry(item.userId(), usersById.get(item.userId()), item.value(), rank));
         }
 
         LeaderboardEntryDto self = entries.stream()
                 .filter(entry -> entry.userId().equals(userId))
                 .findFirst()
-                .orElseGet(() -> buildEntry(userId, 0, 1));
+                .orElseGet(() -> buildEntry(userId, usersById.get(userId), 0, 1));
         long gapToPrevious = computeGap(entries, self);
         return new LeaderboardDetailResponse(period, metric, entries, self, gapToPrevious, entries.size());
     }

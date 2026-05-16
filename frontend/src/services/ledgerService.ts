@@ -213,6 +213,12 @@ export const ledgerService = {
     return rows as LedgerTransaction[];
   },
 
+  async getTransactionsForDate(date: string) {
+    const month = date.slice(0, 7);
+    const transactions = await this.getTransactions(month);
+    return transactions.filter((transaction) => String(transaction.occurred_at).slice(0, 10) === date);
+  },
+
   async getSummary(month: string) {
     const db = await getDb();
     const userId = getUserId();

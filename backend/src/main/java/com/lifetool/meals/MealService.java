@@ -2,7 +2,9 @@ package com.lifetool.meals;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.LocalTime;
+import java.util.List;
 import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -13,9 +15,22 @@ import org.springframework.context.annotation.Lazy;
 import com.lifetool.ai.AiAssistantClient;
 import com.lifetool.media.MediaService;
 import com.lifetool.meals.dto.MealDetailResponse;
+import com.lifetool.meals.dto.MealRecordResponse;
 
 @Service
 public class MealService {
+    private static final List<String> NON_FOOD_HINTS = List.of(
+            "不是食物",
+            "非食物",
+            "不是食品",
+            "不是可食用",
+            "未识别到食物",
+            "未检测到食物",
+            "未发现食物",
+            "没有食物",
+            "图中无食物",
+            "看起来不是食物",
+            "疑似不是食物");
     private static final Pattern TOTAL_CALORIES_PATTERN = Pattern.compile(
             "(?:总热量|合计|总计|总摄入|总共)[^0-9]{0,30}(\\d+(?:\\.\\d+)?)\\s*(?:千卡|大卡|kcal|Kcal|KCAL|卡路里)?");
     private static final Pattern CALORIES_PATTERN = Pattern.compile(
@@ -45,8 +60,28 @@ public class MealService {
         return mealStore.saveAiMealLog(mealLog);
     }
 
+    public static boolean shouldPersistAiRecognition(String aiResult) {
+        Optional<BigDecimal> totalCalories = extractTotalCalories(aiResult);
+        if (totalCalories.isPresent() && totalCalories.get().compareTo(BigDecimal.ZERO) <= 0) {
+            return false;
+        }
+        return !containsNonFoodHint(aiResult);
+    }
+
     public MealSummary getSummary(String userId) {
         return mealStore.getSummary(userId);
+    }
+
+    public List<MealRecordResponse> listMealsByDate(String userId, LocalDate date) {
+        return mealStore.findByUserIdAndDate(userId, date).stream()
+                .map(MealRecordResponse::from)
+                .toList();
+    }
+
+    public List<MealRecordResponse> listMealsByDateRange(String userId, LocalDate from, LocalDate to) {
+        return mealStore.findByUserIdAndDateRange(userId, from, to).stream()
+                .map(MealRecordResponse::from)
+                .toList();
     }
 
     public MealDetailResponse getMealDetail(String userId, String mealLogId) {
@@ -142,7 +177,7 @@ public class MealService {
         return "snack";
     }
 
-    private static Optional<BigDecimal> extractTotalCalories(String text) {
+    public static Optional<BigDecimal> extractTotalCalories(String text) {
         if (text == null || text.isBlank()) {
             return Optional.empty();
         }
@@ -161,6 +196,14 @@ public class MealService {
             last = new BigDecimal(calorieMatcher.group(1));
         }
         return Optional.ofNullable(last);
+    }
+
+    private static boolean containsNonFoodHint(String text) {
+        if (text == null || text.isBlank()) {
+            return false;
+        }
+        String normalized = text.replaceAll("\\s+", "");
+        return NON_FOOD_HINTS.stream().anyMatch(normalized::contains);
     }
 
     private static String blankToNull(String value) {

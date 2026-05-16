@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -98,5 +99,30 @@ class AiServiceFoodRecognitionRetryTest {
         AiException ex = assertThrows(AiException.class, () -> service.recognizeFood("u1", request));
         assertEquals("AI_RECOGNITION_FAILED", ex.getCode());
         verify(mediaService, times(1)).generateReadUrl("u1", "asset-2", "meal_photo");
+    }
+
+    @Test
+    void recognizeFoodDoesNotPersistWhenAiSaysNonFoodOrZeroCalories() {
+        AiService service = new AiService(
+                chatStore,
+                memoryStore,
+                userDataTools,
+                testProperties(),
+                assistantClient,
+                mealService,
+                mediaService);
+
+        FoodRecognitionRequest request = new FoodRecognitionRequest(null, null, "snack", "asset-3");
+        when(mediaService.generateReadUrl("u1", "asset-3", "meal_photo"))
+                .thenReturn("https://cos/non-food");
+        when(assistantClient.chatWithImage(any(), any(), eq("https://cos/non-food"), any()))
+                .thenReturn("这不是食物，总热量约 0 千卡。");
+
+        FoodRecognitionResponse response = service.recognizeFood("u1", request);
+
+        assertEquals("这不是食物，总热量约 0 千卡。", response.result());
+        assertEquals(null, response.mealLogId());
+        assertEquals(BigDecimal.ZERO, response.totalCalories());
+        verify(mealService, never()).recordAiRecognition(any(), any(), any(), any());
     }
 }

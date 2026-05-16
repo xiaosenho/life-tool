@@ -70,6 +70,10 @@ function currentMonthKey() {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 }
 
+function monthKeyForDate(date: string) {
+  return date.slice(0, 7);
+}
+
 const DEFAULT_FOCUS_MINUTES = 25;
 const DEFAULT_SHORT_BREAK_MINUTES = 5;
 const DEFAULT_LONG_BREAK_MINUTES = 15;
@@ -242,6 +246,44 @@ export const focusService = {
       totalSeconds: completedSessions.reduce((sum, session) => sum + session.actualSeconds, 0),
       sessionCount: completedSessions.length,
     };
+  },
+
+  async getStatsForDate(date: string) {
+    const db = await getDb();
+    const userId = useAuthStore.getState().user?.id;
+    if (!userId) return { totalSeconds: 0, sessionCount: 0 };
+
+    const rows = await db.getAllAsync<any>(
+      "SELECT actual_seconds FROM focus_sessions WHERE user_id = ? AND started_at LIKE ? AND status = 'completed'",
+      [userId, `${date}%`]
+    );
+
+    return {
+      totalSeconds: rows.reduce((acc, row) => acc + row.actual_seconds, 0),
+      sessionCount: rows.length,
+    };
+  },
+
+  async getStatsForDateFromServer(date: string) {
+    const res = await this.getSessionsFromServer(monthKeyForDate(date));
+    if (!res.success || !res.data) {
+      throw new Error(res.error?.message || '获取专注统计失败');
+    }
+    const completedSessions = res.data.filter((session) => (
+      session.status === 'completed' && localDateKey(new Date(session.startedAt)) === date
+    ));
+    return {
+      totalSeconds: completedSessions.reduce((sum, session) => sum + session.actualSeconds, 0),
+      sessionCount: completedSessions.length,
+    };
+  },
+
+  async getMonthSessionsFromServer(month: string) {
+    const res = await this.getSessionsFromServer(month);
+    if (!res.success || !res.data) {
+      throw new Error(res.error?.message || '获取专注记录失败');
+    }
+    return res.data;
   },
 
   // Direct API methods (call backend)

@@ -4,6 +4,7 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  Keyboard,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -63,6 +64,7 @@ export default function AiChatScreen() {
   const [audioProgress, setAudioProgress] = useState<Record<string, number>>({});
   const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
   const [activeTools, setActiveTools] = useState<string[]>([]);
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
   const scrollViewRef = useRef<ScrollView | null>(null);
   const hasInitialScrolledRef = useRef(false);
   const soundRef = useRef<Audio.Sound | null>(null);
@@ -77,6 +79,17 @@ export default function AiChatScreen() {
 
   useEffect(() => {
     void bootstrap();
+  }, []);
+
+  useEffect(() => {
+    const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const hideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+    const showSub = Keyboard.addListener(showEvent, () => setKeyboardVisible(true));
+    const hideSub = Keyboard.addListener(hideEvent, () => setKeyboardVisible(false));
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
   }, []);
 
   const bootstrap = async () => {
@@ -340,7 +353,10 @@ export default function AiChatScreen() {
           ) : (
             <ScrollView
               ref={scrollViewRef}
-              contentContainerStyle={styles.messageList}
+              contentContainerStyle={[
+                styles.messageList,
+                { paddingBottom: keyboardVisible ? 24 : Math.max(insets.bottom + 24, 36) }
+              ]}
               keyboardShouldPersistTaps="handled"
             >
               {messages.map((message) => (
@@ -402,14 +418,16 @@ export default function AiChatScreen() {
           {activeTools.length > 0 && (
             <View style={styles.toolPanel}>
               {activeTools.map((tool) => (
-                <Text key={tool} style={styles.toolText}>{toolLabels[tool] ?? tool}</Text>
+                <Text key={tool} style={styles.toolText} numberOfLines={1} ellipsizeMode="tail">
+                  {toolLabels[tool] ?? tool}
+                </Text>
               ))}
             </View>
           )}
         </View>
       </Screen>
 
-      <View style={[styles.composer, { paddingBottom: Math.max(insets.bottom, 12) }]}>
+      <View style={[styles.composer, { paddingBottom: keyboardVisible ? 12 : Math.max(insets.bottom, 12) }]}>
         <TouchableOpacity
           style={[styles.mediaButton, (sending || uploadingMedia) && styles.disabledButton]}
           onPress={toggleRecordAudio}
@@ -437,6 +455,7 @@ export default function AiChatScreen() {
           value={input}
           onChangeText={setInput}
           placeholder="问点什么..."
+          placeholderTextColor={colors.muted}
           multiline
         />
         <TouchableOpacity style={[styles.sendButton, sending && styles.disabledButton]} onPress={sendMessage}>
@@ -477,7 +496,8 @@ export default function AiChatScreen() {
 const styles = StyleSheet.create({
   audioInfo: {
     flex: 1,
-    gap: 6
+    gap: 6,
+    minWidth: 0
   },
   audioBubble: {
     alignItems: "center",
@@ -516,7 +536,8 @@ const styles = StyleSheet.create({
   chatBox: {
     flex: 1,
     gap: 10,
-    marginTop: 12
+    marginTop: 12,
+    minHeight: 0
   },
   composer: {
     alignItems: "flex-end",
@@ -550,6 +571,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     maxHeight: 120,
     minHeight: 48,
+    minWidth: 0,
     paddingHorizontal: 12,
     paddingVertical: 12
   },
@@ -605,7 +627,8 @@ const styles = StyleSheet.create({
     fontWeight: "700"
   },
   messageRow: {
-    alignItems: "flex-start"
+    alignItems: "flex-start",
+    minWidth: 0
   },
   previewCloseButton: {
     alignItems: "center",
@@ -671,11 +694,13 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     gap: 6,
+    overflow: "hidden",
     padding: 12
   },
   toolText: {
     color: colors.muted,
     fontSize: 12,
+    flexShrink: 1,
     lineHeight: 18
   },
   userBubble: {
@@ -704,6 +729,7 @@ const styles = StyleSheet.create({
   },
   waveTrack: {
     flexDirection: "row",
+    flexWrap: "nowrap",
     gap: 4
   },
   waveTrackMine: {

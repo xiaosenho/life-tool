@@ -1,5 +1,7 @@
 package com.lifetool.users;
 
+import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
@@ -17,6 +19,21 @@ public class InMemoryUserRepository implements UserRepository {
     @Override
     public Optional<User> findById(String id) {
         return Optional.ofNullable(byId.get(id));
+    }
+
+    @Override
+    public Map<String, User> findByIds(Collection<String> ids) {
+        Map<String, User> results = new LinkedHashMap<>();
+        if (ids == null) {
+            return results;
+        }
+        ids.forEach(id -> {
+            User user = byId.get(id);
+            if (user != null) {
+                results.put(id, user);
+            }
+        });
+        return results;
     }
 
     @Override

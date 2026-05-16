@@ -23,8 +23,11 @@ import org.springframework.http.MediaType;
 import org.springframework.util.MimeTypeUtils;
 import org.springframework.web.client.RestClient;
 
+import com.lifetool.media.MediaService;
+
 public class SpringAiAssistantClient implements AiAssistantClient {
     private static final Logger log = LoggerFactory.getLogger(SpringAiAssistantClient.class);
+    private static final int AUDIO_FETCH_RETRY_TIMES = 2;
 
     private final ChatClient chatClient;
     private final ChatClient statelessChatClient;
@@ -32,10 +35,12 @@ public class SpringAiAssistantClient implements AiAssistantClient {
     private final RestClient restClient;
     private final String chatModel;
     private final String chatCompletionsPath;
+    private final MediaService mediaService;
 
     public SpringAiAssistantClient(
             ChatClient.Builder chatClientBuilder,
             UserDataTools userDataTools,
+            MediaService mediaService,
             @Value("${spring.ai.openai.api-key}") String apiKey,
             @Value("${spring.ai.openai.base-url}") String baseUrl,
             @Value("${spring.ai.openai.chat.options.model}") String chatModel,
@@ -49,6 +54,7 @@ public class SpringAiAssistantClient implements AiAssistantClient {
                 .build();
         this.statelessChatClient = chatClientBuilder.build();
         this.userDataTools = userDataTools;
+        this.mediaService = mediaService;
         this.chatModel = chatModel;
         this.chatCompletionsPath = normalizePath(chatCompletionsPath);
         this.restClient = RestClient.builder()
@@ -183,7 +189,7 @@ public class SpringAiAssistantClient implements AiAssistantClient {
                     content.add(Map.of(
                             "type", "input_audio",
                             "input_audio", Map.of(
-                                    "data", fetchAudioAsBase64(mediaInput.url()),
+                                    "data", fetchAudioAsBase64WithRetry(mediaInput),
                                     "format", audioFormat(mediaInput.contentType()))));
                 } else {
                     content.add(Map.of(
@@ -225,6 +231,32 @@ public class SpringAiAssistantClient implements AiAssistantClient {
         };
     }
 
+    private String fetchAudioAsBase64WithRetry(MediaInput mediaInput) {
+        String currentUrl = mediaInput.url();
+        RuntimeException lastException = null;
+        for (int attempt = 1; attempt <= AUDIO_FETCH_RETRY_TIMES; attempt++) {
+            try {
+                return fetchAudioAsBase64(currentUrl);
+            } catch (RuntimeException ex) {
+                lastException = ex;
+                if (!isExpiredCosUrl(ex) || attempt >= AUDIO_FETCH_RETRY_TIMES || mediaInput.assetId() == null || mediaInput.assetId().isBlank()) {
+                    throw ex;
+                }
+                log.warn(
+                        "AI audio fetch got expired signed URL, refreshing once. nextAttempt={}/{}, assetId={}, url={}",
+                        attempt + 1,
+                        AUDIO_FETCH_RETRY_TIMES,
+                        mediaInput.assetId(),
+                        summarizeUrl(currentUrl));
+                currentUrl = mediaService.generateReadUrl(
+                        UserDataTools.requireCurrentUserId(),
+                        mediaInput.assetId(),
+                        "chat_audio");
+            }
+        }
+        throw lastException == null ? new IllegalStateException("Failed to load audio bytes") : lastException;
+    }
+
     private String fetchAudioAsBase64(String url) {
         byte[] bytes = restClient.get()
                 .uri(url)
@@ -234,6 +266,14 @@ public class SpringAiAssistantClient implements AiAssistantClient {
             throw new IllegalStateException("Failed to load audio bytes");
         }
         return Base64.getEncoder().encodeToString(bytes);
+    }
+
+    private boolean isExpiredCosUrl(Throwable ex) {
+        String message = ex.getMessage();
+        if (message == null || message.isBlank()) {
+            return false;
+        }
+        return message.contains("403 Forbidden") && message.contains("Request has expired");
     }
 
     private String summarizeUrl(String url) {

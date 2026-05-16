@@ -1,7 +1,6 @@
 package com.lifetool.sync;
 
 import java.sql.Connection;
-import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
@@ -10,7 +9,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
-import org.springframework.beans.factory.annotation.Value;
+import javax.sql.DataSource;
+
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Repository;
 
@@ -22,19 +22,13 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 @Profile("postgres")
 public class JdbcSyncStore implements SyncStore {
 
-    private final String url;
-    private final String username;
-    private final String password;
+    private final DataSource dataSource;
     private final ObjectMapper objectMapper;
 
     public JdbcSyncStore(
-            @Value("${spring.datasource.url}") String url,
-            @Value("${spring.datasource.username}") String username,
-            @Value("${spring.datasource.password}") String password,
+            DataSource dataSource,
             ObjectMapper objectMapper) {
-        this.url = url;
-        this.username = username;
-        this.password = password;
+        this.dataSource = dataSource;
         this.objectMapper = objectMapper;
     }
 
@@ -173,6 +167,6 @@ public class JdbcSyncStore implements SyncStore {
     }
 
     private Connection getConnection() throws SQLException {
-        return DriverManager.getConnection(url, username, password);
+        return dataSource.getConnection();
     }
 }

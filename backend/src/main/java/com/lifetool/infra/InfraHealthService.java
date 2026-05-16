@@ -7,10 +7,12 @@ import java.io.OutputStreamWriter;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
-import java.sql.DriverManager;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
+import javax.sql.DataSource;
+
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -18,22 +20,19 @@ import org.springframework.stereotype.Service;
 public class InfraHealthService {
 
     private final String datasourceUrl;
-    private final String datasourceUsername;
-    private final String datasourcePassword;
+    private final ObjectProvider<DataSource> dataSourceProvider;
     private final String redisHost;
     private final int redisPort;
     private final String redisPassword;
 
     public InfraHealthService(
             @Value("${spring.datasource.url:}") String datasourceUrl,
-            @Value("${spring.datasource.username:}") String datasourceUsername,
-            @Value("${spring.datasource.password:}") String datasourcePassword,
+            ObjectProvider<DataSource> dataSourceProvider,
             @Value("${spring.data.redis.host:}") String redisHost,
             @Value("${spring.data.redis.port:6379}") int redisPort,
             @Value("${spring.data.redis.password:}") String redisPassword) {
         this.datasourceUrl = datasourceUrl;
-        this.datasourceUsername = datasourceUsername;
-        this.datasourcePassword = datasourcePassword;
+        this.dataSourceProvider = dataSourceProvider;
         this.redisHost = redisHost;
         this.redisPort = redisPort;
         this.redisPassword = redisPassword;
@@ -50,7 +49,11 @@ public class InfraHealthService {
         if (datasourceUrl == null || datasourceUrl.isBlank()) {
             return status("not_configured", "spring.datasource.url is empty");
         }
-        try (var conn = DriverManager.getConnection(datasourceUrl, datasourceUsername, datasourcePassword);
+        DataSource dataSource = dataSourceProvider.getIfAvailable();
+        if (dataSource == null) {
+            return status("down", "DataSource bean is unavailable");
+        }
+        try (var conn = dataSource.getConnection();
              var stmt = conn.createStatement();
              var rs = stmt.executeQuery("SELECT version()")) {
             rs.next();
