@@ -53,5 +53,6 @@
 - docker-compose.yml 中 PostgreSQL/Redis 端口绑定 127.0.0.1，默认不对公网开放。
 - 敏感配置（数据库密码、JWT 密钥）通过 .env 文件注入，不硬编码在 compose 中。
 - COS（腾讯云对象存储）配置说明见 [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md#腾讯云-cos-媒体存储配置)。
+- AI / 豆包兼容接口排障说明见 [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md#ai-接口排障记录)。
 - Android APK 构建手册见 [docs/ANDROID_BUILD.md](docs/ANDROID_BUILD.md)。
 - 部署方式见 [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)。

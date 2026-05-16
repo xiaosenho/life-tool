@@ -203,6 +203,7 @@ JWT_SECRET=<openssl rand -base64 32>
 LIFETOOL_DB_MIGRATION_ENABLED=true
 LIFETOOL_AI_MOCK_ENABLED=false
 AI_BASE_URL=https://ark.cn-beijing.volces.com/api/v3
+AI_CHAT_COMPLETIONS_PATH=/chat/completions
 AI_API_KEY=<真实API Key>
 AI_CHAT_MODEL=doubao-seed-2-0-mini-260428
 ```
@@ -313,3 +314,111 @@ curl http://localhost:8080/api/health
 # 腾讯云 COS 媒体存储配置
 
 （保持不变，略）
+
+---
+
+# AI 接口排障记录
+
+本节记录 2026-05 中 AI 会话与 AI 识图排障过程中踩过的坑，后续部署或排障时优先参考。
+
+## 1. AI 识图 / AI 会话常见故障
+
+### 1.1 现象一：AI 识图报错，日志中出现 `Error while downloading ... status code: 403`
+
+第一直觉通常会怀疑 COS 签名 URL 过期，但这并不一定成立。实际排查时应先通过日志确认：
+
+- 后端生成的 `q-sign-time`
+- AI 请求发起时间
+- 是否在 5 分钟有效期内
+
+如果签名时间是新鲜的，但调用仍失败，需要继续看后续日志，判断失败点是否已经从 COS 转移到模型接口自身。
+
+### 1.2 现象二：AI 识图 / AI 会话报 `404 Not Found: [no body]`
+
+这类错误在本项目中已经确认过一次真实根因：**不是 COS、不是用户鉴权，而是豆包兼容接口的 completions 路径被代码写死成了错误地址。**
+
+错误组合：
+
+```text
+AI_BASE_URL=https://ark.cn-beijing.volces.com/api/v3
+代码里写死 /v1/chat/completions
+```
+
+最终会请求到：
+
+```text
+https://ark.cn-beijing.volces.com/api/v3/v1/chat/completions
+```
+
+该地址返回 404。
+
+正确做法：
+
+```text
+AI_BASE_URL=https://ark.cn-beijing.volces.com/api/v3
+AI_CHAT_COMPLETIONS_PATH=/chat/completions
+```
+
+代码中必须通过配置读取 `spring.ai.openai.chat.completions-path`，不要把 `/v1/chat/completions` 写死在 `RestClient` 调用里。
+
+### 1.3 现象三：AI 会话前端提示像是 401
+
+如果后端日志里真正抛出的是：
+
+```text
+org.springframework.web.client.HttpClientErrorException$NotFound: 404 Not Found: [no body]
+```
+
+那么这不是用户登录态失效，而是外部 AI 接口调用失败。应优先检查：
+
+1. `AI_BASE_URL`
+2. `AI_CHAT_COMPLETIONS_PATH`
+3. `AI_CHAT_MODEL`
+4. 外部服务返回码和响应体
+
+不要仅凭前端提示文案把问题误判成登录鉴权失败。
+
+## 2. 推荐 AI 环境变量
+
+豆包 Ark OpenAI-compatible 接口建议使用以下组合：
+
+```bash
+LIFETOOL_AI_MOCK_ENABLED=false
+AI_BASE_URL=https://ark.cn-beijing.volces.com/api/v3
+AI_CHAT_COMPLETIONS_PATH=/chat/completions
+AI_API_KEY=<真实 API Key>
+AI_CHAT_MODEL=doubao-seed-2-0-mini-260428
+```
+
+注意：
+
+- `AI_BASE_URL` 负责主机和前缀
+- `AI_CHAT_COMPLETIONS_PATH` 负责具体 completions 资源路径
+- 二者不要重复拼出 `/v1`
+
+## 3. 部署后自检清单
+
+后端启动后，建议至少执行以下检查：
+
+```bash
+docker compose logs -f backend
+curl http://127.0.0.1:8091/api/health
+```
+
+AI 功能排查时，重点观察日志中是否出现：
+
+- `AI food recognition start`
+- `AI image recognition request`
+- `Calling AI chatWithImage via direct REST API`
+- `AI chatWithImage direct REST call failed`
+
+如果 AI 会话失败，还要看：
+
+- `SpringAiAssistantClient.chatWithMedia(...)`
+
+优先确认是：
+
+- COS 下载失败
+- completions 路径错误
+- API key / 模型名错误
+- 外部模型服务返回 4xx / 5xx

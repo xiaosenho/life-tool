@@ -254,6 +254,27 @@ blocked
   - 明确生产密钥不得提交到 Git。
 - 风险等级：中
 
+### TASK-BE-110：修复豆包 AI 识图与会话 completions 路径
+
+- 状态：done
+- 推荐负责人：Codex
+- 影响文件：
+  - `backend/src/main/java/com/lifetool/ai/SpringAiAssistantClient.java`
+  - `backend/src/main/java/com/lifetool/ai/AiConfiguration.java`
+  - `backend/src/main/resources/application.yml`
+  - `docs/DEPLOYMENT.md`
+  - `README.md`
+- 描述：
+  - 修复 AI 识图与 AI 会话直连 REST 调用时写死 `/v1/chat/completions` 的问题。
+  - 改为通过 `spring.ai.openai.chat.completions-path` / `AI_CHAT_COMPLETIONS_PATH` 配置 completions 路径。
+  - 适配豆包 Ark OpenAI-compatible 接口，避免 `AI_BASE_URL=https://ark.cn-beijing.volces.com/api/v3` 时拼出错误的 `/api/v3/v1/chat/completions`。
+  - 补充排障日志，区分 COS 403、外部 AI 404 与真实业务鉴权错误。
+- 验收标准：
+  - AI 识图请求不再因错误的 completions 路径返回 404。
+  - AI 会话请求与 AI 识图请求共用同一 completions-path 配置。
+  - `mvn -q -Dtest=AiControllerTest,AiServiceFoodRecognitionRetryTest,AiAssistantClientTest test` 通过。
+- 风险等级：高
+
 ### TASK-BE-104：实现媒体上传授权与资产记录
 
 - 状态：done
