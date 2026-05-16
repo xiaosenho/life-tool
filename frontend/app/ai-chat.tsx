@@ -336,7 +336,7 @@ export default function AiChatScreen() {
               <Text style={styles.loadingText}>正在准备对话...</Text>
             </View>
           ) : messages.length === 0 ? (
-            <Text style={styles.emptyText}>可以问我“结合最近记录，帮我安排明天的专注和饮食”。</Text>
+            <Text style={styles.emptyText}>可以直接问我今天的安排。</Text>
           ) : (
             <ScrollView
               ref={scrollViewRef}
@@ -436,7 +436,7 @@ export default function AiChatScreen() {
           style={styles.input}
           value={input}
           onChangeText={setInput}
-          placeholder="输入你的问题..."
+          placeholder="问点什么..."
           multiline
         />
         <TouchableOpacity style={[styles.sendButton, sending && styles.disabledButton]} onPress={sendMessage}>

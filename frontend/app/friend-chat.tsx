@@ -53,7 +53,7 @@ const QUICK_INTERACTIONS: Array<{
     type: "cheer",
     label: "加油",
     icon: "sparkles-outline",
-    content: "今天也继续加油！",
+    content: "加油！",
     backgroundColor: "#CCFBF1",
     iconColor: colors.accent
   },
@@ -61,7 +61,7 @@ const QUICK_INTERACTIONS: Array<{
     type: "celebrate",
     label: "庆祝",
     icon: "trophy-outline",
-    content: "太棒了，必须给你庆祝一下！🎉",
+    content: "太棒了！🎉",
     backgroundColor: "#FEF3C7",
     iconColor: "#D97706"
   },
@@ -69,7 +69,7 @@ const QUICK_INTERACTIONS: Array<{
     type: "hug",
     label: "抱抱",
     icon: "heart-outline",
-    content: "先给你一个抱抱，我们慢慢来 🤗",
+    content: "抱抱你 🤗",
     backgroundColor: "#FCE7F3",
     iconColor: "#DB2777"
   },
@@ -77,7 +77,7 @@ const QUICK_INTERACTIONS: Array<{
     type: "coffee",
     label: "咖啡",
     icon: "cafe-outline",
-    content: "奖励你一杯咖啡，辛苦啦 ☕",
+    content: "请你喝咖啡 ☕",
     backgroundColor: "#EDE9FE",
     iconColor: "#7C3AED"
   },
@@ -85,11 +85,33 @@ const QUICK_INTERACTIONS: Array<{
     type: "poke",
     label: "提醒",
     icon: "notifications-outline",
-    content: "戳戳你，别忘了今天的小目标哦 👀",
+    content: "别忘了今天目标 👀",
     backgroundColor: "#DBEAFE",
     iconColor: "#2563EB"
   }
 ];
+
+function mergeMessagesPreservingMediaUrl(previous: FriendMessage[], incoming: FriendMessage[]) {
+  const previousById = new Map(previous.map((message) => [message.id, message]));
+  return incoming.map((message) => {
+    const previousMessage = previousById.get(message.id);
+    if (
+      !previousMessage?.attachment?.url ||
+      !message.attachment ||
+      previousMessage.attachment.assetId !== message.attachment.assetId ||
+      previousMessage.attachment.kind !== message.attachment.kind
+    ) {
+      return message;
+    }
+    return {
+      ...message,
+      attachment: {
+        ...message.attachment,
+        url: previousMessage.attachment.url
+      }
+    };
+  });
+}
 
 export default function FriendChatScreen() {
   const POLL_INTERVAL_MS = 1000;
@@ -132,7 +154,7 @@ export default function FriendChatScreen() {
     try {
       const response = await friendService.listMessages(friendUserId);
       if (response.success && response.data) {
-        setMessages(response.data);
+        setMessages((current) => mergeMessagesPreservingMediaUrl(current, response.data ?? []));
         await friendService.markConversationRead(friendUserId);
         if (!hasInitialScrolledRef.current) {
           hasInitialScrolledRef.current = true;
@@ -480,7 +502,7 @@ export default function FriendChatScreen() {
             onChangeText={setDraft}
             onFocus={() => setComposerFocused(true)}
             onBlur={() => setComposerFocused(false)}
-            placeholder="发条消息，鼓励一下好友"
+            placeholder="发消息..."
             placeholderTextColor={colors.muted}
           />
           <TouchableOpacity
