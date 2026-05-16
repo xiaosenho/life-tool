@@ -23,6 +23,7 @@ import {
 } from "@/services/friendService";
 import { LeaderboardDetailResponse, leaderboardService } from "@/services/leaderboardService";
 import { useAuthStore } from "@/store/authStore";
+import { useFriendBadgeStore } from "@/store/friendBadgeStore";
 import { colors } from "@/theme/colors";
 import { formatDateTimeCn } from "@/utils/time";
 import { FRIEND_MESSAGE_TYPE_LABELS } from "@/services/friendService";
@@ -53,12 +54,14 @@ const boardDescriptions: Record<BoardKey, string> = {
 export default function FriendsScreen() {
   const router = useRouter();
   const userId = useAuthStore((state) => state.user?.id ?? "");
+  const sharedConversations = useFriendBadgeStore((state) => state.conversations);
+  const syncFriendBadge = useFriendBadgeStore((state) => state.syncFromConversations);
+  const conversationUnread = useFriendBadgeStore((state) => state.conversationUnread);
   const [activeTab, setActiveTab] = useState<TabKey>("friends");
   const [activeBoard, setActiveBoard] = useState<BoardKey>("focus_today");
   const [email, setEmail] = useState("");
   const [friends, setFriends] = useState<FriendInfo[]>([]);
   const [requests, setRequests] = useState<FriendRequest[]>([]);
-  const [conversations, setConversations] = useState<FriendConversationSummary[]>([]);
   const [leaderboards, setLeaderboards] = useState<Record<BoardKey, LeaderboardDetailResponse | null>>({
     focus_today: null,
     focus_week: null,
@@ -94,13 +97,13 @@ export default function FriendsScreen() {
 
       if (friendRes.success && friendRes.data) setFriends(friendRes.data);
       if (requestRes.success && requestRes.data) setRequests(requestRes.data);
-      if (conversationRes.success && conversationRes.data) setConversations(conversationRes.data);
+      if (conversationRes.success && conversationRes.data) syncFriendBadge(conversationRes.data);
     } catch (error) {
       Alert.alert("加载失败", error instanceof Error ? error.message : "请稍后重试");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [syncFriendBadge]);
 
   const loadMessagesData = useCallback(async (silent = false) => {
     if (!silent) {
@@ -112,13 +115,13 @@ export default function FriendsScreen() {
         friendService.listConversations()
       ]);
       if (friendRes.success && friendRes.data) setFriends(friendRes.data);
-      if (conversationRes.success && conversationRes.data) setConversations(conversationRes.data);
+      if (conversationRes.success && conversationRes.data) syncFriendBadge(conversationRes.data);
     } catch (error) {
       Alert.alert("加载失败", error instanceof Error ? error.message : "请稍后重试");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [syncFriendBadge]);
 
   const loadLeaderboardData = useCallback(async (boardKey: BoardKey, silent = false) => {
     if (!silent) {
@@ -273,7 +276,8 @@ export default function FriendsScreen() {
               <EmptyState text="还没有好友，先邀请一位一起坚持吧。" />
             ) : (
               friends.map((friend) => {
-                const conversation = conversations.find((item) => item.friendUserId === friend.userId);
+                const conversation = sharedConversations.find((item) => item.friendUserId === friend.userId);
+                const unreadCount = conversationUnread[friend.userId] ?? conversation?.unreadCount ?? 0;
                 return (
                   <View key={friend.userId} style={styles.friendCard}>
                     <View style={styles.avatar}>
@@ -288,7 +292,7 @@ export default function FriendsScreen() {
                       onPress={() => router.push({ pathname: "/friend-chat", params: { friendUserId: friend.userId, friendName: friend.displayName } })}
                     >
                       <Text style={styles.secondaryButtonText}>
-                        {conversation?.unreadCount ? `互动(${conversation.unreadCount})` : "互动"}
+                        {unreadCount ? `互动(${unreadCount})` : "互动"}
                       </Text>
                     </TouchableOpacity>
                     <TouchableOpacity style={styles.iconButton} onPress={() => handleRemoveFriend(friend)}>
@@ -391,7 +395,7 @@ export default function FriendsScreen() {
 
       {activeTab === "messages" && (
         <>
-          <SectionHeader title="互动会话" meta={`${conversations.length} 个`} />
+          <SectionHeader title="互动会话" meta={`${sharedConversations.length} 个`} />
           <View style={styles.panel}>
             <Text style={styles.panelTitle}>快捷发起聊天</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.conversationTabs}>
@@ -399,7 +403,8 @@ export default function FriendsScreen() {
                 <EmptyState text="还没有好友，先去添加一位好友吧。" />
               ) : (
                 friends.map((friend) => {
-                  const conversation = conversations.find((item) => item.friendUserId === friend.userId);
+                  const conversation = sharedConversations.find((item) => item.friendUserId === friend.userId);
+                  const unreadCount = conversationUnread[friend.userId] ?? conversation?.unreadCount ?? 0;
                   return (
                     <Pressable
                       key={friend.userId}
@@ -407,9 +412,9 @@ export default function FriendsScreen() {
                       onPress={() => router.push({ pathname: "/friend-chat", params: { friendUserId: friend.userId, friendName: friend.displayName } })}
                     >
                       <Text style={styles.conversationChipText}>{friend.displayName}</Text>
-                      {!!conversation?.unreadCount && (
+                      {!!unreadCount && (
                         <View style={styles.unreadDot}>
-                          <Text style={styles.unreadText}>{conversation.unreadCount}</Text>
+                          <Text style={styles.unreadText}>{unreadCount}</Text>
                         </View>
                       )}
                     </Pressable>
@@ -421,33 +426,36 @@ export default function FriendsScreen() {
 
           <View style={styles.panel}>
             <Text style={styles.panelTitle}>最近互动</Text>
-            {conversations.length === 0 ? (
+            {sharedConversations.length === 0 ? (
               <Text style={styles.emptyText}>还没有互动消息，现在就可以直接给好友发第一条消息。</Text>
             ) : (
-              conversations.map((item) => (
-                <Pressable
-                  key={item.friendUserId}
-                  style={styles.conversationListItem}
-                  onPress={() => router.push({ pathname: "/friend-chat", params: { friendUserId: item.friendUserId, friendName: item.friendDisplayName } })}
-                >
-                  <View style={styles.flexBlock}>
-                    <Text style={styles.friendName}>{item.friendDisplayName}</Text>
-                    <Text style={styles.friendMeta}>
-                      {FRIEND_MESSAGE_TYPE_LABELS[item.lastMessageType]} · {formatDateTimeCn(item.lastMessageAt)}
-                    </Text>
-                    <Text style={styles.messagePreview} numberOfLines={1}>
-                      {item.lastMessage}
-                    </Text>
-                  </View>
-                  {item.unreadCount > 0 ? (
-                    <View style={styles.unreadDot}>
-                      <Text style={styles.unreadText}>{item.unreadCount}</Text>
+              sharedConversations.map((item) => {
+                const unreadCount = conversationUnread[item.friendUserId] ?? item.unreadCount ?? 0;
+                return (
+                  <Pressable
+                    key={item.friendUserId}
+                    style={styles.conversationListItem}
+                    onPress={() => router.push({ pathname: "/friend-chat", params: { friendUserId: item.friendUserId, friendName: item.friendDisplayName } })}
+                  >
+                    <View style={styles.flexBlock}>
+                      <Text style={styles.friendName}>{item.friendDisplayName}</Text>
+                      <Text style={styles.friendMeta}>
+                        {FRIEND_MESSAGE_TYPE_LABELS[item.lastMessageType]} · {formatDateTimeCn(item.lastMessageAt)}
+                      </Text>
+                      <Text style={styles.messagePreview} numberOfLines={1}>
+                        {item.lastMessage}
+                      </Text>
                     </View>
-                  ) : (
-                    <Ionicons name="chevron-forward" size={18} color={colors.muted} />
-                  )}
-                </Pressable>
-              ))
+                    {unreadCount > 0 ? (
+                      <View style={styles.unreadDot}>
+                        <Text style={styles.unreadText}>{unreadCount}</Text>
+                      </View>
+                    ) : (
+                      <Ionicons name="chevron-forward" size={18} color={colors.muted} />
+                    )}
+                  </Pressable>
+                );
+              })
             )}
           </View>
         </>

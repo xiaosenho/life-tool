@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef } from "react";
-import { router } from "expo-router";
+import React, { useState, useEffect, useLayoutEffect, useRef } from "react";
+import { router, useNavigation } from "expo-router";
 import {
   View,
   Text,
@@ -17,6 +17,7 @@ const PRESET_MINUTES = [15, 25, 45, 60];
 const DEFAULT_MINUTES = 25;
 
 export default function FocusScreen() {
+  const navigation = useNavigation();
   const [timeLeft, setTimeLeft] = useState(DEFAULT_MINUTES * 60);
   const [targetMinutes, setTargetMinutes] = useState(DEFAULT_MINUTES);
   const [defaultMinutes, setDefaultMinutes] = useState(DEFAULT_MINUTES);
@@ -33,6 +34,18 @@ export default function FocusScreen() {
     loadPreference();
     loadTodayStats();
   }, []);
+
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerShown: true,
+      headerTitle: "专注",
+      headerRight: () => (
+        <TouchableOpacity style={styles.headerVocabButton} onPress={() => router.push("/vocab")} activeOpacity={0.85}>
+          <Text style={styles.headerVocabButtonText}>可以背单词啦</Text>
+        </TouchableOpacity>
+      ),
+    });
+  }, [navigation]);
 
   useEffect(() => {
     if (isActive && timeLeft > 0) {
@@ -216,7 +229,7 @@ export default function FocusScreen() {
   const canEditTarget = !startedAt;
 
   return (
-    <Screen title="专注">
+    <Screen>
       <ScrollView contentContainerStyle={styles.container}>
         {offlineNotice && (
           <View style={styles.offlineBanner}>
@@ -343,9 +356,22 @@ const styles = StyleSheet.create({
   container: {
     flexGrow: 1,
     paddingHorizontal: 16,
-    paddingTop: 12,
+    paddingTop: 8,
     alignItems: "center",
     paddingBottom: 24,
+  },
+  headerVocabButton: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: "#ECFDF5",
+    borderWidth: 1,
+    borderColor: "#A7F3D0",
+  },
+  headerVocabButtonText: {
+    color: "#065F46",
+    fontSize: 12,
+    fontWeight: "700",
   },
   statsRow: {
     flexDirection: "row",

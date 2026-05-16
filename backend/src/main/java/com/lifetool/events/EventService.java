@@ -7,6 +7,7 @@ import java.time.YearMonth;
 import java.time.temporal.ChronoUnit;
 import java.util.Comparator;
 import java.util.List;
+import java.util.stream.Stream;
 
 import org.springframework.stereotype.Service;
 
@@ -36,10 +37,8 @@ public class EventService {
         }
 
         return store.findByUserId(userId).stream()
-                .map(event -> responseForRange(event, from))
-                .filter(response -> !response.nextOccurrenceDate().isBefore(from))
-                .filter(response -> !response.nextOccurrenceDate().isAfter(to))
-                .sorted(Comparator.comparing(EventResponse::nextOccurrenceDate))
+                .flatMap(event -> expandResponsesForRange(event, from, to))
+                .sorted(Comparator.comparing(EventResponse::displayDate))
                 .toList();
     }
 
@@ -112,7 +111,10 @@ public class EventService {
         }
         LocalDate today = today();
         LocalDate end = today.plusDays(days);
-        return listEvents(userId, today, end);
+        return store.findByUserId(userId).stream()
+                .flatMap(event -> expandResponsesForRange(event, today, end))
+                .sorted(Comparator.comparingLong(EventResponse::daysUntil))
+                .toList();
     }
 
     private EventResponse responseForToday(AnniversaryEvent event) {
@@ -123,6 +125,18 @@ public class EventService {
         LocalDate next = nextOccurrence(event, referenceDate);
         long daysUntil = ChronoUnit.DAYS.between(today(), next);
         return EventResponse.from(event, daysUntil, next);
+    }
+
+    private Stream<EventResponse> expandResponsesForRange(AnniversaryEvent event, LocalDate from, LocalDate to) {
+        LocalDate next = nextOccurrence(event, from);
+        return expandReminderOffsets(event).stream()
+                .map(offset -> {
+                    LocalDate displayDate = next.minusDays(offset);
+                    long daysUntil = ChronoUnit.DAYS.between(today(), displayDate);
+                    return EventResponse.from(event, daysUntil, next, displayDate, offset);
+                })
+                .filter(response -> !response.displayDate().isBefore(from))
+                .filter(response -> !response.displayDate().isAfter(to));
     }
 
     private LocalDate nextOccurrence(AnniversaryEvent event, LocalDate referenceDate) {
@@ -206,6 +220,14 @@ public class EventService {
     private static List<Integer> normalizeReminders(List<Integer> reminders) {
         if (reminders == null) return List.of();
         return reminders.stream().distinct().sorted(Comparator.reverseOrder()).toList();
+    }
+
+    private static List<Integer> expandReminderOffsets(AnniversaryEvent event) {
+        return Stream.concat(Stream.of(0), event.getRemindDaysBefore().stream())
+                .filter(day -> day != null && day >= 0)
+                .distinct()
+                .sorted()
+                .toList();
     }
 
     private static String blankToNull(String value) {

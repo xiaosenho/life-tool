@@ -15,6 +15,8 @@ public record EventResponse(
         List<Integer> remindDaysBefore,
         long daysUntil,
         LocalDate nextOccurrenceDate,
+        LocalDate displayDate,
+        Integer reminderOffsetDays,
         String note,
         String mediaAssetId,
         Instant createdAt,
@@ -24,6 +26,15 @@ public record EventResponse(
             AnniversaryEvent event,
             long daysUntil,
             LocalDate nextOccurrenceDate) {
+        return from(event, daysUntil, nextOccurrenceDate, nextOccurrenceDate, 0);
+    }
+
+    public static EventResponse from(
+            AnniversaryEvent event,
+            long daysUntil,
+            LocalDate nextOccurrenceDate,
+            LocalDate displayDate,
+            Integer reminderOffsetDays) {
         return new EventResponse(
                 event.getId(),
                 event.getType(),
@@ -33,6 +44,8 @@ public record EventResponse(
                 event.getRemindDaysBefore(),
                 daysUntil,
                 nextOccurrenceDate,
+                displayDate,
+                reminderOffsetDays,
                 event.getNote(),
                 event.getMediaAssetId(),
                 event.getCreatedAt(),

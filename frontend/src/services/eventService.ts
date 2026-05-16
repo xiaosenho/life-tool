@@ -20,6 +20,8 @@ export interface AnniversaryEvent {
   deleted_at: string | null;
   daysUntil: number;
   nextOccurrenceDate: string;
+  displayDate?: string;
+  reminderOffsetDays?: number;
 }
 
 export interface EventInput {
@@ -41,6 +43,8 @@ interface ServerEvent {
   remindDaysBefore: number[];
   daysUntil: number;
   nextOccurrenceDate: string;
+  displayDate?: string;
+  reminderOffsetDays?: number;
   note: string | null;
   mediaAssetId: string | null;
   createdAt: string;
@@ -146,7 +150,26 @@ function fromServerEvent(server: ServerEvent, userId: string): AnniversaryEvent 
     deleted_at: null,
     daysUntil: server.daysUntil,
     nextOccurrenceDate: server.nextOccurrenceDate,
+    displayDate: server.displayDate ?? server.nextOccurrenceDate,
+    reminderOffsetDays: server.reminderOffsetDays ?? 0,
   };
+}
+
+function expandReminderOccurrences(event: AnniversaryEvent): AnniversaryEvent[] {
+  const offsets = Array.from(new Set([0, ...(event.remind_days_before ?? [])]))
+    .filter((day) => Number.isInteger(day) && day >= 0)
+    .sort((a, b) => a - b);
+
+  return offsets.map((offset) => {
+    const displayDateObj = toDate(event.nextOccurrenceDate);
+    displayDateObj.setUTCDate(displayDateObj.getUTCDate() - offset);
+    return {
+      ...event,
+      displayDate: toDateString(displayDateObj),
+      reminderOffsetDays: offset,
+      daysUntil: daysBetween(todayDate(), displayDateObj),
+    };
+  });
 }
 
 async function upsertLocalEvent(event: AnniversaryEvent) {
@@ -270,7 +293,9 @@ export const eventService = {
     if (response.success && response.data) {
       const events = response.data.map((item) => fromServerEvent(item, userId));
       await Promise.all(events.map((event) => upsertLocalEvent(event)));
-      return events.sort((a, b) => a.nextOccurrenceDate.localeCompare(b.nextOccurrenceDate));
+      return events
+        .filter((event) => !!event.displayDate && event.displayDate >= from && event.displayDate <= to)
+        .sort((a, b) => (a.displayDate ?? "").localeCompare(b.displayDate ?? ""));
     }
     const db = await getDb();
     const rows = await db.getAllAsync<any>(
@@ -279,8 +304,9 @@ export const eventService = {
     );
     return rows
       .map(hydrate)
-      .filter((event) => event.nextOccurrenceDate >= from && event.nextOccurrenceDate <= to)
-      .sort((a, b) => a.nextOccurrenceDate.localeCompare(b.nextOccurrenceDate));
+      .flatMap(expandReminderOccurrences)
+      .filter((event) => !!event.displayDate && event.displayDate >= from && event.displayDate <= to)
+      .sort((a, b) => (a.displayDate ?? "").localeCompare(b.displayDate ?? ""));
   },
 
   async getUpcoming(days: number = 30) {
@@ -289,11 +315,39 @@ export const eventService = {
       const userId = getUserId();
       const events = response.data.map((item) => fromServerEvent(item, userId));
       await Promise.all(events.map((event) => upsertLocalEvent(event)));
-      return events.sort((a, b) => a.nextOccurrenceDate.localeCompare(b.nextOccurrenceDate));
+      return events
+        .filter((event) => event.daysUntil >= 0 && event.daysUntil <= days)
+        .sort((a, b) => a.daysUntil - b.daysUntil);
     }
     const from = new Date().toISOString().slice(0, 10);
     const end = new Date();
     end.setUTCDate(end.getUTCDate() + days);
     return this.getEvents(from, toDateString(end));
+  },
+
+  async getAllSaved() {
+    const userId = getUserId();
+    const response = await apiClient.get<ServerEvent[]>(`/events?from=1970-01-01&to=2100-12-31`);
+    if (response.success && response.data) {
+      const deduped = new Map<string, AnniversaryEvent>();
+      response.data.forEach((item) => {
+        const event = fromServerEvent(item, userId);
+        deduped.set(event.id, event);
+      });
+      const events = Array.from(deduped.values());
+      await Promise.all(events.map((event) => upsertLocalEvent(event)));
+      return events.sort((a, b) => {
+        const dateCompare = a.event_date.localeCompare(b.event_date);
+        if (dateCompare !== 0) return dateCompare;
+        return a.created_at.localeCompare(b.created_at);
+      });
+    }
+
+    const db = await getDb();
+    const rows = await db.getAllAsync<any>(
+      'SELECT * FROM anniversary_events WHERE user_id = ? AND deleted_at IS NULL ORDER BY event_date ASC, created_at ASC',
+      [userId]
+    );
+    return rows.map(hydrate);
   },
 };

@@ -40,6 +40,7 @@ import {
   uploadChatImage
 } from "@/services/chatMediaService";
 import { useAuthStore } from "@/store/authStore";
+import { useFriendBadgeStore } from "@/store/friendBadgeStore";
 import { colors } from "@/theme/colors";
 import { formatDateTimeCn } from "@/utils/time";
 
@@ -125,6 +126,9 @@ export default function FriendChatScreen() {
   const router = useRouter();
   const { friendUserId, friendName } = useLocalSearchParams<{ friendUserId: string; friendName?: string }>();
   const userId = useAuthStore((state) => state.user?.id ?? "");
+  const clearConversationUnread = useFriendBadgeStore((state) => state.clearConversationUnread);
+  const sharedConversations = useFriendBadgeStore((state) => state.conversations);
+  const upsertConversation = useFriendBadgeStore((state) => state.upsertConversation);
   const [messages, setMessages] = useState<FriendMessage[]>([]);
   const [draft, setDraft] = useState("");
   const [loading, setLoading] = useState(true);
@@ -154,12 +158,35 @@ export default function FriendChatScreen() {
   const insets = useSafeAreaInsets();
 
   const title = useMemo(() => friendName || "聊天", [friendName]);
+  const friendConversation = useMemo(
+    () => sharedConversations.find((item) => item.friendUserId === friendUserId),
+    [friendUserId, sharedConversations]
+  );
 
   const scrollToBottom = useCallback((animated = true) => {
     requestAnimationFrame(() => {
       scrollViewRef.current?.scrollToEnd({ animated });
     });
   }, []);
+
+  const updateConversationSummary = useCallback(
+    (lastMessage: string, lastMessageType: FriendMessage["type"], lastMessageAt: string) => {
+      if (!friendUserId) {
+        return;
+      }
+
+      upsertConversation({
+        friendUserId,
+        friendDisplayName: friendConversation?.friendDisplayName ?? title,
+        friendEmail: friendConversation?.friendEmail ?? "",
+        lastMessage,
+        lastMessageType,
+        lastMessageAt,
+        unreadCount: 0
+      });
+    },
+    [friendConversation?.friendDisplayName, friendConversation?.friendEmail, friendUserId, title, upsertConversation]
+  );
 
   const loadMessages = useCallback(async (silent = false) => {
     if (!friendUserId) {
@@ -173,6 +200,7 @@ export default function FriendChatScreen() {
       if (response.success && response.data) {
         setMessages((current) => mergeMessagesPreservingMediaUrl(current, response.data ?? []));
         await friendService.markConversationRead(friendUserId);
+        clearConversationUnread(friendUserId);
         if (!hasInitialScrolledRef.current) {
           hasInitialScrolledRef.current = true;
           setTimeout(() => scrollToBottom(false), 0);
@@ -186,7 +214,7 @@ export default function FriendChatScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [friendUserId]);
+  }, [clearConversationUnread, friendUserId, scrollToBottom]);
 
   const stopPolling = useCallback(() => {
     if (pollingRef.current) {
@@ -265,6 +293,7 @@ export default function FriendChatScreen() {
         Alert.alert("发送失败", response.error?.message ?? "请稍后重试");
         return;
       }
+      updateConversationSummary(content, type, response.data?.createdAt ?? new Date().toISOString());
       setDraft("");
       scrollToBottom(true);
       await loadMessages(true);
@@ -302,6 +331,7 @@ export default function FriendChatScreen() {
         Alert.alert("发送失败", response.error?.message ?? "请稍后重试");
         return;
       }
+      updateConversationSummary("[图片消息]", "image", response.data?.createdAt ?? new Date().toISOString());
       await loadMessages(true);
       scrollToBottom(true);
     } catch (error) {
@@ -358,6 +388,7 @@ export default function FriendChatScreen() {
         Alert.alert("发送失败", response.error?.message ?? "请稍后重试");
         return;
       }
+      updateConversationSummary("[语音消息]", "audio", response.data?.createdAt ?? new Date().toISOString());
       await loadMessages(true);
       scrollToBottom(true);
     } catch (error) {

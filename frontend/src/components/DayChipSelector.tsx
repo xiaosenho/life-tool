@@ -7,9 +7,11 @@ const DAY_OPTIONS = [1, 3, 7, 14, 30];
 interface DayChipSelectorProps {
   selected: number[];
   onChange: (days: number[]) => void;
+  options?: number[];
+  label?: string;
 }
 
-export function DayChipSelector({ selected, onChange }: DayChipSelectorProps) {
+export function DayChipSelector({ selected, onChange, options = DAY_OPTIONS, label = "提前提醒" }: DayChipSelectorProps) {
   const toggle = (day: number) => {
     if (selected.includes(day)) {
       onChange(selected.filter((d) => d !== day));
@@ -20,9 +22,9 @@ export function DayChipSelector({ selected, onChange }: DayChipSelectorProps) {
 
   return (
     <View style={styles.chipRow}>
-      <Text style={styles.label}>提前提醒</Text>
+      <Text style={styles.label}>{label}</Text>
       <View style={styles.chips}>
-        {DAY_OPTIONS.map((day) => {
+        {options.map((day) => {
           const active = selected.includes(day);
           return (
             <TouchableOpacity

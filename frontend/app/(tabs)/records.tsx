@@ -61,8 +61,14 @@ const REPEAT_RULES: { value: RepeatRule; label: string }[] = [
   { value: "none", label: "不重复" },
   { value: "yearly", label: "每年" },
   { value: "monthly", label: "每月" },
-  { value: "weekly", label: "每周" },
 ];
+
+const REMINDER_OPTIONS_BY_REPEAT: Record<RepeatRule, number[]> = {
+  none: [1, 3, 7, 14, 30],
+  yearly: [1, 3, 7, 14, 30],
+  monthly: [1, 3, 7, 14],
+  weekly: [1, 2, 3, 6],
+};
 
 function currentMonth() {
   return currentMonthInShanghai();
@@ -85,6 +91,14 @@ function formatMealType(value: string) {
       snack: "加餐",
     }[value] ?? value
   );
+}
+
+function buildEventDate(year: number, month: number, day: number) {
+  return `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+function daysInMonthFor(year: number, month: number) {
+  return new Date(year, month, 0).getDate();
 }
 
 export default function RecordsScreen() {
@@ -124,7 +138,12 @@ export default function RecordsScreen() {
   const [repeatRule, setRepeatRule] = useState<RepeatRule>("yearly");
   const [remindDays, setRemindDays] = useState<number[]>([7, 1]);
   const [eventNote, setEventNote] = useState("");
+  const initialEventDate = useMemo(() => new Date(`${today()}T00:00:00`), []);
+  const [eventYear, setEventYear] = useState(initialEventDate.getFullYear());
+  const [eventMonth, setEventMonth] = useState(initialEventDate.getMonth() + 1);
+  const [eventDay, setEventDay] = useState(initialEventDate.getDate());
   const [upcomingEvents, setUpcomingEvents] = useState<AnniversaryEvent[]>([]);
+  const [allSavedEvents, setAllSavedEvents] = useState<AnniversaryEvent[]>([]);
   const [calendarMonth, setCalendarMonth] = useState(currentMonth());
   const [selectedDate, setSelectedDate] = useState(today());
   const [calendarLoading, setCalendarLoading] = useState(false);
@@ -142,6 +161,43 @@ export default function RecordsScreen() {
     if (summary.budget <= 0) return 0;
     return Math.min(summary.expense / summary.budget, 1);
   }, [summary.budget, summary.expense]);
+
+  const availableReminderOptions = useMemo(
+    () => REMINDER_OPTIONS_BY_REPEAT[repeatRule] ?? REMINDER_OPTIONS_BY_REPEAT.none,
+    [repeatRule]
+  );
+
+  const eventDateDisplay = useMemo(() => {
+    if (repeatRule === "yearly") {
+      return `每年 ${eventMonth} 月 ${eventDay} 日`;
+    }
+    if (repeatRule === "monthly") {
+      return `每月 ${eventDay} 日`;
+    }
+    return eventDate;
+  }, [eventDate, eventDay, eventMonth, repeatRule]);
+
+  const historicalOneTimeEvents = useMemo(
+    () =>
+      allSavedEvents.filter((event) => event.repeat_rule === "none" && event.event_date < today()),
+    [allSavedEvents]
+  );
+
+  useEffect(() => {
+    setRemindDays((current) => current.filter((day) => availableReminderOptions.includes(day)));
+  }, [availableReminderOptions]);
+
+  useEffect(() => {
+    const maxDay = daysInMonthFor(eventYear, eventMonth);
+    if (eventDay > maxDay) {
+      setEventDay(maxDay);
+    }
+  }, [eventYear, eventMonth, eventDay]);
+
+  useEffect(() => {
+    const normalizedDay = Math.min(eventDay, daysInMonthFor(eventYear, eventMonth));
+    setEventDate(buildEventDate(eventYear, eventMonth, normalizedDay));
+  }, [eventYear, eventMonth, eventDay]);
 
   const loadDiet = useCallback(async () => {
     setDietLoading(true);
@@ -278,8 +334,12 @@ export default function RecordsScreen() {
 
   async function loadEvents() {
     try {
-      const events = await eventService.getUpcoming(366);
-      setUpcomingEvents(events);
+      const [upcoming, saved] = await Promise.all([
+        eventService.getUpcoming(366),
+        eventService.getAllSaved(),
+      ]);
+      setUpcomingEvents(upcoming);
+      setAllSavedEvents(saved);
     } catch (error) {
       console.warn("加载纪念日失败", error);
     }
@@ -374,7 +434,7 @@ export default function RecordsScreen() {
 
       const eventCountByDate = new Map<string, number>();
       monthEvents.forEach((event) => {
-        const date = event.nextOccurrenceDate;
+        const date = event.displayDate ?? event.nextOccurrenceDate;
         eventCountByDate.set(date, (eventCountByDate.get(date) || 0) + 1);
       });
 
@@ -463,24 +523,26 @@ export default function RecordsScreen() {
       Alert.alert("提示", "请输入事件标题。");
       return;
     }
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(eventDate)) {
-      Alert.alert("提示", "日期格式需为 YYYY-MM-DD。");
-      return;
-    }
+
+    const nextEventDate =
+      repeatRule === "none"
+        ? eventDate
+        : buildEventDate(eventYear, eventMonth, Math.min(eventDay, daysInMonthFor(eventYear, eventMonth)));
 
     try {
       await eventService.createEvent({
         type: eventType,
         title: eventTitle,
-        eventDate,
+        eventDate: nextEventDate,
         repeatRule,
         remindDaysBefore: remindDays,
         note: eventNote.trim() || null,
       });
       setEventTitle("");
       setEventNote("");
+      setRemindDays([]);
       await loadEvents();
-      Alert.alert("已保存", "这个重要日已保存到本地。");
+      Alert.alert("已保存", "这个重要日已保存。");
     } catch (error) {
       Alert.alert("保存失败", error instanceof Error ? error.message : "请稍后重试。");
     }
@@ -824,10 +886,7 @@ export default function RecordsScreen() {
               placeholder="标题"
               placeholderTextColor={colors.muted}
             />
-            <DateInput value={eventDate} onChange={setEventDate} />
-
-            <DayChipSelector selected={remindDays} onChange={setRemindDays} />
-
+            <Text style={styles.fieldLabel}>重复周期</Text>
             <View style={styles.categoryGrid}>
               {REPEAT_RULES.map((item) => (
                 <TouchableOpacity
@@ -841,6 +900,80 @@ export default function RecordsScreen() {
                 </TouchableOpacity>
               ))}
             </View>
+            <Text style={styles.fieldLabel}>日期配置</Text>
+            {repeatRule === "none" ? (
+              <DateInput value={eventDate} onChange={setEventDate} />
+            ) : (
+              <View style={styles.repeatConfigCard}>
+                {repeatRule === "yearly" ? (
+                  <View style={styles.row}>
+                    <View style={styles.repeatField}>
+                      <Text style={styles.repeatFieldLabel}>月</Text>
+                      <TextInput
+                        style={styles.input}
+                        value={String(eventMonth)}
+                        onChangeText={(value) => {
+                          const next = Number(value.replace(/\D/g, ""));
+                          if (!Number.isFinite(next)) {
+                            setEventMonth(1);
+                            return;
+                          }
+                          setEventMonth(Math.max(1, Math.min(12, next)));
+                        }}
+                        keyboardType="number-pad"
+                        maxLength={2}
+                      />
+                    </View>
+                    <View style={styles.repeatField}>
+                      <Text style={styles.repeatFieldLabel}>日</Text>
+                      <TextInput
+                        style={styles.input}
+                        value={String(eventDay)}
+                        onChangeText={(value) => {
+                          const next = Number(value.replace(/\D/g, ""));
+                          if (!Number.isFinite(next)) {
+                            setEventDay(1);
+                            return;
+                          }
+                          setEventDay(Math.max(1, Math.min(31, next)));
+                        }}
+                        keyboardType="number-pad"
+                        maxLength={2}
+                      />
+                    </View>
+                  </View>
+                ) : null}
+                {repeatRule === "monthly" ? (
+                  <View style={styles.repeatSingleField}>
+                    <Text style={styles.repeatFieldLabel}>每月几号</Text>
+                    <TextInput
+                      style={styles.input}
+                      value={String(eventDay)}
+                      onChangeText={(value) => {
+                        const next = Number(value.replace(/\D/g, ""));
+                        if (!Number.isFinite(next)) {
+                          setEventDay(1);
+                          return;
+                        }
+                        setEventDay(Math.max(1, Math.min(31, next)));
+                      }}
+                      keyboardType="number-pad"
+                      maxLength={2}
+                    />
+                  </View>
+                ) : null}
+                <Text style={styles.repeatPreviewText}>{eventDateDisplay}</Text>
+              </View>
+            )}
+
+            <DayChipSelector
+              selected={remindDays}
+              onChange={setRemindDays}
+              options={availableReminderOptions}
+            />
+            <Text style={styles.eventRuleHint}>
+              不重复：按具体年月日；每年：按月日重复；每月：按几号重复，超出当月天数时取最后一天。提醒选项会按周期自动限制，避免超过周期长度。
+            </Text>
             <TextInput
               style={styles.input}
               value={eventNote}
@@ -860,16 +993,49 @@ export default function RecordsScreen() {
               <Text style={styles.emptyText}>暂无纪念日或提醒</Text>
             ) : (
               upcomingEvents.slice(0, 8).map((event) => (
-                <View key={event.id} style={styles.transactionRow}>
+                <View key={`${event.id}-${event.displayDate ?? event.nextOccurrenceDate}-${event.reminderOffsetDays ?? 0}`} style={styles.transactionRow}>
                   <View style={styles.transactionMain}>
                     <Text style={styles.transactionTitle}>{event.title}</Text>
                     <Text style={styles.transactionMeta}>
-                      {formatDateCn(event.nextOccurrenceDate)} · {event.repeat_rule === "none" ? "不重复" : "重复"}
+                      {formatDateCn(event.displayDate ?? event.nextOccurrenceDate)} · {event.reminderOffsetDays && event.reminderOffsetDays > 0
+                        ? `提前 ${event.reminderOffsetDays} 天提醒`
+                        : event.repeat_rule === "none" ? "不重复" : "重复"}
                     </Text>
                   </View>
                   <Text style={[styles.transactionAmount, styles.eventCountdown]}>
                     {event.daysUntil === 0 ? "今天" : `${event.daysUntil} 天`}
                   </Text>
+                  <TouchableOpacity style={styles.iconButton} onPress={() => deleteEvent(event.id)}>
+                    <MaterialCommunityIcons name="trash-can-outline" size={18} color={colors.muted} />
+                  </TouchableOpacity>
+                </View>
+              ))
+            )}
+          </View>
+
+          <View style={styles.panel}>
+            <Text style={styles.panelTitle}>历史重要日</Text>
+            {historicalOneTimeEvents.length === 0 ? (
+              <Text style={styles.emptyText}>暂无已过去的不重复重要日。</Text>
+            ) : (
+              historicalOneTimeEvents.map((event) => (
+                <View key={event.id} style={styles.transactionRow}>
+                  <View style={styles.transactionMain}>
+                    <Text style={styles.transactionTitle}>{event.title}</Text>
+                    <Text style={styles.transactionMeta}>
+                      {event.type === "anniversary"
+                        ? "纪念日"
+                        : event.type === "birthday"
+                          ? "生日"
+                          : event.type === "important_day"
+                            ? "重要日"
+                            : "提醒"}
+                    </Text>
+                    <Text style={styles.transactionMeta}>
+                      {formatDateCn(event.event_date)}
+                    </Text>
+                    {event.note ? <Text style={styles.transactionMeta}>{event.note}</Text> : null}
+                  </View>
                   <TouchableOpacity style={styles.iconButton} onPress={() => deleteEvent(event.id)}>
                     <MaterialCommunityIcons name="trash-can-outline" size={18} color={colors.muted} />
                   </TouchableOpacity>
@@ -955,12 +1121,18 @@ export default function RecordsScreen() {
                   <Text style={styles.emptyText}>当天没有纪念日或提醒。</Text>
                 ) : (
                   calendarDetail.events.map((event) => (
-                    <View key={event.id} style={styles.transactionRow}>
+                    <View key={`${event.id}-${event.displayDate ?? event.nextOccurrenceDate}-${event.reminderOffsetDays ?? 0}`} style={styles.transactionRow}>
                       <View style={styles.transactionMain}>
                         <Text style={styles.transactionTitle}>{event.title}</Text>
-                        <Text style={styles.transactionMeta}>{event.type}</Text>
+                        <Text style={styles.transactionMeta}>
+                          {event.reminderOffsetDays && event.reminderOffsetDays > 0
+                            ? `提前 ${event.reminderOffsetDays} 天提醒`
+                            : event.type}
+                        </Text>
                       </View>
-                      <Text style={[styles.transactionAmount, styles.eventCountdown]}>当天</Text>
+                      <Text style={[styles.transactionAmount, styles.eventCountdown]}>
+                        {event.reminderOffsetDays && event.reminderOffsetDays > 0 ? "提醒" : "当天"}
+                      </Text>
                     </View>
                   ))
                 )}
@@ -1318,6 +1490,20 @@ const styles = StyleSheet.create({
   eventCountdown: {
     color: colors.accent,
   },
+  eventRuleHint: {
+    color: colors.muted,
+    fontSize: 12,
+    lineHeight: 18,
+    marginTop: -2,
+    marginBottom: 2,
+  },
+  fieldLabel: {
+    color: colors.muted,
+    fontSize: 13,
+    fontWeight: "700",
+    marginTop: 2,
+    marginBottom: 2,
+  },
   halfInput: {
     flex: 1,
   },
@@ -1445,6 +1631,31 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     height: 8,
     overflow: "hidden",
+  },
+  repeatConfigCard: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 12,
+    backgroundColor: colors.background,
+    padding: 12,
+    gap: 10,
+  },
+  repeatField: {
+    flex: 1,
+  },
+  repeatFieldLabel: {
+    color: colors.muted,
+    fontSize: 12,
+    fontWeight: "700",
+    marginBottom: 6,
+  },
+  repeatPreviewText: {
+    color: colors.accent,
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  repeatSingleField: {
+    width: 120,
   },
   refreshLink: {
     color: colors.accent,
