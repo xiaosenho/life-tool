@@ -84,9 +84,12 @@ export default function TodayScreen() {
       const response = await newsService.getTopNews();
       if (response.success && response.data) {
         setNewsItems(response.data);
+      } else {
+        setNewsItems([]);
       }
     } catch (error) {
       console.warn("Failed to load top news", error);
+      setNewsItems([]);
     } finally {
       setNewsLoading(false);
     }
