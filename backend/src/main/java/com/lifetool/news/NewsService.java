@@ -22,10 +22,7 @@ import com.lifetool.news.dto.NewsItemResponse;
 public class NewsService {
     private static final Logger log = LoggerFactory.getLogger(NewsService.class);
     private static final List<FeedConfig> FEEDS = List.of(
-            new FeedConfig("CGTN", "https://www.cgtn.com/subscribe/rss/section/china.xml"),
-            new FeedConfig("CGTN", "https://www.cgtn.com/subscribe/rss/section/world.xml"),
-            new FeedConfig("CGTN", "https://www.cgtn.com/subscribe/rss/section/business.xml"),
-            new FeedConfig("CGTN", "https://www.cgtn.com/subscribe/rss/section/tech-sci.xml"));
+            new FeedConfig("联合早报", "https://plink.anyfeeder.com/zaobao/realtime/china"));
     private static final int MAX_ITEMS = 12;
 
     private final RestClient restClient;
