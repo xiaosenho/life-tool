@@ -14,7 +14,6 @@ import java.util.Date;
 
 @Component
 public class CosUploadUrlSigner {
-
     private final MediaConfig config;
 
     public CosUploadUrlSigner(MediaConfig config) {
@@ -38,6 +37,29 @@ public class CosUploadUrlSigner {
                     objectKey,
                     Date.from(expiresAt),
                     HttpMethodName.PUT);
+            return url.toString();
+        } finally {
+            cosClient.shutdown();
+        }
+    }
+
+    public String generateGetUrl(String objectKey, Instant expiresAt) {
+        if (!config.isCosSigningEnabled()) {
+            return buildMockUploadUrl(objectKey);
+        }
+
+        COSCredentials credentials = new BasicCOSCredentials(
+                config.getCosSecretId(),
+                config.getCosSecretKey());
+        ClientConfig clientConfig = new ClientConfig(new Region(config.getCosRegion()));
+
+        COSClient cosClient = new COSClient(credentials, clientConfig);
+        try {
+            URL url = cosClient.generatePresignedUrl(
+                    config.getCosBucket(),
+                    objectKey,
+                    Date.from(expiresAt),
+                    HttpMethodName.GET);
             return url.toString();
         } finally {
             cosClient.shutdown();

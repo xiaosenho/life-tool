@@ -9,10 +9,11 @@ import java.util.Set;
 public class MediaConfig {
 
     private static final Set<String> ALLOWED_CONTENT_TYPES = Set.of(
-            "image/jpeg", "image/png", "image/webp");
+            "image/jpeg", "image/png", "image/webp",
+            "audio/m4a", "audio/mp4", "audio/mpeg", "audio/mp3", "audio/wav");
 
     private static final Set<String> ALLOWED_PURPOSES = Set.of(
-            "meal_photo", "event_photo", "avatar");
+            "meal_photo", "event_photo", "avatar", "chat_image", "chat_audio");
 
     @Value("${COS_REGION:ap-guangzhou}")
     private String cosRegion;
@@ -29,19 +30,35 @@ public class MediaConfig {
     @Value("${COS_PUBLIC_BASE_URL:}")
     private String cosPublicBaseUrl;
 
+    @Value("${COS_PUBLIC_READ_ENABLED:false}")
+    private boolean cosPublicReadEnabled;
+
     @Value("${COS_UPLOAD_TOKEN_TTL_SECONDS:300}")
     private int uploadTokenTtlSeconds;
 
+    @Value("${COS_READ_URL_TTL_SECONDS:1800}")
+    private int readUrlTtlSeconds;
+
     @Value("${MEDIA_MAX_IMAGE_BYTES:10485760}")
     private long maxImageBytes;
+
+    @Value("${MEDIA_MAX_AUDIO_BYTES:20971520}")
+    private long maxAudioBytes;
 
     public String getCosRegion() { return cosRegion; }
     public String getCosBucket() { return cosBucket; }
     public String getCosSecretId() { return cosSecretId; }
     public String getCosSecretKey() { return cosSecretKey; }
     public String getCosPublicBaseUrl() { return cosPublicBaseUrl; }
+    public boolean isCosPublicReadEnabled() { return cosPublicReadEnabled; }
     public int getUploadTokenTtlSeconds() { return uploadTokenTtlSeconds; }
+    public int getReadUrlTtlSeconds() { return readUrlTtlSeconds; }
     public long getMaxImageBytes() { return maxImageBytes; }
+    public long getMaxAudioBytes() { return maxAudioBytes; }
+
+    public boolean isPublicReadUrlEnabled() {
+        return cosPublicReadEnabled && hasText(cosPublicBaseUrl);
+    }
 
     public boolean isCosSigningEnabled() {
         return hasText(cosSecretId) && hasText(cosSecretKey) && hasText(cosBucket) && hasText(cosRegion);

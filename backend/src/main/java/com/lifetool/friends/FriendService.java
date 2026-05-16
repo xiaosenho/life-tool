@@ -1,9 +1,16 @@
 package com.lifetool.friends;
 
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
 
+import com.lifetool.friends.dto.FriendConversationSummaryResponse;
+import com.lifetool.friends.dto.FriendMessageAttachmentRequest;
+import com.lifetool.friends.dto.FriendMessageResponse;
+import com.lifetool.media.MediaAsset;
+import com.lifetool.media.MediaService;
 import com.lifetool.users.User;
 import com.lifetool.users.UserRepository;
 
@@ -11,11 +18,15 @@ import com.lifetool.users.UserRepository;
 public class FriendService {
 
     private final FriendStore store;
+    private final FriendMessageStore messageStore;
     private final UserRepository userRepo;
+    private final MediaService mediaService;
 
-    public FriendService(FriendStore store, UserRepository userRepo) {
+    public FriendService(FriendStore store, FriendMessageStore messageStore, UserRepository userRepo, MediaService mediaService) {
         this.store = store;
+        this.messageStore = messageStore;
         this.userRepo = userRepo;
+        this.mediaService = mediaService;
     }
 
     public FriendRequest sendRequest(String fromUserId, String targetEmail) {
@@ -55,6 +66,7 @@ public class FriendService {
             store.saveFriendship(new Friendship(request.getFromUserId(), request.getToUserId()));
         } else if ("reject".equals(action)) {
             request.setStatus(FriendRequest.Status.REJECTED);
+            store.saveRequest(request);
         } else {
             throw new FriendException("VALIDATION_ERROR", "Invalid action, must be 'accept' or 'reject'");
         }
@@ -81,5 +93,151 @@ public class FriendService {
             throw new FriendException("NOT_FOUND", "Not friends");
         }
         store.removeFriendship(userId, friendUserId);
+    }
+
+    public FriendMessage sendMessage(String userId, String friendUserId, String content, String type) {
+        return sendMessage(userId, friendUserId, content, type, null);
+    }
+
+    public FriendMessage sendMessage(String userId, String friendUserId, String content, String type, FriendMessageAttachmentRequest attachmentRequest) {
+        ensureFriends(userId, friendUserId);
+        FriendMessage.MessageType messageType = parseMessageType(type);
+        FriendMessageAttachment attachment = buildAttachment(userId, messageType, attachmentRequest);
+        String normalized = normalizeMessageContent(content, messageType, attachment);
+        return messageStore.save(new FriendMessage(userId, friendUserId, messageType, normalized, attachment));
+    }
+
+    public List<FriendMessage> listConversation(String userId, String friendUserId) {
+        ensureFriends(userId, friendUserId);
+        return messageStore.listConversation(userId, friendUserId);
+    }
+
+    public FriendMessageResponse toMessageResponse(String viewerUserId, FriendMessage message) {
+        return FriendMessageResponse.from(message, refreshAttachment(message.getFromUserId(), message.getAttachment()));
+    }
+
+    public int markConversationRead(String userId, String friendUserId) {
+        ensureFriends(userId, friendUserId);
+        return messageStore.markConversationRead(userId, friendUserId);
+    }
+
+    public List<FriendConversationSummaryResponse> listConversations(String userId) {
+        Map<String, FriendInfo> friends = listFriends(userId).stream()
+                .collect(Collectors.toMap(FriendInfo::userId, info -> info));
+        return messageStore.listByUser(userId).stream()
+                .collect(Collectors.groupingBy(message -> conversationFriendId(userId, message)))
+                .entrySet().stream()
+                .map(entry -> {
+                    String friendId = entry.getKey();
+                    FriendInfo info = friends.get(friendId);
+                    if (info == null) {
+                        return null;
+                    }
+                    List<FriendMessage> messages = entry.getValue();
+                    FriendMessage latest = messages.stream()
+                            .max(java.util.Comparator.comparing(FriendMessage::getCreatedAt))
+                            .orElse(null);
+                    int unreadCount = (int) messages.stream()
+                            .filter(message -> message.getToUserId().equals(userId) && !message.isRead())
+                            .count();
+                    return latest == null ? null : new FriendConversationSummaryResponse(
+                            friendId,
+                            info.displayName(),
+                            info.email(),
+                            latest.getContent(),
+                            latest.getType().name().toLowerCase(),
+                            latest.getCreatedAt(),
+                            unreadCount);
+                })
+                .filter(item -> item != null)
+                .sorted((left, right) -> right.lastMessageAt().compareTo(left.lastMessageAt()))
+                .toList();
+    }
+
+    private void ensureFriends(String userId, String friendUserId) {
+        if (!store.areFriends(userId, friendUserId)) {
+            throw new FriendException("FORBIDDEN", "Only friends can interact");
+        }
+    }
+
+    private FriendMessage.MessageType parseMessageType(String type) {
+        if (type == null || type.isBlank()) {
+            return FriendMessage.MessageType.TEXT;
+        }
+        return switch (type.trim().toLowerCase()) {
+            case "cheer" -> FriendMessage.MessageType.CHEER;
+            case "celebrate" -> FriendMessage.MessageType.CELEBRATE;
+            case "hug" -> FriendMessage.MessageType.HUG;
+            case "coffee" -> FriendMessage.MessageType.COFFEE;
+            case "poke" -> FriendMessage.MessageType.POKE;
+            case "image" -> FriendMessage.MessageType.IMAGE;
+            case "audio" -> FriendMessage.MessageType.AUDIO;
+            default -> FriendMessage.MessageType.TEXT;
+        };
+    }
+
+    private String normalizeMessageContent(String content, FriendMessage.MessageType messageType, FriendMessageAttachment attachment) {
+        String normalized = content == null ? "" : content.trim();
+        if (messageType == FriendMessage.MessageType.IMAGE) {
+            return normalized.isBlank() ? "[图片]" : normalized;
+        }
+        if (messageType == FriendMessage.MessageType.AUDIO) {
+            return normalized.isBlank() ? "[语音]" : normalized;
+        }
+        if (attachment != null && normalized.isBlank()) {
+            return attachment.kind().equals("audio") ? "[语音]" : "[图片]";
+        }
+        if (normalized.isEmpty()) {
+            throw new FriendException("VALIDATION_ERROR", "content is required");
+        }
+        return normalized;
+    }
+
+    private FriendMessageAttachment buildAttachment(
+            String userId,
+            FriendMessage.MessageType messageType,
+            FriendMessageAttachmentRequest attachmentRequest) {
+        if (attachmentRequest == null || attachmentRequest.assetId() == null || attachmentRequest.assetId().isBlank()) {
+            return null;
+        }
+        MediaAsset asset = mediaService.findOwnedAsset(userId, attachmentRequest.assetId());
+        boolean audio = asset.getContentType().startsWith("audio/");
+        if (messageType == FriendMessage.MessageType.IMAGE && audio) {
+            throw new FriendException("VALIDATION_ERROR", "image message requires image asset");
+        }
+        if (messageType == FriendMessage.MessageType.AUDIO && !audio) {
+            throw new FriendException("VALIDATION_ERROR", "audio message requires audio asset");
+        }
+        return new FriendMessageAttachment(
+                asset.getId(),
+                audio ? "audio" : "image",
+                asset.getContentType(),
+                null,
+                attachmentRequest.width(),
+                attachmentRequest.height(),
+                attachmentRequest.durationSeconds());
+    }
+
+    private FriendMessageAttachment refreshAttachment(String userId, FriendMessageAttachment attachment) {
+        if (attachment == null || attachment.assetId() == null || attachment.assetId().isBlank()) {
+            return attachment;
+        }
+        try {
+            String purpose = "audio".equals(attachment.kind()) ? "chat_audio" : "chat_image";
+            return new FriendMessageAttachment(
+                    attachment.assetId(),
+                    attachment.kind(),
+                    attachment.contentType(),
+                    mediaService.generateReadUrl(userId, attachment.assetId(), purpose),
+                    attachment.width(),
+                    attachment.height(),
+                    attachment.durationSeconds());
+        } catch (RuntimeException ex) {
+            return attachment;
+        }
+    }
+
+    private String conversationFriendId(String userId, FriendMessage message) {
+        return message.getFromUserId().equals(userId) ? message.getToUserId() : message.getFromUserId();
     }
 }

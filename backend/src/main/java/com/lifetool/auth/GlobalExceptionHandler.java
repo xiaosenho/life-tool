@@ -6,13 +6,16 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
+import com.lifetool.ai.AiException;
 import com.lifetool.common.ApiResponse;
 import com.lifetool.events.EventException;
 import com.lifetool.focus.FocusException;
 import com.lifetool.friends.FriendException;
+import com.lifetool.habits.HabitException;
 import com.lifetool.leaderboards.LeaderboardException;
 import com.lifetool.ledger.LedgerException;
 import com.lifetool.media.MediaException;
+import com.lifetool.meals.MealException;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -62,6 +65,8 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(FocusException.class)
     public ResponseEntity<ApiResponse<Void>> handleFocus(FocusException ex) {
         HttpStatus status = switch (ex.getCode()) {
+            case "NOT_FOUND" -> HttpStatus.NOT_FOUND;
+            case "FORBIDDEN" -> HttpStatus.FORBIDDEN;
             default -> HttpStatus.BAD_REQUEST;
         };
         return ResponseEntity.status(status).body(ApiResponse.fail(ex.getCode(), ex.getMessage()));
@@ -77,11 +82,42 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(status).body(ApiResponse.fail(ex.getCode(), ex.getMessage()));
     }
 
+    @ExceptionHandler(MealException.class)
+    public ResponseEntity<ApiResponse<Void>> handleMeal(MealException ex) {
+        HttpStatus status = switch (ex.getCode()) {
+            case "NOT_FOUND" -> HttpStatus.NOT_FOUND;
+            case "FORBIDDEN" -> HttpStatus.FORBIDDEN;
+            default -> HttpStatus.BAD_REQUEST;
+        };
+        return ResponseEntity.status(status).body(ApiResponse.fail(ex.getCode(), ex.getMessage()));
+    }
+
     @ExceptionHandler(EventException.class)
     public ResponseEntity<ApiResponse<Void>> handleEvent(EventException ex) {
         HttpStatus status = switch (ex.getCode()) {
             case "NOT_FOUND" -> HttpStatus.NOT_FOUND;
             case "FORBIDDEN" -> HttpStatus.FORBIDDEN;
+            default -> HttpStatus.BAD_REQUEST;
+        };
+        return ResponseEntity.status(status).body(ApiResponse.fail(ex.getCode(), ex.getMessage()));
+    }
+
+    @ExceptionHandler(HabitException.class)
+    public ResponseEntity<ApiResponse<Void>> handleHabit(HabitException ex) {
+        HttpStatus status = switch (ex.getCode()) {
+            case "NOT_FOUND" -> HttpStatus.NOT_FOUND;
+            case "FORBIDDEN" -> HttpStatus.FORBIDDEN;
+            default -> HttpStatus.BAD_REQUEST;
+        };
+        return ResponseEntity.status(status).body(ApiResponse.fail(ex.getCode(), ex.getMessage()));
+    }
+
+    @ExceptionHandler(AiException.class)
+    public ResponseEntity<ApiResponse<Void>> handleAi(AiException ex) {
+        HttpStatus status = switch (ex.getCode()) {
+            case "NOT_FOUND" -> HttpStatus.NOT_FOUND;
+            case "FORBIDDEN" -> HttpStatus.FORBIDDEN;
+            case "AI_RECOGNITION_FAILED" -> HttpStatus.BAD_GATEWAY;
             default -> HttpStatus.BAD_REQUEST;
         };
         return ResponseEntity.status(status).body(ApiResponse.fail(ex.getCode(), ex.getMessage()));

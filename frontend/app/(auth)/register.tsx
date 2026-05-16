@@ -40,7 +40,7 @@ export default function RegisterScreen() {
 
     try {
       const response = await authService.register(email, password, displayName);
-      setAuth(response.user, response.accessToken);
+      setAuth(response.user, response.accessToken, response.refreshToken);
     } catch (err) {
       setError(err instanceof Error ? err.message : "注册失败，请稍后再试");
     } finally {

@@ -10,6 +10,7 @@ import java.util.List;
 
 import org.springframework.stereotype.Service;
 
+import com.lifetool.common.TimeSupport;
 import com.lifetool.events.dto.CreateEventRequest;
 import com.lifetool.events.dto.EventResponse;
 import com.lifetool.events.dto.UpdateEventRequest;
@@ -26,7 +27,7 @@ public class EventService {
 
     public EventService(EventStore store) {
         this.store = store;
-        this.clock = Clock.systemUTC();
+        this.clock = TimeSupport.BUSINESS_CLOCK;
     }
 
     public List<EventResponse> listEvents(String userId, LocalDate from, LocalDate to) {

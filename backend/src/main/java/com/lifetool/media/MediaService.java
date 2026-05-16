@@ -12,7 +12,6 @@ import java.util.UUID;
 
 @Service
 public class MediaService {
-
     private final MediaAssetStore store;
     private final MediaConfig config;
     private final CosUploadUrlSigner uploadUrlSigner;
@@ -26,7 +25,7 @@ public class MediaService {
     public UploadTokenResponse generateUploadToken(String userId, UploadTokenRequest req) {
         validateContentType(req.contentType());
         validatePurpose(req.purpose());
-        validateFileSize(req.fileSize());
+        validateFileSize(req.contentType(), req.fileSize());
 
         String assetId = UUID.randomUUID().toString();
         String ext = extensionFor(req.contentType());
@@ -46,7 +45,7 @@ public class MediaService {
     public AssetResponse createAsset(String userId, CreateAssetRequest req) {
         validateContentType(req.contentType());
         validatePurpose(req.purpose());
-        validateFileSize(req.fileSize());
+        validateFileSize(req.contentType(), req.fileSize());
 
         if (!req.objectKey().startsWith("users/" + userId + "/")) {
             throw new MediaException("FORBIDDEN", "Object key does not belong to current user");
@@ -68,12 +67,20 @@ public class MediaService {
         return toResponse(asset);
     }
 
+    public String generateReadUrl(String userId, String assetId, String expectedPurpose) {
+        MediaAsset asset = findOwnedAsset(userId, assetId);
+        if (expectedPurpose != null && !expectedPurpose.equals(asset.getPurpose())) {
+            throw new MediaException("VALIDATION_ERROR", "Media asset purpose does not match expected purpose");
+        }
+        return buildReadUrl(asset);
+    }
+
     public void deleteAsset(String userId, String assetId) {
         MediaAsset asset = findOwnedAsset(userId, assetId);
         asset.markDeleted();
     }
 
-    private MediaAsset findOwnedAsset(String userId, String assetId) {
+    public MediaAsset findOwnedAsset(String userId, String assetId) {
         MediaAsset asset = store.findById(assetId)
                 .orElseThrow(() -> new MediaException("NOT_FOUND", "Asset not found"));
         if ("deleted".equals(asset.getStatus())) {
@@ -88,35 +95,58 @@ public class MediaService {
     private void validateContentType(String contentType) {
         if (!config.isContentTypeAllowed(contentType)) {
             throw new MediaException("UNSUPPORTED_MEDIA_TYPE",
-                    "Unsupported content type: " + contentType + ". Allowed: image/jpeg, image/png, image/webp");
+                    "Unsupported content type: " + contentType);
         }
     }
 
     private void validatePurpose(String purpose) {
         if (!config.isPurposeAllowed(purpose)) {
             throw new MediaException("VALIDATION_ERROR",
-                    "Invalid purpose: " + purpose + ". Allowed: meal_photo, event_photo, avatar");
+                    "Invalid purpose: " + purpose);
+        }
+    }
+
+    private void validateFileSize(String contentType, long fileSize) {
+        long maxBytes = contentType != null && contentType.startsWith("audio/")
+                ? config.getMaxAudioBytes()
+                : config.getMaxImageBytes();
+        if (fileSize > maxBytes) {
+            throw new MediaException("FILE_TOO_LARGE",
+                    "File size " + fileSize + " exceeds maximum " + maxBytes + " bytes");
         }
     }
 
     private void validateFileSize(long fileSize) {
-        if (fileSize > config.getMaxImageBytes()) {
-            throw new MediaException("FILE_TOO_LARGE",
-                    "File size " + fileSize + " exceeds maximum " + config.getMaxImageBytes() + " bytes");
-        }
+        validateFileSize(null, fileSize);
     }
 
     private static String extensionFor(String contentType) {
         return switch (contentType) {
             case "image/png" -> "png";
             case "image/webp" -> "webp";
+            case "audio/m4a", "audio/mp4" -> "m4a";
+            case "audio/mpeg", "audio/mp3" -> "mp3";
+            case "audio/wav" -> "wav";
             default -> "jpg";
         };
     }
 
-    private static AssetResponse toResponse(MediaAsset a) {
+    private AssetResponse toResponse(MediaAsset a) {
         return new AssetResponse(
                 a.getId(), a.getObjectKey(), a.getContentType(), a.getPurpose(),
-                a.getFileSize(), a.getWidth(), a.getHeight(), a.getStatus(), a.getCreatedAt());
+                a.getFileSize(), a.getWidth(), a.getHeight(), a.getStatus(), a.getCreatedAt(),
+                buildReadUrl(a));
+    }
+
+    private String buildReadUrl(MediaAsset asset) {
+        if (config.isPublicReadUrlEnabled()) {
+            String baseUrl = config.getCosPublicBaseUrl().trim();
+            String normalizedBaseUrl = baseUrl.endsWith("/") ? baseUrl.substring(0, baseUrl.length() - 1) : baseUrl;
+            return normalizedBaseUrl + "/" + asset.getObjectKey();
+        }
+        Instant expiresAt = Instant.now().plusSeconds(config.getReadUrlTtlSeconds());
+        return uploadUrlSigner.generateGetUrl(
+                asset.getObjectKey(),
+                expiresAt);
     }
 }

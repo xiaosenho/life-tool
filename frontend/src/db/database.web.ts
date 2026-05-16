@@ -141,6 +141,15 @@ const webDb = {
       return undefined;
     }
 
+    if (sql.includes('DELETE FROM habit_checkins')) {
+      for (const [key, value] of habitCheckins.entries()) {
+        if (value.user_id === params[0] && value.habit_id === params[1] && value.checkin_date === params[2]) {
+          habitCheckins.delete(key);
+        }
+      }
+      return undefined;
+    }
+
     if (sql.includes('INSERT INTO ledger_transactions')) {
       ledgerTransactions.set(params[0], {
         id: params[0],

@@ -12,7 +12,7 @@
 
 ## 快速开始
 
-当前阶段是项目骨架和基础文档阶段，开发前请先阅读：
+当前代码库已经进入 MVP 可运行阶段，包含后端 API、Expo 手机端、本地 SQLite 兜底、PostgreSQL/Redis 部署配置、腾讯云 COS 媒体上传、AI 对话与饮食识别、以及 Android APK 构建流程。开发前请先阅读：
 
 1. [docs/AGENT_RULES.md](docs/AGENT_RULES.md)
 2. [docs/PRD.md](docs/PRD.md)
@@ -21,6 +21,7 @@
 5. [docs/TASKS.md](docs/TASKS.md)
 6. [docs/AGENT_CLI.md](docs/AGENT_CLI.md)
 7. [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) — 本地开发环境部署
+8. [docs/ANDROID_BUILD.md](docs/ANDROID_BUILD.md) — Android APK 构建
 
 ## 推荐 Agent 分工
 
@@ -44,12 +45,14 @@
 ## 当前状态
 
 - 已建立多 Agent 项目结构。
-- 已建立基础文档。
 - 已记录本地 Claude / Gemini / DeepSeek CLI 调度规范。
-- 已初始化后端和前端工程代码。
+- 后端已实现注册登录、JWT、专注、习惯、好友、排行榜、饮食、记账、纪念日、媒体、同步、AI 对话和 AI 饮食识别等核心 API。
+- 前端已实现中文移动端主界面、今日、专注、记录、好友、我的/AI 辅助入口、本地 SQLite 兜底和网络失败提示。
 - 已提供本地 Docker 基础设施（PostgreSQL + Redis）。
 - 已支持阿里云 ECS 生产部署，含安全组配置、Docker 安装、反向代理、备份、日志管理。
 - docker-compose.yml 中 PostgreSQL/Redis 端口绑定 127.0.0.1，默认不对公网开放。
 - 敏感配置（数据库密码、JWT 密钥）通过 .env 文件注入，不硬编码在 compose 中。
 - COS（腾讯云对象存储）配置说明见 [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md#腾讯云-cos-媒体存储配置)。
+- AI / 豆包兼容接口排障说明见 [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md#ai-接口排障记录)。
+- Android APK 构建手册见 [docs/ANDROID_BUILD.md](docs/ANDROID_BUILD.md)。
 - 部署方式见 [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)。

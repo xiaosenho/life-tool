@@ -1,0 +1,395 @@
+package com.lifetool.ai;
+
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.http.MediaType;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+@SpringBootTest
+@AutoConfigureMockMvc
+class AiControllerTest {
+    @Autowired private MockMvc mockMvc;
+    @Autowired private ObjectMapper objectMapper;
+    @Autowired private UserDataTools userDataTools;
+
+    private String tokenA;
+    private String tokenB;
+    private String userIdA;
+    private String userIdB;
+
+    @BeforeEach
+    void setUp() throws Exception {
+        String unique = String.valueOf(System.nanoTime());
+        AuthInfo authA = register("ai-a-" + unique + "@test.com", "AI A");
+        AuthInfo authB = register("ai-b-" + unique + "@test.com", "AI B");
+        tokenA = authA.token();
+        tokenB = authB.token();
+        userIdA = authA.userId();
+        userIdB = authB.userId();
+    }
+
+    @Test
+    void lifeAdviceReturnsChineseDisclaimer() throws Exception {
+        mockMvc.perform(post("/api/ai/life-advice")
+                        .header("Authorization", "Bearer " + tokenA)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"period\":\"last_7_days\",\"topics\":[\"focus\",\"ledger\"]}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.summary").isString())
+                .andExpect(jsonPath("$.data.disclaimer").value("AI 建议仅供参考，不构成医疗、营养、财务或法律结论。"));
+    }
+
+    @Test
+    void createSessionSendMessageAndListMessages() throws Exception {
+        String sessionId = createSession(tokenA);
+
+        mockMvc.perform(post("/api/ai/chat/sessions/{id}/messages", sessionId)
+                        .header("Authorization", "Bearer " + tokenA)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "content": "帮我结合专注和记账给点建议",
+                                  "enabledTools": ["get_focus_summary", "get_ledger_summary"]
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.role").value("assistant"))
+                .andExpect(jsonPath("$.data.disclaimer").value("AI 建议仅供参考，不构成医疗、营养、财务或法律结论。"))
+                .andExpect(jsonPath("$.data.toolCalls.length()").value(2))
+                .andExpect(jsonPath("$.data.toolCalls[0].toolName").value("get_focus_summary"))
+                .andExpect(jsonPath("$.data.toolCalls[0].status").value("succeeded"));
+
+        mockMvc.perform(get("/api/ai/chat/sessions/{id}/messages", sessionId)
+                        .header("Authorization", "Bearer " + tokenA))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.messages.length()").value(2))
+                .andExpect(jsonPath("$.data.messages[0].role").value("user"))
+                .andExpect(jsonPath("$.data.messages[1].role").value("assistant"));
+    }
+
+    @Test
+    void explicitPreferenceMessageMarksLongTermMemorySaved() throws Exception {
+        String sessionId = createSession(tokenA);
+
+        mockMvc.perform(post("/api/ai/chat/sessions/{id}/messages", sessionId)
+                        .header("Authorization", "Bearer " + tokenA)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "content": "以后都用简洁中文回答我",
+                                  "enabledTools": ["get_user_profile_context"]
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.role").value("assistant"))
+                .andExpect(jsonPath("$.data.longTermMemorySaved").value(true))
+                .andExpect(jsonPath("$.data.toolCalls[1].toolName").value("save_long_term_memory"))
+                .andExpect(jsonPath("$.data.toolCalls[1].status").value("succeeded"));
+
+        mockMvc.perform(get("/api/ai/chat/sessions/{id}/messages", sessionId)
+                        .header("Authorization", "Bearer " + tokenA))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.messages[1].longTermMemorySaved").value(true));
+    }
+
+    @Test
+    void sessionAndMemoryAreUserIsolated() throws Exception {
+        String sessionId = createSession(tokenA);
+
+        mockMvc.perform(get("/api/ai/chat/sessions/{id}/messages", sessionId)
+                        .header("Authorization", "Bearer " + tokenB))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.error.code").value("FORBIDDEN"));
+
+        MvcResult memories = mockMvc.perform(get("/api/ai/memories")
+                        .header("Authorization", "Bearer " + tokenA))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items.length()").value(1))
+                .andReturn();
+
+        String memoryId = objectMapper.readTree(memories.getResponse().getContentAsString())
+                .get("data").get("items").get(0).get("id").asText();
+
+        mockMvc.perform(delete("/api/ai/memories/{id}", memoryId)
+                        .header("Authorization", "Bearer " + tokenB))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.error.code").value("FORBIDDEN"));
+
+        mockMvc.perform(delete("/api/ai/memories/{id}", memoryId)
+                        .header("Authorization", "Bearer " + tokenA))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(get("/api/ai/memories")
+                        .header("Authorization", "Bearer " + tokenA))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items.length()").value(0));
+    }
+
+    @Test
+    void unknownToolsAreSilentlyIgnored() throws Exception {
+        String sessionId = createSession(tokenA);
+
+        mockMvc.perform(post("/api/ai/chat/sessions/{id}/messages", sessionId)
+                        .header("Authorization", "Bearer " + tokenA)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "content": "测试未知工具",
+                                  "enabledTools": ["get_focus_summary", "nonexistent_tool", "also_unknown"]
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.toolCalls.length()").value(1))
+                .andExpect(jsonPath("$.data.toolCalls[0].toolName").value("get_focus_summary"));
+    }
+
+    @Test
+    void shortNamesFocusLedgerMapToFullToolNames() throws Exception {
+        String sessionId = createSession(tokenA);
+
+        mockMvc.perform(post("/api/ai/chat/sessions/{id}/messages", sessionId)
+                        .header("Authorization", "Bearer " + tokenA)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "content": "测试简写映射",
+                                  "enabledTools": ["focus", "ledger"]
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.toolCalls.length()").value(2))
+                .andExpect(jsonPath("$.data.toolCalls[0].toolName").value("get_focus_summary"))
+                .andExpect(jsonPath("$.data.toolCalls[0].status").value("succeeded"))
+                .andExpect(jsonPath("$.data.toolCalls[1].toolName").value("get_ledger_summary"))
+                .andExpect(jsonPath("$.data.toolCalls[1].status").value("succeeded"));
+    }
+
+    @Test
+    void deleteNonExistentMemoryReturnsNotFound() throws Exception {
+        mockMvc.perform(delete("/api/ai/memories/{id}", "non-existent-memory-id")
+                        .header("Authorization", "Bearer " + tokenA))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.error.code").value("NOT_FOUND"));
+    }
+
+    @Test
+    void sendMessageWithEmptyContentReturns400() throws Exception {
+        String sessionId = createSession(tokenA);
+
+        mockMvc.perform(post("/api/ai/chat/sessions/{id}/messages", sessionId)
+                        .header("Authorization", "Bearer " + tokenA)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "content": "",
+                                  "enabledTools": ["focus"]
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.code").value("VALIDATION_ERROR"));
+    }
+
+    @Test
+    void unauthenticatedReturns401() throws Exception {
+        mockMvc.perform(get("/api/ai/memories"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void foodRecognitionCreatesTodayMealLog() throws Exception {
+        TestAsset asset = createMealAsset(tokenA);
+
+        mockMvc.perform(post("/api/ai/food-recognition")
+                        .header("Authorization", "Bearer " + tokenA)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "mediaAssetId": "%s",
+                                  "mealType": "lunch"
+                                }
+                                """.formatted(asset.id())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.result").isString())
+                .andExpect(jsonPath("$.data.mealLogId").isString())
+                .andExpect(jsonPath("$.data.totalCalories").value(520));
+
+        String sessionId = createSession(tokenA);
+        mockMvc.perform(post("/api/ai/chat/sessions/{id}/messages", sessionId)
+                        .header("Authorization", "Bearer " + tokenA)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "content": "看看我今天饮食",
+                                  "enabledTools": ["diet"]
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.toolCalls.length()").value(1))
+                .andExpect(jsonPath("$.data.toolCalls[0].toolName").value("get_diet_summary"))
+                .andExpect(jsonPath("$.data.toolCalls[0].status").value("succeeded"));
+    }
+
+    @Test
+    void foodRecognitionCanUseMediaAssetIdWithoutClientReadUrl() throws Exception {
+        TestAsset asset = createMealAsset(tokenA);
+
+        mockMvc.perform(post("/api/ai/food-recognition")
+                        .header("Authorization", "Bearer " + tokenA)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "mediaAssetId": "%s",
+                                  "mealType": "dinner"
+                                }
+                                """.formatted(asset.id())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.result").isString())
+                .andExpect(jsonPath("$.data.mealLogId").isString())
+                .andExpect(jsonPath("$.data.totalCalories").value(520));
+    }
+
+    @Test
+    void repeatedFoodRecognitionDoesNotReuseChatMemoryImageMessages() throws Exception {
+        TestAsset asset = createMealAsset(tokenA);
+
+        mockMvc.perform(post("/api/ai/food-recognition")
+                        .header("Authorization", "Bearer " + tokenA)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "mediaAssetId": "%s",
+                                  "mealType": "dinner"
+                                }
+                                """.formatted(asset.id())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.result").isString());
+
+        mockMvc.perform(post("/api/ai/food-recognition")
+                        .header("Authorization", "Bearer " + tokenA)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "mediaAssetId": "%s",
+                                  "mealType": "dinner"
+                                }
+                                """.formatted(asset.id())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.result").isString());
+    }
+
+    @Test
+    void foodRecognitionRejectsOtherUsersMediaAsset() throws Exception {
+        TestAsset asset = createMealAsset(tokenA);
+
+        mockMvc.perform(post("/api/ai/food-recognition")
+                        .header("Authorization", "Bearer " + tokenB)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "mediaAssetId": "%s",
+                                  "mealType": "dinner"
+                                }
+                                """.formatted(asset.id())))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.error.code").value("FORBIDDEN"));
+    }
+
+    @Test
+    void saveLongTermMemoryToolStoresExplicitPreferenceWithoutDuplicates() throws Exception {
+        createSession(tokenA);
+
+        UserDataTools.setCurrentUserId(userIdA);
+        try {
+            var first = userDataTools.saveLongTermMemoryTool("preference", "以后都用简洁中文回答我");
+            var second = userDataTools.saveLongTermMemoryTool("preference", "以后都用简洁中文回答我");
+            org.junit.jupiter.api.Assertions.assertEquals(true, first.get("saved"));
+            org.junit.jupiter.api.Assertions.assertEquals(false, second.get("saved"));
+        } finally {
+            UserDataTools.clearCurrentUserId();
+        }
+
+        mockMvc.perform(get("/api/ai/memories")
+                        .header("Authorization", "Bearer " + tokenA))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items.length()").value(2))
+                .andExpect(jsonPath("$.data.items[0].content").value("以后都用简洁中文回答我"));
+    }
+
+    private String createSession(String token) throws Exception {
+        MvcResult result = mockMvc.perform(post("/api/ai/chat/sessions")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"title\":\"最近状态分析\",\"useLongTermMemory\":true}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.title").value("最近状态分析"))
+                .andReturn();
+        return objectMapper.readTree(result.getResponse().getContentAsString())
+                .get("data").get("id").asText();
+    }
+
+    private TestAsset createMealAsset(String token) throws Exception {
+        MvcResult uploadResult = mockMvc.perform(post("/api/media/upload-token")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "contentType": "image/jpeg",
+                                  "purpose": "meal_photo",
+                                  "fileSize": 512000
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        var uploadData = objectMapper.readTree(uploadResult.getResponse().getContentAsString()).get("data");
+        String assetId = uploadData.get("assetId").asText();
+        String objectKey = uploadData.get("objectKey").asText();
+
+        mockMvc.perform(post("/api/media/assets")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "assetId": "%s",
+                                  "objectKey": "%s",
+                                  "contentType": "image/jpeg",
+                                  "purpose": "meal_photo",
+                                  "fileSize": 512000,
+                                  "width": 1280,
+                                  "height": 960
+                                }
+                                """.formatted(assetId, objectKey)))
+                .andExpect(status().isCreated());
+
+        return new TestAsset(assetId, objectKey);
+    }
+
+    private record TestAsset(String id, String objectKey) {}
+
+    private AuthInfo register(String email, String name) throws Exception {
+        String body = "{\"email\":\"" + email + "\",\"password\":\"secret123\",\"displayName\":\"" + name + "\"}";
+        MvcResult result = mockMvc.perform(post("/api/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isCreated())
+                .andReturn();
+        var data = objectMapper.readTree(result.getResponse().getContentAsString()).get("data");
+        return new AuthInfo(
+                data.get("accessToken").asText(),
+                data.get("user").get("id").asText());
+    }
+
+    private record AuthInfo(String token, String userId) {}
+}

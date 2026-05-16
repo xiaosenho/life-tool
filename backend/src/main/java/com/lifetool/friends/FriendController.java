@@ -3,6 +3,7 @@ package com.lifetool.friends;
 import java.util.List;
 import java.util.Map;
 
+import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -16,6 +17,9 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.lifetool.common.ApiResponse;
+import com.lifetool.friends.dto.FriendConversationSummaryResponse;
+import com.lifetool.friends.dto.FriendMessageResponse;
+import com.lifetool.friends.dto.SendFriendMessageRequest;
 
 @RestController
 @RequestMapping("/api/friends")
@@ -72,5 +76,37 @@ public class FriendController {
             @PathVariable String friendUserId) {
         friendService.removeFriend(userId, friendUserId);
         return ResponseEntity.ok(ApiResponse.ok(null));
+    }
+
+    @GetMapping("/messages")
+    public ResponseEntity<ApiResponse<List<FriendConversationSummaryResponse>>> listConversations(
+            @AuthenticationPrincipal String userId) {
+        return ResponseEntity.ok(ApiResponse.ok(friendService.listConversations(userId)));
+    }
+
+    @GetMapping("/messages/{friendUserId}")
+    public ResponseEntity<ApiResponse<List<FriendMessageResponse>>> listConversation(
+            @AuthenticationPrincipal String userId,
+            @PathVariable String friendUserId) {
+        return ResponseEntity.ok(ApiResponse.ok(friendService.listConversation(userId, friendUserId).stream()
+                .map(message -> friendService.toMessageResponse(userId, message))
+                .toList()));
+    }
+
+    @PostMapping("/messages/{friendUserId}")
+    public ResponseEntity<ApiResponse<FriendMessageResponse>> sendMessage(
+            @AuthenticationPrincipal String userId,
+            @PathVariable String friendUserId,
+            @Valid @RequestBody SendFriendMessageRequest request) {
+        var message = friendService.sendMessage(userId, friendUserId, request.content(), request.type(), request.attachment());
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.ok(friendService.toMessageResponse(userId, message)));
+    }
+
+    @PostMapping("/messages/{friendUserId}/read")
+    public ResponseEntity<ApiResponse<Map<String, Integer>>> markConversationRead(
+            @AuthenticationPrincipal String userId,
+            @PathVariable String friendUserId) {
+        int count = friendService.markConversationRead(userId, friendUserId);
+        return ResponseEntity.ok(ApiResponse.ok(Map.of("updated", count)));
     }
 }

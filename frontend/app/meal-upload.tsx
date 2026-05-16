@@ -15,6 +15,7 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 
 import { Screen } from "@/components/Screen";
 import { colors } from "@/theme/colors";
+import { aiService } from "@/services/aiService";
 import { mediaService, AssetResponse } from "@/services/mediaService";
 
 type UploadStatus = "idle" | "uploading" | "success" | "error";
@@ -25,6 +26,9 @@ export default function MealUploadScreen() {
   const [status, setStatus] = useState<UploadStatus>("idle");
   const [error, setError] = useState<string | null>(null);
   const [asset, setAsset] = useState<AssetResponse | null>(null);
+  const [recognizing, setRecognizing] = useState(false);
+  const [recognition, setRecognition] = useState<string | null>(null);
+  const [recognitionError, setRecognitionError] = useState<string | null>(null);
 
   const pickImage = async (useCamera: boolean) => {
     try {
@@ -83,10 +87,36 @@ export default function MealUploadScreen() {
       });
       setAsset(result);
       setStatus("success");
+      recognizeMeal(result);
     } catch (err: any) {
       console.error("上传图片失败：", err);
       setStatus("error");
       setError(err.message || "上传失败，请检查网络或配置");
+    }
+  };
+
+  const recognizeMeal = async (currentAsset: AssetResponse | null = asset) => {
+    setRecognizing(true);
+    setRecognition(null);
+    setRecognitionError(null);
+    try {
+      if (!currentAsset?.id) {
+        throw new Error("图片资产信息缺失，请重新上传图片");
+      }
+
+      const response = await aiService.recognizeFood({
+        mediaAssetId: currentAsset.id,
+        customPrompt: "请用中文识别图片中的食物，估算每种食物的重量、热量、蛋白质、脂肪和碳水，并给出总热量。",
+      });
+      if (!response.success || !response.data) {
+        throw new Error(response.error?.message || "识别失败");
+      }
+      setRecognition(response.data.result);
+    } catch (err) {
+      console.error("AI 饮食识别失败：", err);
+      setRecognitionError(err instanceof Error ? err.message : "识别失败，请稍后重试");
+    } finally {
+      setRecognizing(false);
     }
   };
 
@@ -95,6 +125,9 @@ export default function MealUploadScreen() {
     setStatus("idle");
     setError(null);
     setAsset(null);
+    setRecognizing(false);
+    setRecognition(null);
+    setRecognitionError(null);
   };
 
   return (
@@ -168,10 +201,34 @@ export default function MealUploadScreen() {
                 <Text style={styles.infoValue}>{asset?.id}</Text>
               </View>
 
-              <View style={styles.aiPlaceholder}>
-                <MaterialCommunityIcons name="robot" size={32} color={colors.muted} />
-                <Text style={styles.aiText}>等待识别接口接入...</Text>
-                <Text style={styles.aiHint}>后续将自动展示识别出的食物、重量及热量估算。</Text>
+              <View style={styles.aiResultBox}>
+                <View style={styles.aiResultHeader}>
+                  <MaterialCommunityIcons name="robot" size={22} color={colors.accent} />
+                  <Text style={styles.aiResultTitle}>AI 热量估算</Text>
+                </View>
+                {recognizing && (
+                  <View style={styles.recognizingRow}>
+                    <ActivityIndicator size="small" color={colors.accent} />
+                    <Text style={styles.aiHint}>正在识别食物和估算热量...</Text>
+                  </View>
+                )}
+                {recognitionError && !recognizing && (
+                  <>
+                    <Text style={styles.aiErrorText}>{recognitionError}</Text>
+                    <TouchableOpacity
+                      style={styles.retryAiButton}
+                      onPress={() => recognizeMeal(asset)}
+                    >
+                      <Text style={styles.retryAiButtonText}>重新识别</Text>
+                    </TouchableOpacity>
+                  </>
+                )}
+                {recognition && !recognizing && (
+                  <>
+                    <Text style={styles.aiSavedText}>已同步到今日饮食记录</Text>
+                    <Text style={styles.aiResultText}>{recognition}</Text>
+                  </>
+                )}
               </View>
 
               <TouchableOpacity
@@ -195,12 +252,44 @@ const styles = StyleSheet.create({
     marginTop: 4,
     textAlign: "center",
   },
-  aiPlaceholder: {
+  aiErrorText: {
+    color: colors.error,
+    fontSize: 13,
+    lineHeight: 20,
+    marginTop: 12,
+  },
+  aiResultBox: {
     alignItems: "center",
     backgroundColor: colors.background,
     borderRadius: 12,
     marginTop: 20,
-    padding: 24,
+    padding: 18,
+    width: "100%",
+  },
+  aiResultHeader: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 8,
+    width: "100%",
+  },
+  aiResultText: {
+    color: colors.text,
+    fontSize: 14,
+    lineHeight: 22,
+    marginTop: 12,
+    width: "100%",
+  },
+  aiSavedText: {
+    color: colors.accent,
+    fontSize: 13,
+    fontWeight: "700",
+    marginTop: 12,
+    width: "100%",
+  },
+  aiResultTitle: {
+    color: colors.text,
+    fontSize: 15,
+    fontWeight: "700",
   },
   aiText: {
     color: colors.muted,
@@ -325,6 +414,26 @@ const styles = StyleSheet.create({
     color: "#FFF",
     fontSize: 14,
     fontWeight: "600",
+  },
+  retryAiButton: {
+    borderColor: colors.accent,
+    borderRadius: 8,
+    borderWidth: 1,
+    marginTop: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  retryAiButtonText: {
+    color: colors.accent,
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  recognizingRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 14,
+    width: "100%",
   },
   scrollContent: {
     paddingBottom: 20,

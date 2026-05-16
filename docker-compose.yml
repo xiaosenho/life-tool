@@ -7,12 +7,12 @@ services:
       - "127.0.0.1:5432:5432"
     environment:
       POSTGRES_DB: lifetool
-      POSTGRES_USER: lifetool
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-lifetool_dev}
+      POSTGRES_USER: ${POSTGRES_USER:-pgvector}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-pgvector}
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U lifetool -d lifetool"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-pgvector} -d lifetool"]
       interval: 5s
       timeout: 3s
       retries: 5
@@ -30,6 +30,52 @@ services:
       interval: 5s
       timeout: 3s
       retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: lifetool-backend
+    restart: unless-stopped
+    ports:
+      - "8091:8091"
+    environment:
+      SERVER_PORT: ${SERVER_PORT:-8091}
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-postgres}
+      SPRING_DATASOURCE_URL: ${SPRING_DATASOURCE_URL:-jdbc:postgresql://postgres:5432/lifetool}
+      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME:-lifetool}
+      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:-lifetool_dev}
+      SPRING_DATA_REDIS_HOST: ${SPRING_DATA_REDIS_HOST:-redis}
+      SPRING_DATA_REDIS_PORT: ${SPRING_DATA_REDIS_PORT:-6379}
+      SPRING_DATA_REDIS_PASSWORD: ${SPRING_DATA_REDIS_PASSWORD:-}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_ACCESS_TTL_MS: ${JWT_ACCESS_TTL_MS:-86400000}
+      JWT_REFRESH_TTL_MS: ${JWT_REFRESH_TTL_MS:-604800000}
+      LIFETOOL_DB_MIGRATION_ENABLED: ${LIFETOOL_DB_MIGRATION_ENABLED:-false}
+      LIFETOOL_AI_MOCK_ENABLED: ${LIFETOOL_AI_MOCK_ENABLED:-true}
+      LIFETOOL_AI_MAX_TOOL_ROUNDS: ${LIFETOOL_AI_MAX_TOOL_ROUNDS:-3}
+      AI_BASE_URL: ${AI_BASE_URL:-https://api.openai.com}
+      AI_CHAT_COMPLETIONS_PATH: ${AI_CHAT_COMPLETIONS_PATH:-/v1/chat/completions}
+      AI_API_KEY: ${AI_API_KEY:-mock-key}
+      AI_CHAT_MODEL: ${AI_CHAT_MODEL:-gpt-4o-mini}
+      COS_REGION: ${COS_REGION:-}
+      COS_BUCKET: ${COS_BUCKET:-}
+      COS_SECRET_ID: ${COS_SECRET_ID:-}
+      COS_SECRET_KEY: ${COS_SECRET_KEY:-}
+      COS_PUBLIC_BASE_URL: ${COS_PUBLIC_BASE_URL:-}
+      COS_UPLOAD_TOKEN_TTL_SECONDS: ${COS_UPLOAD_TOKEN_TTL_SECONDS:-300}
+      MEDIA_MAX_IMAGE_BYTES: ${MEDIA_MAX_IMAGE_BYTES:-10485760}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O- http://localhost:8091/api/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
 volumes:
   pgdata:

@@ -19,7 +19,7 @@
 | 同步 | `server_versions`, `sync_mutations` | 多设备数据同步 | MVP |
 | 专注 | `focus_sessions`, `focus_preferences` | 番茄钟、倒计时、正计时记录 + 偏好 | MVP + V2 |
 | 习惯 | `habits`, `habit_checkins` | 习惯定义与每日打卡 | MVP |
-| 好友 | `friendships` | 好友申请、通过、删除 | MVP |
+| 好友 | `friendships`, `friend_messages` | 好友申请、通过、删除、互动消息 | MVP + Phase 3 |
 | 统计/排行榜 | `daily_stats` | 每日用户汇总统计 | MVP |
 | 媒体 | `media_assets` | 图片/文件元数据管理 | Phase 2 |
 | 饮食 | `meal_logs`, `meal_items` | 饮食记录与食物条目 | Phase 2 |
@@ -38,6 +38,7 @@ users (1) ──< focus_sessions
 users (1) ──< focus_preferences        (每用户一行，unique)
 users (1) ──< habits (1) ──< habit_checkins
 users (1) ──< friendships              (requester_id / addressee_id 双向指向 users)
+users (1) ──< friend_messages          (from_user_id / to_user_id 双向指向 users)
 users (1) ──< daily_stats              (每个 stat_date 一行)
 users (1) ──< meal_logs (1) ──< meal_items
 users (1) ──< ledger_transactions
@@ -95,12 +96,13 @@ media_assets 被以下表通过 media_asset_id 引用：
 | habit | habits | 创建/编辑/归档习惯时 |
 | habit_checkin | habit_checkins | 每日打卡时 |
 | privacy_setting | privacy_settings | 修改隐私设置时 |
-| meal_log | meal_logs | 确认饮食记录时 |
+| meal_log | meal_logs | 手动创建或 AI 识别成功写入饮食记录时 |
 | meal_item | meal_items | 随 meal_log 一起同步 |
 | ledger_transaction | ledger_transactions | 创建/编辑记账时 |
 | ledger_budget | ledger_budgets | 创建/编辑月度预算时 |
 | event_log | event_logs | 创建/编辑事件时 |
 | anniversary_event | anniversary_events | 创建/编辑纪念日和重复提醒时 |
+| friend_message | friend_messages | 好友发送消息或鼓励互动时 |
 
 ## 5. 隐私原则
 
@@ -159,7 +161,9 @@ media_assets 被以下表通过 media_asset_id 引用：
 
 1. **V1**：初始化所有表结构（MVP + Phase 2 基础表）。
 2. **V2**：补充专注偏好、月度预算、纪念日与重复提醒（TASK-DB-002）。
-3. **V3+**：根据实际需求添加字段、索引或调整约束，不在 V1/V2 中过度设计。
+3. **V3**：补充 AI Framework 持久化表（AI 工具调用审计、长期记忆、会话摘要、Agent 运行审计）。
+4. **V4**：修复运行期约束与部分状态取值，保证当前后端实现可在真实 PostgreSQL 环境落库。
+5. **V5+**：根据实际需求添加字段、索引或调整约束，不在已发布迁移中过度设计。
 
 ### 9.2 常见变更模式
 
@@ -186,11 +190,12 @@ CREATE INDEX idx_meal_logs_note ON meal_logs USING gin (to_tsvector('simple', no
 - `daily_stats` 建议通过定时任务或事件触发计算，避免实时聚合。
 - `daily_stats` 的 `stat_date` 索引在排行榜查询时使用，数据量大后考虑按 date 分区。
 
-## 10. 当前 V1 边界
+## 10. 当前迁移边界
 
-- V1 只提供数据库结构，不代表后端已经切换到 JPA/数据库仓储。
-- 当前后端仍有部分内存仓储实现，后续应按模块逐步迁移到 Repository。
-- `backend/src/main/resources/db/migration/V1__init_schema.sql` 按 Flyway 迁移文件组织，但项目尚未接入 Flyway 依赖；接入时可直接复用该路径。
+- 当前迁移文件位于 `backend/src/main/resources/db/migration`，包括 V1 到 V4。
+- 后端已接入 Flyway 依赖，并通过 `lifetool.database.migration-enabled` 控制是否在启动时自动执行迁移。
+- 当前后端采用 Store 抽象：本地和测试可使用内存 Store，`postgres` profile 使用 PostgreSQL Store。
+- 迁移文件不等同于所有业务都必须同步支持离线；客户端同步范围以实际 service 和 `sync_mutations` 实现为准。
 
 ## 11. V2 已迁移内容
 
@@ -252,64 +257,139 @@ users (1) ──< anniversary_events       (每用户可多个纪念日)
 media_assets (1) ──< anniversary_events (通过 media_asset_id)
 ```
 
-## 12. AI Framework 后续表
+## 12. V3 已迁移内容
 
-下一次数据库迁移建议新增或扩展以下表，以支持会话记忆和 function calling。
+V3 新增 `ai_tool_calls`、`ai_memory_items`、`ai_session_summaries`、`ai_agent_runs` 四张表，对应迁移文件 `V3__add_ai_framework_tables.sql`。
 
-### 12.1 `ai_tool_calls`
+### 12.1 AI 工具调用审计 (`ai_tool_calls`)
 
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| `id` | uuid | 主键 |
-| `user_id` | uuid | 当前用户 |
-| `session_id` | uuid | AI 会话 |
-| `message_id` | uuid | 触发工具调用的消息 |
-| `tool_name` | text | 工具名 |
-| `arguments` | jsonb | 工具参数，禁止包含客户端传入 userId |
-| `result_summary` | jsonb | 工具结果摘要，不保存过量原始明细 |
-| `status` | text | pending / succeeded / failed |
-| `latency_ms` | int | 执行耗时 |
-| `created_at` | timestamptz | 创建时间 |
+| 字段 | 类型 | 约束 | 说明 |
+|------|------|------|------|
+| `id` | uuid | 主键 | |
+| `user_id` | uuid | FK → users, NOT NULL | 当前用户 |
+| `session_id` | uuid | FK → ai_chat_sessions, NOT NULL | AI 会话 |
+| `message_id` | uuid | FK → ai_chat_messages, NOT NULL | 触发工具调用的消息 |
+| `tool_name` | text | NOT NULL | 工具名，如 get_focus_summary |
+| `arguments` | jsonb | NOT NULL, DEFAULT '{}' | 工具参数，禁止包含客户端传入 userId |
+| `result_summary` | jsonb | NULL | 工具结果摘要，不保存过量原始明细 |
+| `status` | text | CHECK, NOT NULL, DEFAULT 'pending' | pending / succeeded / failed |
+| `latency_ms` | int | CHECK >= 0, NULL | 执行耗时（毫秒） |
+| `created_at` | timestamptz | NOT NULL | 创建时间 |
 
-### 12.2 `ai_memory_items`
+- 索引：
+  - `idx_ai_tool_calls_user_session` — `(user_id, session_id)` 按会话查询工具调用。
+  - `idx_ai_tool_calls_user_message` — `(user_id, message_id)` 按消息查询工具调用。
+  - `idx_ai_tool_calls_user_status` — `(user_id, status)` 按状态过滤。
 
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| `id` | uuid | 主键 |
-| `user_id` | uuid | 当前用户 |
-| `memory_type` | text | preference / goal / constraint / health_note / routine |
-| `content` | text | 记忆内容 |
-| `source` | text | user_confirmed / assistant_suggested / system_extracted |
-| `confidence` | numeric(4,3) | 置信度 |
-| `enabled` | boolean | 是否启用 |
-| `created_at` | timestamptz | 创建时间 |
-| `updated_at` | timestamptz | 更新时间 |
-| `deleted_at` | timestamptz | 软删除 |
+### 12.2 AI 长期记忆 (`ai_memory_items`)
 
-### 12.3 `ai_session_summaries`
+| 字段 | 类型 | 约束 | 说明 |
+|------|------|------|------|
+| `id` | uuid | 主键 | |
+| `user_id` | uuid | FK → users, NOT NULL | 当前用户 |
+| `memory_type` | text | CHECK, NOT NULL | preference / goal / constraint / health_note / routine |
+| `content` | text | NOT NULL | 记忆内容 |
+| `source` | text | CHECK, NOT NULL, DEFAULT 'assistant_suggested' | user_confirmed / assistant_suggested / system_extracted |
+| `confidence` | numeric(4,3) | CHECK 0.000~1.000, NULL | 置信度 |
+| `enabled` | boolean | NOT NULL, DEFAULT true | 是否启用 |
+| `created_at` | timestamptz | NOT NULL | 创建时间 |
+| `updated_at` | timestamptz | NOT NULL | 更新时间 |
+| `deleted_at` | timestamptz | NULL | 软删除 |
 
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| `id` | uuid | 主键 |
-| `session_id` | uuid | AI 会话 |
-| `user_id` | uuid | 当前用户 |
-| `summary` | text | 当前会话压缩摘要 |
-| `message_count` | int | 摘要覆盖的消息数 |
-| `created_at` | timestamptz | 创建时间 |
-| `updated_at` | timestamptz | 更新时间 |
+- 索引：
+  - `idx_ai_memory_items_user_type` — `(user_id, memory_type)` 按类型筛选。
+  - `idx_ai_memory_items_user_enabled` — `(user_id, enabled)` 按启用状态筛选。
+- `updated_at` 触发器：`trg_ai_memory_items_updated_at`。
 
-### 12.4 `ai_agent_runs`
+### 12.3 AI 会话摘要 (`ai_session_summaries`)
 
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| `id` | uuid | 主键 |
-| `user_id` | uuid | 当前用户 |
-| `session_id` | uuid | AI 会话，可为空 |
-| `provider` | text | AI Provider |
-| `model` | text | 模型名 |
-| `input_tokens` | int | 输入 token |
-| `output_tokens` | int | 输出 token |
-| `tool_rounds` | int | 工具调用轮数 |
-| `status` | text | succeeded / failed |
-| `error_code` | text | 错误码 |
-| `created_at` | timestamptz | 创建时间 |
+| 字段 | 类型 | 约束 | 说明 |
+|------|------|------|------|
+| `id` | uuid | 主键 | |
+| `session_id` | uuid | FK → ai_chat_sessions, NOT NULL, UNIQUE | AI 会话，每会话一条 |
+| `user_id` | uuid | FK → users, NOT NULL | 当前用户 |
+| `summary` | text | NOT NULL | 当前会话压缩摘要 |
+| `message_count` | int | CHECK >= 0, NOT NULL, DEFAULT 0 | 摘要覆盖的消息数 |
+| `created_at` | timestamptz | NOT NULL | 创建时间 |
+| `updated_at` | timestamptz | NOT NULL | 更新时间 |
+
+- 唯一约束：`uq_ai_session_summaries_session` — `(session_id)`，每个会话最多一条当前摘要。
+- 索引：`idx_ai_session_summaries_user` — `(user_id)` 支持用户侧查询。
+- `updated_at` 触发器：`trg_ai_session_summaries_updated_at`。
+
+### 12.4 AI Agent 运行审计 (`ai_agent_runs`)
+
+| 字段 | 类型 | 约束 | 说明 |
+|------|------|------|------|
+| `id` | uuid | 主键 | |
+| `user_id` | uuid | FK → users, NOT NULL | 当前用户 |
+| `session_id` | uuid | FK → ai_chat_sessions, ON DELETE SET NULL, NULL | AI 会话，可为空（独立 run） |
+| `provider` | text | NOT NULL | AI Provider，如 openai / mock |
+| `model` | text | NOT NULL | 模型名，如 gpt-4o |
+| `input_tokens` | int | CHECK >= 0, NOT NULL, DEFAULT 0 | 输入 token |
+| `output_tokens` | int | CHECK >= 0, NOT NULL, DEFAULT 0 | 输出 token |
+| `tool_rounds` | int | CHECK >= 0, NOT NULL, DEFAULT 0 | 工具调用轮数 |
+| `status` | text | CHECK, NOT NULL, DEFAULT 'succeeded' | succeeded / failed |
+| `error_code` | text | NULL | 错误码，失败时记录 |
+| `created_at` | timestamptz | NOT NULL | 创建时间 |
+
+- 索引：
+  - `idx_ai_agent_runs_user_session` — `(user_id, session_id)` 按会话查询。
+  - `idx_ai_agent_runs_user_status` — `(user_id, status)` 按状态过滤。
+  - `idx_ai_agent_runs_user_time` — `(user_id, created_at)` 按时间范围查询。
+
+### 12.5 V3 表关系
+
+```
+users (1) ──< ai_tool_calls
+users (1) ──< ai_memory_items
+users (1) ──< ai_session_summaries
+users (1) ──< ai_agent_runs
+ai_chat_sessions (1) ──< ai_session_summaries (每会话一条)
+ai_chat_sessions (1) ──< ai_agent_runs (可多条)
+ai_chat_messages (1) ──< ai_tool_calls (每消息可多条工具调用)
+```
+
+## 13. V5 已迁移内容
+
+V5 新增 `friend_messages`，用于支持好友间站内消息和轻量鼓励互动，对应迁移文件 `V5__add_friend_messages.sql`。
+
+### 13.1 好友互动消息 (`friend_messages`)
+
+| 字段 | 类型 | 约束 | 说明 |
+|------|------|------|------|
+| `id` | uuid | 主键 | |
+| `from_user_id` | uuid | FK → users, NOT NULL | 发送者 |
+| `to_user_id` | uuid | FK → users, NOT NULL | 接收者 |
+| `message_type` | text | CHECK, NOT NULL | `text` / `cheer` |
+| `content` | text | NOT NULL | 消息内容或鼓励文本 |
+| `read_at` | timestamptz | NULL | 首次已读时间 |
+| `created_at` | timestamptz | NOT NULL | 发送时间 |
+| `updated_at` | timestamptz | NOT NULL | 更新时间 |
+| `deleted_at` | timestamptz | NULL | 软删除 |
+
+- 索引：
+  - `idx_friend_messages_to_user_created` — `(to_user_id, created_at DESC)` 支持收件箱与未读查询。
+  - `idx_friend_messages_pair_created` — `(from_user_id, to_user_id, created_at DESC)` 支持好友会话查询。
+- 约束：
+  - `friend_messages_type_check` — 仅允许 `text` 和 `cheer`。
+- 说明：
+  - 应用层必须先校验双方是否为好友，再允许写入互动消息。
+  - 未读数量按 `to_user_id = 当前用户 AND read_at IS NULL` 统计。
+  - 同步 entity_type：当前不进入离线同步队列，按服务端实时互动处理。
+
+- `ai_tool_calls` 同时依赖 `ai_chat_sessions` 和 `ai_chat_messages` 表。
+- `ai_agent_runs.session_id` 可为 NULL，以支持不绑定会话的运行（如定时分析任务）。
+- `ai_memory_items` 只依赖 `users`，长期记忆跨会话独立存在。
+
+## 13. V4 已迁移内容
+
+V4 对应迁移文件 `V4__fix_runtime_constraints.sql`，用于修复开发过程中真实接口落库暴露出的约束问题。
+
+主要调整：
+
+- 放宽或修正 `friendships.status`，支持当前好友申请流程中的拒绝状态。
+- 修复部分运行时状态字段与后端枚举不一致的问题。
+- 保持向前兼容，不直接修改已发布的 V1/V2/V3 文件。
+
+后续新增约束或字段时继续使用新的版本号迁移，禁止回改已在环境中执行过的 migration。

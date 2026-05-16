@@ -8,20 +8,41 @@
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "plugins": [
-      "expo-router"
+      "expo-router",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "usesCleartextTraffic": true
+          }
+        }
+      ]
     ],
     "ios": {
-      "supportsTablet": false
+      "supportsTablet": false,
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "用于发送语音消息与 AI 语音提问"
+      }
     },
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#0F172A"
       },
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "package": "com.anonymous.lifetool",
+      "permissions": [
+        "RECORD_AUDIO"
+      ]
     },
     "web": {
       "bundler": "metro",
       "output": "single"
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "33e4890e-9292-4621-9389-4e50136c86a4"
+      }
     }
   }
 }

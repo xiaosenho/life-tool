@@ -1,54 +1,32 @@
 package com.lifetool.leaderboards;
 
-import org.springframework.stereotype.Repository;
+public interface LeaderboardStatsStore {
+    long getFocusTodaySeconds(String userId);
 
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
+    void setFocusTodaySeconds(String userId, long seconds);
 
-@Repository
-public class LeaderboardStatsStore {
+    long getFocusWeekSeconds(String userId);
 
-    private final Map<String, Long> focusTodaySeconds = new ConcurrentHashMap<>();
-    private final Map<String, Long> focusWeekSeconds = new ConcurrentHashMap<>();
-    private final Map<String, Long> habitsTodayCompletion = new ConcurrentHashMap<>();
-    private final Map<String, Long> streaksDays = new ConcurrentHashMap<>();
+    void setFocusWeekSeconds(String userId, long seconds);
 
-    public long getFocusTodaySeconds(String userId) {
-        return focusTodaySeconds.getOrDefault(userId, 0L);
+    long getHabitsTodayCompletion(String userId);
+
+    void setHabitsTodayCompletion(String userId, long completion);
+
+    default long getHabitsTodayTotal(String userId) {
+        return 0L;
     }
 
-    public void setFocusTodaySeconds(String userId, long seconds) {
-        focusTodaySeconds.put(userId, seconds);
+    default void setHabitTodayStats(String userId, long completed, long total) {
+        setHabitsTodayCompletion(userId, completed);
     }
 
-    public long getFocusWeekSeconds(String userId) {
-        return focusWeekSeconds.getOrDefault(userId, 0L);
-    }
+    long getStreaksDays(String userId);
 
-    public void setFocusWeekSeconds(String userId, long seconds) {
-        focusWeekSeconds.put(userId, seconds);
-    }
+    void setStreaksDays(String userId, long days);
 
-    public long getHabitsTodayCompletion(String userId) {
-        return habitsTodayCompletion.getOrDefault(userId, 0L);
-    }
+    void clearAll();
 
-    public void setHabitsTodayCompletion(String userId, long completion) {
-        habitsTodayCompletion.put(userId, completion);
-    }
-
-    public long getStreaksDays(String userId) {
-        return streaksDays.getOrDefault(userId, 0L);
-    }
-
-    public void setStreaksDays(String userId, long days) {
-        streaksDays.put(userId, days);
-    }
-
-    public void clearAll() {
-        focusTodaySeconds.clear();
-        focusWeekSeconds.clear();
-        habitsTodayCompletion.clear();
-        streaksDays.clear();
+    default void refreshFocusStats(String userId) {
     }
 }

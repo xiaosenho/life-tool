@@ -27,6 +27,8 @@ class LeaderboardControllerTest {
 
     private String token;
     private String userId;
+    private String tokenB;
+    private String userIdB;
 
     @BeforeEach
     void setUp() throws Exception {
@@ -41,6 +43,29 @@ class LeaderboardControllerTest {
         JsonNode data = objectMapper.readTree(result.getResponse().getContentAsString()).get("data");
         token = data.get("accessToken").asText();
         userId = data.get("user").get("id").asText();
+
+        String emailB = "leaderboard-peer-" + System.nanoTime() + "@example.com";
+        String bodyB = """
+                {"email":"%s","password":"secret123","displayName":"PeerUser"}""".formatted(emailB);
+        MvcResult resultB = mockMvc.perform(post("/api/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON).content(bodyB))
+                .andExpect(status().isCreated())
+                .andReturn();
+        JsonNode dataB = objectMapper.readTree(resultB.getResponse().getContentAsString()).get("data");
+        tokenB = dataB.get("accessToken").asText();
+        userIdB = dataB.get("user").get("id").asText();
+
+        String requestId = objectMapper.readTree(mockMvc.perform(post("/api/friends/requests")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\"" + emailB + "\"}"))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString()).get("data").get("id").asText();
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch("/api/friends/requests/" + requestId)
+                        .header("Authorization", "Bearer " + tokenB)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"action\":\"accept\"}"))
+                .andExpect(status().isOk());
     }
 
     @Test
@@ -63,10 +88,11 @@ class LeaderboardControllerTest {
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.period").value("today"))
                 .andExpect(jsonPath("$.data.metric").value("focus_seconds"))
-                .andExpect(jsonPath("$.data.entries[0].userId").value(userId))
-                .andExpect(jsonPath("$.data.entries[0].displayName").value("LeaderboardUser"))
-                .andExpect(jsonPath("$.data.entries[0].value").value(0))
-                .andExpect(jsonPath("$.data.entries[0].rank").value(1));
+                .andExpect(jsonPath("$.data.entries.length()").value(2))
+                .andExpect(jsonPath("$.data.entries[0].rank").value(1))
+                .andExpect(jsonPath("$.data.entries[1].rank").value(1))
+                .andExpect(jsonPath("$.data.entries[?(@.userId=='" + userId + "')].displayName").value(org.hamcrest.Matchers.hasItem("LeaderboardUser")))
+                .andExpect(jsonPath("$.data.entries[?(@.userId=='" + userId + "')].value").value(org.hamcrest.Matchers.hasItem(0)));
     }
 
     @Test
@@ -77,9 +103,8 @@ class LeaderboardControllerTest {
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.period").value("week"))
                 .andExpect(jsonPath("$.data.metric").value("focus_seconds"))
-                .andExpect(jsonPath("$.data.entries[0].userId").value(userId))
-                .andExpect(jsonPath("$.data.entries[0].value").value(0))
-                .andExpect(jsonPath("$.data.entries[0].rank").value(1));
+                .andExpect(jsonPath("$.data.entries.length()").value(2))
+                .andExpect(jsonPath("$.data.entries[?(@.userId=='" + userId + "')].value").value(org.hamcrest.Matchers.hasItem(0)));
     }
 
     @Test
@@ -90,9 +115,8 @@ class LeaderboardControllerTest {
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.period").value("today"))
                 .andExpect(jsonPath("$.data.metric").value("habit_completion"))
-                .andExpect(jsonPath("$.data.entries[0].userId").value(userId))
-                .andExpect(jsonPath("$.data.entries[0].value").value(0))
-                .andExpect(jsonPath("$.data.entries[0].rank").value(1));
+                .andExpect(jsonPath("$.data.entries.length()").value(2))
+                .andExpect(jsonPath("$.data.entries[?(@.userId=='" + userId + "')].value").value(org.hamcrest.Matchers.hasItem(0)));
     }
 
     @Test
@@ -103,8 +127,8 @@ class LeaderboardControllerTest {
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.period").value("all_time"))
                 .andExpect(jsonPath("$.data.metric").value("streak_days"))
-                .andExpect(jsonPath("$.data.entries[0].userId").value(userId))
-                .andExpect(jsonPath("$.data.entries[0].value").value(0))
+                .andExpect(jsonPath("$.data.entries.length()").value(2))
+                .andExpect(jsonPath("$.data.entries[?(@.userId=='" + userId + "')].value").value(org.hamcrest.Matchers.hasItem(0)))
                 .andExpect(jsonPath("$.data.entries[0].rank").value(1));
     }
 
@@ -115,6 +139,23 @@ class LeaderboardControllerTest {
                         .header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.entries[0].value").value(3600));
+    }
+
+    @Test
+    void focusDetailIncludesFriendRankingAndGap() throws Exception {
+        statsStore.setFocusTodaySeconds(userId, 3600L);
+        statsStore.setFocusTodaySeconds(userIdB, 5400L);
+
+        mockMvc.perform(get("/api/leaderboards/focus/detail?period=today")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.entries.length()").value(2))
+                .andExpect(jsonPath("$.data.entries[0].userId").value(userIdB))
+                .andExpect(jsonPath("$.data.entries[1].userId").value(userId))
+                .andExpect(jsonPath("$.data.self.userId").value(userId))
+                .andExpect(jsonPath("$.data.self.rank").value(2))
+                .andExpect(jsonPath("$.data.gapToPrevious").value(1800))
+                .andExpect(jsonPath("$.data.totalParticipants").value(2));
     }
 
     @Test

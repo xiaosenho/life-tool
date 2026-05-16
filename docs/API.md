@@ -181,6 +181,10 @@ POST   /api/friends/requests
 GET    /api/friends/requests
 PATCH  /api/friends/requests/{id}
 DELETE /api/friends/{friendUserId}
+GET    /api/friends/messages
+GET    /api/friends/messages/{friendUserId}
+POST   /api/friends/messages/{friendUserId}
+POST   /api/friends/messages/{friendUserId}/read
 ```
 
 好友申请状态：
@@ -190,6 +194,68 @@ pending
 accepted
 blocked
 deleted
+```
+
+### GET /api/friends/messages
+
+响应：
+
+```json
+[
+  {
+    "friendUserId": "uuid",
+    "friendDisplayName": "Alex",
+    "friendEmail": "alex@example.com",
+    "lastMessage": "今天继续加油！",
+    "lastMessageType": "cheer",
+    "lastMessageAt": "2026-05-15T12:00:00Z",
+    "unreadCount": 1
+  }
+]
+```
+
+### GET /api/friends/messages/{friendUserId}
+
+响应：
+
+```json
+[
+  {
+    "id": "uuid",
+    "fromUserId": "uuid",
+    "toUserId": "uuid",
+    "type": "text",
+    "content": "今晚继续冲一下榜单？",
+    "createdAt": "2026-05-15T12:00:00Z",
+    "readAt": null
+  }
+]
+```
+
+### POST /api/friends/messages/{friendUserId}
+
+请求：
+
+```json
+{
+  "content": "今天继续加油！",
+  "type": "cheer"
+}
+```
+
+说明：
+
+- `type` 当前支持 `text` 和 `cheer`，缺省时按 `text` 处理。
+- 只有已建立好友关系的双方才允许互发消息。
+
+### POST /api/friends/messages/{friendUserId}/read
+
+响应：
+
+```json
+{
+  "updated": 1
+}
 ```
 
 ## 6. Privacy
@@ -212,8 +278,12 @@ friends_detail
 ```text
 GET /api/leaderboards/focus?period=today
 GET /api/leaderboards/focus?period=week
+GET /api/leaderboards/focus/detail?period=today
+GET /api/leaderboards/focus/detail?period=week
 GET /api/leaderboards/habits?period=today
+GET /api/leaderboards/habits/detail?period=today
 GET /api/leaderboards/streaks
+GET /api/leaderboards/streaks/detail
 ```
 
 响应：
@@ -233,6 +303,41 @@ GET /api/leaderboards/streaks
   ]
 }
 ```
+
+### GET /api/leaderboards/focus/detail?period=today
+
+响应：
+
+```json
+{
+  "period": "today",
+  "metric": "focus_seconds",
+  "entries": [
+    {
+      "userId": "uuid",
+      "displayName": "Alex",
+      "avatarUrl": null,
+      "value": 7200,
+      "rank": 1
+    }
+  ],
+  "self": {
+    "userId": "uuid",
+    "displayName": "Alex",
+    "avatarUrl": null,
+    "value": 7200,
+    "rank": 1
+  },
+  "gapToPrevious": 0,
+  "totalParticipants": 3
+}
+```
+
+说明：
+
+- detail 接口返回完整好友榜单，而不是仅摘要。
+- `self` 表示当前用户自己的榜单条目。
+- `gapToPrevious` 表示当前用户与前一名的差距；若当前已是并列第 1，则返回 0。
 
 ## 8. Focus Preferences
 
@@ -497,6 +602,7 @@ DELETE /api/media/assets/{id}
 {
   "id": "uuid",
   "objectKey": "users/user_uuid/media/asset_uuid.jpg",
+  "readUrl": "https://lifetool-media-prod.cos.ap-guangzhou.myqcloud.com/...",
   "contentType": "image/jpeg",
   "purpose": "meal_photo",
   "fileSize": 512000,
@@ -515,6 +621,7 @@ DELETE /api/media/assets/{id}
 {
   "id": "uuid",
   "objectKey": "users/user_uuid/media/asset_uuid.jpg",
+  "readUrl": "https://lifetool-media-prod.cos.ap-guangzhou.myqcloud.com/...",
   "contentType": "image/jpeg",
   "purpose": "meal_photo",
   "fileSize": 512000,
@@ -553,15 +660,16 @@ DELETE /api/media/assets/{id}
 | --- | --- | --- |
 | COS_REGION | COS 地域 | ap-guangzhou |
 | COS_BUCKET | COS 存储桶 | life-tool-media |
-| COS_PUBLIC_BASE_URL | COS 公网访问地址，留空则返回 mock URL | 空 |
+| COS_SECRET_ID | COS 子账号 SecretId | 空 |
+| COS_SECRET_KEY | COS 子账号 SecretKey | 空 |
+| COS_PUBLIC_BASE_URL | 兼容保留字段；当前私有读优先返回后端签发的短有效期 readUrl | 空 |
 | COS_UPLOAD_TOKEN_TTL_SECONDS | 上传授权有效期（秒） | 300 |
 | MEDIA_MAX_IMAGE_BYTES | 最大图片大小（字节） | 10485760 |
 
 ## 12. AI
 
 ```text
-POST /api/ai/food-recognition/jobs
-GET  /api/ai/food-recognition/jobs/{id}
+POST /api/ai/food-recognition
 POST /api/ai/life-advice
 POST /api/ai/chat/sessions
 POST /api/ai/chat/sessions/{id}/messages
@@ -570,7 +678,7 @@ GET  /api/ai/memories
 DELETE /api/ai/memories/{id}
 ```
 
-### POST /api/ai/food-recognition/jobs
+### POST /api/ai/food-recognition
 
 请求：
 
@@ -578,7 +686,7 @@ DELETE /api/ai/memories/{id}
 {
   "mediaAssetId": "uuid",
   "mealType": "lunch",
-  "occurredAt": "2026-05-13T12:00:00Z"
+  "customPrompt": "这是一份午餐，请估算热量。"
 }
 ```
 
@@ -586,33 +694,21 @@ DELETE /api/ai/memories/{id}
 
 ```json
 {
-  "jobId": "uuid",
-  "status": "pending"
+  "result": "图片中可能包含米饭、鸡胸肉和青菜。总热量约 620 千卡。",
+  "disclaimer": "AI 建议仅供参考，不构成医疗或营养诊断。",
+  "mealLogId": "uuid",
+  "totalCalories": 620
 }
 ```
 
-### GET /api/ai/food-recognition/jobs/{id}
+说明：
 
-响应：
-
-```json
-{
-  "jobId": "uuid",
-  "status": "succeeded",
-  "result": {
-    "items": [
-      {
-        "name": "米饭",
-        "estimatedGrams": 150,
-        "estimatedCalories": 174,
-        "confidence": 0.78
-      }
-    ],
-    "totalCalories": 174,
-    "notes": "结果为估算值，请确认后保存。"
-  }
-}
-```
+- 当前接口为同步识别接口，不再使用 `/jobs` 轮询模型。
+- `mediaAssetId` 为必填；后端会基于媒体资产实时生成可访问的 COS 短时效读链接。
+- 当模型拉取图片命中 COS `403`（签名过期等场景）时，后端会自动刷新读链接并重试一次。
+- 识别成功后，后端会为当前用户生成一条饮食记录，并返回 `mealLogId`。
+- `totalCalories` 由后端从模型文本中提取；无法可靠提取时返回 0 或后端默认值。
+- 前端识别成功后应刷新今日饮食汇总。
 
 ### POST /api/ai/life-advice
 
@@ -700,7 +796,7 @@ DELETE /api/ai/memories/{id}
 说明：
 
 - 客户端不能直接调用工具，`enabledTools` 只是本次对话允许使用的工具范围。
-- 工具实际执行由后端 `AiOrchestrator` 完成。
+- 工具实际执行由后端 `AiService` 和 `UserDataTools` 完成。
 - 后端必须按当前登录用户注入 `userId`。
 
 ### GET /api/ai/chat/sessions/{id}/messages
@@ -752,7 +848,7 @@ DELETE /api/ai/memories/{id}
 | --- | --- |
 | `get_focus_summary` | 查询当前用户近 N 天专注汇总 |
 | `get_habit_summary` | 查询当前用户习惯完成率和连续打卡 |
-| `get_diet_summary` | 查询当前用户已确认饮食汇总 |
+| `get_diet_summary` | 查询当前用户饮食热量、餐次分布和记录数 |
 | `get_ledger_summary` | 查询当前用户月度收支和预算汇总 |
 | `get_upcoming_events` | 查询当前用户未来纪念日和提醒 |
 | `get_user_profile_context` | 查询当前用户基础偏好和隐私配置 |
@@ -769,5 +865,5 @@ DELETE /api/ai/memories/{id}
 | RATE_LIMITED | 请求过快 |
 | FILE_TOO_LARGE | 文件过大 |
 | UNSUPPORTED_MEDIA_TYPE | 不支持的媒体类型 |
-| AI_JOB_FAILED | AI 任务失败 |
+| AI_RECOGNITION_FAILED | AI 识图失败 |
 | INTERNAL_ERROR | 服务端错误 |

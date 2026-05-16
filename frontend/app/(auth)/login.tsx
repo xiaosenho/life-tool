@@ -33,7 +33,7 @@ export default function LoginScreen() {
 
     try {
       const response = await authService.login(email, password);
-      setAuth(response.user, response.accessToken);
+      setAuth(response.user, response.accessToken, response.refreshToken);
     } catch (err) {
       setError(err instanceof Error ? err.message : "登录失败，请稍后再试");
     } finally {

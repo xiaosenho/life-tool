@@ -2,6 +2,7 @@ import { getDb } from '@/db/database';
 import { syncService } from './syncService';
 import { createLocalId } from '@/utils/id';
 import { useAuthStore } from '@/store/authStore';
+import { apiClient } from './apiClient';
 
 export interface Habit {
   id: string;
@@ -28,6 +29,69 @@ export interface HabitCheckin {
   note: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface ServerHabit {
+  id: string;
+  userId: string;
+  name: string;
+  description: string | null;
+  frequencyType: 'daily' | 'weekly' | 'custom';
+  frequencyDays: number[] | null;
+  targetCount: number;
+  color: string | null;
+  icon: string | null;
+  archived: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ServerHabitCheckin {
+  id: string;
+  userId: string;
+  habitId: string;
+  checkinDate: string;
+  count: number;
+  note: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ServerCheckinInput {
+  count?: number;
+  note?: string | null;
+  checkinDate?: string;
+}
+
+export function serverHabitToLocal(habit: ServerHabit): Habit {
+  return {
+    id: habit.id,
+    user_id: habit.userId,
+    name: habit.name,
+    description: habit.description,
+    frequency_type: habit.frequencyType,
+    frequency_days: habit.frequencyDays,
+    target_count: habit.targetCount,
+    color: habit.color,
+    icon: habit.icon,
+    is_archived: habit.archived,
+    created_at: habit.createdAt,
+    updated_at: habit.updatedAt,
+    deleted_at: null,
+  };
+}
+
+export function serverCheckinToLocal(checkin: ServerHabitCheckin): HabitCheckin {
+  return {
+    id: checkin.id,
+    user_id: checkin.userId,
+    habit_id: checkin.habitId,
+    checkin_date: checkin.checkinDate,
+    count: checkin.count,
+    note: checkin.note,
+    created_at: checkin.createdAt,
+    updated_at: checkin.updatedAt,
+  };
 }
 
 export const habitService = {
@@ -127,6 +191,37 @@ export const habitService = {
     return checkin;
   },
 
+  async cancelCheckin(habitId: string, checkinDate?: string) {
+    const db = await getDb();
+    const userId = useAuthStore.getState().user?.id;
+
+    if (!userId) {
+      throw new Error('User not authenticated');
+    }
+
+    const date = checkinDate || new Date().toISOString().split('T')[0];
+    const existing = await db.getFirstAsync<HabitCheckin>(
+      'SELECT * FROM habit_checkins WHERE user_id = ? AND habit_id = ? AND checkin_date = ? LIMIT 1',
+      [userId, habitId, date]
+    );
+
+    if (!existing) {
+      throw new Error('Habit checkin not found');
+    }
+
+    await db.runAsync(
+      'DELETE FROM habit_checkins WHERE user_id = ? AND habit_id = ? AND checkin_date = ?',
+      [userId, habitId, date]
+    );
+
+    await syncService.enqueueMutation('habit_checkin', existing.id, 'delete', {
+      id: existing.id,
+      user_id: userId,
+      habit_id: habitId,
+      checkin_date: date,
+    });
+  },
+
   async getTodayCheckins() {
     const db = await getDb();
     const userId = useAuthStore.getState().user?.id;
@@ -138,5 +233,51 @@ export const habitService = {
       [userId, today]
     );
     return rows as HabitCheckin[];
-  }
+  },
+
+  // Direct API methods (call backend)
+  async createHabitOnServer(data: {
+    name: string;
+    description?: string | null;
+    frequencyType?: string;
+    frequencyDays?: number[] | null;
+    targetCount?: number;
+    color?: string | null;
+    icon?: string | null;
+  }) {
+    return apiClient.post<ServerHabit>('/habits', data);
+  },
+
+  async getHabitsFromServer() {
+    return apiClient.get<ServerHabit[]>('/habits');
+  },
+
+  async updateHabitOnServer(id: string, data: { name?: string; targetCount?: number; color?: string; archived?: boolean }) {
+    return apiClient.patch<ServerHabit>(`/habits/${id}`, data);
+  },
+
+  async deleteHabitOnServer(id: string) {
+    return apiClient.delete<void>(`/habits/${id}`);
+  },
+
+  async checkinOnServer(habitId: string, input: ServerCheckinInput = {}) {
+    return apiClient.post<ServerHabitCheckin>(`/habits/${habitId}/checkins`, {
+      count: input.count ?? 1,
+      note: input.note,
+      checkinDate: input.checkinDate,
+    });
+  },
+
+  async cancelCheckinOnServer(habitId: string, checkinDate?: string) {
+    const suffix = checkinDate ? `?checkinDate=${encodeURIComponent(checkinDate)}` : '';
+    return apiClient.delete<void>(`/habits/${habitId}/checkins${suffix}`);
+  },
+
+  async getCheckinsFromServer(habitId: string, from?: string, to?: string) {
+    const query = new URLSearchParams();
+    if (from) query.set('from', from);
+    if (to) query.set('to', to);
+    const suffix = query.toString() ? `?${query.toString()}` : '';
+    return apiClient.get<ServerHabitCheckin[]>(`/habits/${habitId}/checkins${suffix}`);
+  },
 };

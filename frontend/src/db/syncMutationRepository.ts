@@ -34,6 +34,14 @@ export const syncMutationRepository = {
     );
   },
 
+  async getPendingCount() {
+    const db = await getDb();
+    const row = await db.getFirstAsync<{ count: number }>(
+      'SELECT COUNT(*) as count FROM sync_mutations WHERE synced = 0'
+    );
+    return row?.count ?? 0;
+  },
+
   async markAsSynced(mutationIds: string[]) {
     if (mutationIds.length === 0) return;
     const db = await getDb();

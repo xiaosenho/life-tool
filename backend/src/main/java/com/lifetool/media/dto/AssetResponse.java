@@ -11,5 +11,6 @@ public record AssetResponse(
         Integer width,
         Integer height,
         String status,
-        Instant createdAt) {
+        Instant createdAt,
+        String readUrl) {
 }

@@ -254,6 +254,27 @@ blocked
   - 明确生产密钥不得提交到 Git。
 - 风险等级：中
 
+### TASK-BE-110：修复豆包 AI 识图与会话 completions 路径
+
+- 状态：done
+- 推荐负责人：Codex
+- 影响文件：
+  - `backend/src/main/java/com/lifetool/ai/SpringAiAssistantClient.java`
+  - `backend/src/main/java/com/lifetool/ai/AiConfiguration.java`
+  - `backend/src/main/resources/application.yml`
+  - `docs/DEPLOYMENT.md`
+  - `README.md`
+- 描述：
+  - 修复 AI 识图与 AI 会话直连 REST 调用时写死 `/v1/chat/completions` 的问题。
+  - 改为通过 `spring.ai.openai.chat.completions-path` / `AI_CHAT_COMPLETIONS_PATH` 配置 completions 路径。
+  - 适配豆包 Ark OpenAI-compatible 接口，避免 `AI_BASE_URL=https://ark.cn-beijing.volces.com/api/v3` 时拼出错误的 `/api/v3/v1/chat/completions`。
+  - 补充排障日志，区分 COS 403、外部 AI 404 与真实业务鉴权错误。
+- 验收标准：
+  - AI 识图请求不再因错误的 completions 路径返回 404。
+  - AI 会话请求与 AI 识图请求共用同一 completions-path 配置。
+  - `mvn -q -Dtest=AiControllerTest,AiServiceFoodRecognitionRetryTest,AiAssistantClientTest test` 通过。
+- 风险等级：高
+
 ### TASK-BE-104：实现媒体上传授权与资产记录
 
 - 状态：done
@@ -273,20 +294,20 @@ blocked
 
 ### TASK-BE-105：实现 AI 饮食图片识别任务
 
-- 状态：todo
+- 状态：done
 - 推荐负责人：Claude
 - 影响文件：
   - `backend/src/main/**/ai/**`
   - `backend/src/main/**/meals/**`
   - `docs/API.md`
 - 描述：
-  - 基于已上传图片创建 AI 识别任务。
+  - 基于已上传图片触发 AI 饮食识别。
   - 调用 AI 服务识别食物、估算重量和热量。
-  - 保存待确认结果，用户确认后写入饮食记录。
+  - 识别成功后直接写入饮食记录，并返回 `mealLogId` 和 `totalCalories`。
 - 验收标准：
-  - 图片识别任务有 pending/succeeded/failed 状态。
-  - AI 结果包含食物列表、估算热量和置信度。
-  - AI 结果不会未经确认直接进入正式热量统计。
+  - 已上传图片可以成功触发识别。
+  - AI 结果包含识别文本和热量估算。
+  - 识别成功后会生成当前用户饮食记录。
 - 风险等级：高
 
 ### TASK-FE-104：实现饮食拍照上传与识别结果确认
@@ -300,16 +321,16 @@ blocked
 - 描述：
   - Records 页增加饮食图片入口。
   - 支持拍照或选择图片、压缩、上传、触发识别。
-  - 展示 AI 识别结果，并允许用户编辑确认。
+  - 展示 AI 识别结果，并完成基础写入流程。
 - 验收标准：
   - 用户可以上传一张饮食图片。
   - 用户可以看到 AI 返回的食物和热量估算。
-  - 用户确认后生成饮食记录并进入同步队列。
+  - 识别成功后生成饮食记录并进入同步队列。
 - 风险等级：高
 
 ### TASK-BE-106：实现 AI 框架、会话记忆与 Function Calling
 
-- 状态：todo
+- 状态：in_progress
 - 推荐负责人：Claude
 - 影响文件：
   - `backend/src/main/**/ai/**`
@@ -334,7 +355,7 @@ blocked
 
 ### TASK-BE-110：实现 AI 用户数据查询工具集
 
-- 状态：todo
+- 状态：in_progress
 - 推荐负责人：Claude
 - 影响文件：
   - `backend/src/main/**/ai/tools/**`
@@ -355,7 +376,7 @@ blocked
 
 ### TASK-DB-003：补充 AI Framework 持久化 DDL
 
-- 状态：todo
+- 状态：done
 - 推荐负责人：DeepSeek
 - 影响文件：
   - `backend/src/main/resources/db/migration/**`
@@ -371,7 +392,7 @@ blocked
 
 ### TASK-FE-105：实现 AI 建议与对话页面
 
-- 状态：todo
+- 状态：in_progress
 - 推荐负责人：Gemini
 - 影响文件：
   - `frontend/**/ai/**`
@@ -415,9 +436,25 @@ blocked
 
 ## Phase 3：记录、提醒与体验补全
 
+### TASK-PRD-003：定义 Records 页重构与饮食记录增强需求
+
+- 状态：done
+- 推荐负责人：Codex
+- 影响文件：
+  - `docs/PRD.md`
+  - `docs/TASKS.md`
+- 描述：
+  - 明确下一阶段 Records 页从堆叠结构调整为分区切换结构。
+  - 明确饮食记录详情、删除、重新识别等产品需求。
+  - 将现有文档中与真实实现不一致的“识别确认流”描述修正为当前行为。
+- 验收标准：
+  - PRD 明确 Records 页拆分方向、饮食增强范围和验收标准。
+  - TASKS 可直接指导前后端进入下一阶段开发。
+- 风险等级：低
+
 ### TASK-FE-106：实现好友与排行榜前端页面
 
-- 状态：todo
+- 状态：review
 - 推荐负责人：Gemini
 - 影响文件：
   - `frontend/src/services/friendService.ts`
@@ -437,6 +474,169 @@ blocked
   - 未登录、空列表、接口失败、加载中均有中文状态。
   - `npm run typecheck` 通过。
 - 风险等级：中
+
+### TASK-PRD-004：定义好友页重构与互动需求
+
+- 状态：done
+- 推荐负责人：Codex
+- 影响文件：
+  - `docs/PRD.md`
+  - `docs/TASKS.md`
+- 描述：
+  - 明确好友页当前问题：结构过浅、排行榜不可用、缺少互动闭环。
+  - 定义好友、排行榜、互动三个主分区及其目标。
+  - 产出下一阶段可执行的前后端任务拆分。
+- 验收标准：
+  - PRD 明确好友页重构方向和互动能力范围。
+  - TASKS 能直接指导前后端进入实现阶段。
+- 风险等级：低
+
+### TASK-FE-112：重构好友页为“好友/排行榜/互动”三分区
+
+- 状态：done
+- 推荐负责人：Gemini
+- 影响文件：
+  - `frontend/app/(tabs)/friends.tsx`
+  - `frontend/src/components/**`
+  - `frontend/src/services/friendService.ts`
+  - `frontend/src/services/leaderboardService.ts`
+- 描述：
+  - 将好友页从简单堆叠结构改为三分区结构。
+  - 好友分区展示好友列表、申请处理、添加好友和状态摘要。
+  - 排行榜分区支持榜单切换、完整排名列表和个人名次提示。
+  - 互动分区展示最近消息、鼓励动作和未读状态。
+- 验收标准：
+  - 用户可以在好友、排行榜、互动之间快速切换。
+  - 页面不再停留在摘要卡片级别，而是能完成实际查看和操作。
+  - 所有空状态、加载状态、失败状态都有中文提示。
+  - `npm run typecheck` 通过。
+- 风险等级：中
+
+### TASK-BE-112：补齐排行榜详情与好友互动接口
+
+- 状态：done
+- 推荐负责人：Claude
+- 影响文件：
+  - `backend/src/main/**/leaderboards/**`
+  - `backend/src/main/**/friends/**`
+  - `backend/src/main/**/notifications/**`
+  - `docs/API.md`
+- 描述：
+  - 为排行榜补齐完整榜单详情接口，返回好友排名列表、当前用户名次、与前一名差距等信息。
+  - 增加好友互动接口，支持好友间发送文本消息和轻量鼓励动作。
+  - 支持未读计数、消息列表和已读状态。
+  - 保证所有互动只在好友关系成立后可用，并受用户隔离控制。
+- 验收标准：
+  - 用户可以获取完整榜单，而不是只有摘要。
+  - 用户可以给好友发送一条站内消息。
+  - 用户可以查看与某位好友的互动记录和未读状态。
+  - 非好友之间不能互发消息。
+  - `mvn test` 通过。
+- 风险等级：高
+
+### TASK-DB-004：补充好友互动消息与未读状态 DDL
+
+- 状态：done
+- 推荐负责人：DeepSeek
+- 影响文件：
+  - `backend/src/main/resources/db/migration/**`
+  - `docs/DATABASE.md`
+- 描述：
+  - 为好友互动增加站内消息和轻量互动记录表。
+  - 支持发送者、接收者、消息类型、消息内容、已读状态、软删除和时间索引。
+  - 更新数据库文档中的社交域说明和索引策略。
+- 验收标准：
+  - 新增迁移可在现有数据库上执行。
+  - 表结构可支持好友消息、鼓励动作和未读统计。
+  - `docs/DATABASE.md` 与迁移保持一致。
+- 风险等级：中
+
+### TASK-FE-113：实现完整排行榜页与好友互动 UI
+
+- 状态：done
+- 推荐负责人：Gemini
+- 影响文件：
+  - `frontend/app/(tabs)/friends.tsx`
+  - `frontend/src/services/leaderboardService.ts`
+  - `frontend/src/services/friendService.ts`
+  - `frontend/src/services/messageService.ts`
+- 描述：
+  - 将排行榜从摘要卡片升级为完整榜单视图。
+  - 展示榜单切换、排名列表、个人名次和差距信息。
+  - 实现好友消息列表、会话入口、发送消息和鼓励按钮。
+  - 为未读消息和新互动提供可见状态提示。
+- 验收标准：
+  - 用户可以完整浏览各类榜单。
+  - 用户可以进入某位好友的互动会话并发送消息。
+  - 用户可以看到未读消息提示和最近互动列表。
+  - `npm run typecheck` 通过。
+- 风险等级：高
+
+### TASK-FE-110：重构 Records 页为分区结构
+
+- 状态：done
+- 推荐负责人：Gemini
+- 影响文件：
+  - `frontend/app/(tabs)/records.tsx`
+  - `frontend/src/components/**`
+  - `frontend/src/services/mealService.ts`
+  - `frontend/src/services/ledgerService.ts`
+  - `frontend/src/services/eventService.ts`
+- 描述：
+  - 将 Records 页从单页纵向堆叠改为分区切换结构。
+  - 提供饮食、记账、纪念日三个主分区的切换入口。
+  - 每个分区只展示自己的摘要卡片、列表和新增按钮。
+  - 保证移动端切换效率和视觉层级清晰。
+- 验收标准：
+  - 用户可以在同一页内快速切换饮食、记账、纪念日分区。
+  - 默认视图不再同时堆叠三类完整内容。
+  - 每个分区都有清晰的空状态、加载状态和新增入口。
+  - `npm run typecheck` 通过。
+- 风险等级：中
+
+### TASK-BE-111：补齐饮食记录详情、删除与重新识别接口
+
+- 状态：done
+- 推荐负责人：Claude
+- 影响文件：
+  - `backend/src/main/**/meals/**`
+  - `backend/src/main/**/ai/**`
+  - `backend/src/main/**/media/**`
+  - `docs/API.md`
+- 描述：
+  - 为饮食记录补齐详情查询接口，返回图片资产、识别结果文本、热量和基础元数据。
+  - 支持删除指定饮食记录，并保证今日/区间汇总同步更新。
+  - 支持基于已有 `mediaAssetId` 对某条饮食记录重新触发热量识别，无需重复上传图片。
+  - 明确重新识别后的落库策略：更新原记录或生成新识别结果，并在接口文档中说明。
+- 验收标准：
+  - 用户可以查看自己的饮食记录详情。
+  - 用户可以删除自己的饮食记录，删除后汇总结果正确更新。
+  - 用户可以基于原图重新触发一次识别。
+  - A 用户不能查看、删除或重识别 B 用户的饮食记录。
+  - `mvn test` 通过。
+- 风险等级：高
+
+### TASK-FE-111：实现饮食记录详情、图片查看、删除与重新识别
+
+- 状态：done
+- 推荐负责人：Gemini
+- 影响文件：
+  - `frontend/app/(tabs)/records.tsx`
+  - `frontend/src/services/mealService.ts`
+  - `frontend/src/services/aiService.ts`
+  - `frontend/src/services/mediaService.ts`
+- 描述：
+  - 在饮食分区展示近期记录列表，支持进入详情。
+  - 在详情中展示原图、识别结果、热量、免责声明和记录时间。
+  - 提供删除操作，并在成功后刷新列表与摘要。
+  - 提供“重新计算热量”入口，复用已有图片重新触发识别。
+- 验收标准：
+  - 用户可以查看饮食记录对应图片和识别结果。
+  - 用户可以删除一条饮食记录，并立即看到 UI 更新。
+  - 用户可以点击重新计算热量，并看到新的识别结果反馈。
+  - 失败状态、空状态、加载状态均有中文提示。
+  - `npm run typecheck` 通过。
+- 风险等级：高
 
 ### TASK-BE-107：实现专注偏好接口
 

@@ -9,6 +9,7 @@ const tabIcons: Record<string, IconName> = {
   index: "today-outline",
   focus: "timer-outline",
   records: "receipt-outline",
+  ai: "sparkles-outline",
   friends: "people-outline",
   profile: "person-circle-outline"
 };
@@ -16,6 +17,7 @@ const tabIcons: Record<string, IconName> = {
 export default function TabLayout() {
   return (
     <Tabs
+      backBehavior="history"
       screenOptions={({ route }) => ({
         headerShown: false,
         tabBarActiveTintColor: colors.accent,
