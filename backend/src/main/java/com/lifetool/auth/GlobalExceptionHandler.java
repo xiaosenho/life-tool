@@ -16,6 +16,7 @@ import com.lifetool.leaderboards.LeaderboardException;
 import com.lifetool.ledger.LedgerException;
 import com.lifetool.media.MediaException;
 import com.lifetool.meals.MealException;
+import com.lifetool.vocab.VocabException;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -118,6 +119,16 @@ public class GlobalExceptionHandler {
             case "NOT_FOUND" -> HttpStatus.NOT_FOUND;
             case "FORBIDDEN" -> HttpStatus.FORBIDDEN;
             case "AI_RECOGNITION_FAILED" -> HttpStatus.BAD_GATEWAY;
+            default -> HttpStatus.BAD_REQUEST;
+        };
+        return ResponseEntity.status(status).body(ApiResponse.fail(ex.getCode(), ex.getMessage()));
+    }
+
+
+    @ExceptionHandler(VocabException.class)
+    public ResponseEntity<ApiResponse<Void>> handleVocab(VocabException ex) {
+        HttpStatus status = switch (ex.getCode()) {
+            case "NOT_FOUND" -> HttpStatus.NOT_FOUND;
             default -> HttpStatus.BAD_REQUEST;
         };
         return ResponseEntity.status(status).body(ApiResponse.fail(ex.getCode(), ex.getMessage()));

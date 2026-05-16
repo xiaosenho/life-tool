@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import { router } from "expo-router";
 import {
   View,
   Text,
@@ -257,6 +258,14 @@ export default function FocusScreen() {
           </TouchableOpacity>
         </View>
 
+        <TouchableOpacity style={styles.vocabCard} onPress={() => router.push('/vocab')}>
+          <View style={styles.vocabCardTextWrap}>
+            <Text style={styles.vocabCardTitle}>背单词 · 今日30词</Text>
+            <Text style={styles.vocabCardSubtitle}>像英语书一样顺序背，支持一键隐藏中文</Text>
+          </View>
+          <Text style={styles.vocabCardAction}>开始</Text>
+        </TouchableOpacity>
+
         <View style={styles.preferencePanel}>
           <View style={styles.preferenceHeader}>
             <View>
@@ -511,6 +520,39 @@ const styles = StyleSheet.create({
     color: colors.muted,
     fontSize: 13,
     marginTop: 10,
+  },
+  vocabCard: {
+    width: "100%",
+    backgroundColor: colors.surface,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    marginBottom: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  vocabCardTextWrap: {
+    flex: 1,
+  },
+  vocabCardTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: colors.text,
+  },
+  vocabCardSubtitle: {
+    marginTop: 4,
+    fontSize: 13,
+    color: colors.muted,
+    lineHeight: 18,
+  },
+  vocabCardAction: {
+    color: colors.accent,
+    fontSize: 15,
+    fontWeight: "700",
   },
   controls: {
     flexDirection: "row",

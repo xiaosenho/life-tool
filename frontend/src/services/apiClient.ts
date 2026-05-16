@@ -84,4 +84,13 @@ export const apiClient = {
   delete<T>(endpoint: string, options: RequestInit = {}) {
     return this.request<T>(endpoint, { ...options, method: "DELETE" });
   },
+
+
+  put<T>(endpoint: string, body?: any, options: RequestInit = {}) {
+    return this.request<T>(endpoint, {
+      ...options,
+      method: "PUT",
+      body: body ? JSON.stringify(body) : undefined,
+    });
+  },
 };
