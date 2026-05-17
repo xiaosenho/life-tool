@@ -1,11 +1,20 @@
 package com.lifetool.media;
 
+import com.qcloud.cos.COSClient;
+import com.qcloud.cos.ClientConfig;
+import com.qcloud.cos.auth.BasicCOSCredentials;
+import com.qcloud.cos.auth.COSCredentials;
+import com.qcloud.cos.model.COSObject;
+import com.qcloud.cos.region.Region;
 import com.lifetool.media.dto.AssetResponse;
 import com.lifetool.media.dto.CreateAssetRequest;
 import com.lifetool.media.dto.UploadTokenRequest;
 import com.lifetool.media.dto.UploadTokenResponse;
 import org.springframework.stereotype.Service;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.net.URI;
 import java.time.Instant;
 import java.util.Map;
 import java.util.UUID;
@@ -73,6 +82,14 @@ public class MediaService {
             throw new MediaException("VALIDATION_ERROR", "Media asset purpose does not match expected purpose");
         }
         return buildReadUrl(asset);
+    }
+
+    public byte[] readAssetBytes(String userId, String assetId, String expectedPurpose) {
+        MediaAsset asset = findOwnedAsset(userId, assetId);
+        if (expectedPurpose != null && !expectedPurpose.equals(asset.getPurpose())) {
+            throw new MediaException("VALIDATION_ERROR", "Media asset purpose does not match expected purpose");
+        }
+        return loadBytes(asset);
     }
 
     public void deleteAsset(String userId, String assetId) {
@@ -148,5 +165,31 @@ public class MediaService {
         return uploadUrlSigner.generateGetUrl(
                 asset.getObjectKey(),
                 expiresAt);
+    }
+
+    private byte[] loadBytes(MediaAsset asset) {
+        if (config.isCosSigningEnabled()) {
+            COSCredentials credentials = new BasicCOSCredentials(
+                    config.getCosSecretId(),
+                    config.getCosSecretKey());
+            ClientConfig clientConfig = new ClientConfig(new Region(config.getCosRegion()));
+            COSClient cosClient = new COSClient(credentials, clientConfig);
+            try {
+                COSObject object = cosClient.getObject(config.getCosBucket(), asset.getObjectKey());
+                try (InputStream inputStream = object.getObjectContent()) {
+                    return inputStream.readAllBytes();
+                }
+            } catch (IOException ex) {
+                throw new MediaException("MEDIA_READ_FAILED", "Failed to read media object bytes");
+            } finally {
+                cosClient.shutdown();
+            }
+        }
+
+        try (InputStream inputStream = URI.create(buildReadUrl(asset)).toURL().openStream()) {
+            return inputStream.readAllBytes();
+        } catch (IOException ex) {
+            throw new MediaException("MEDIA_READ_FAILED", "Failed to read media object bytes");
+        }
     }
 }

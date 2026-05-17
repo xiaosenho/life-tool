@@ -21,6 +21,7 @@
 
 - Expo 通用图标：`frontend/assets/app-icon.png`
 - Android adaptive icon 前景图：`frontend/assets/adaptive-icon-foreground.png`
+- 当前资源已调整为“方角视觉”，不要在源图里再画大圆角主卡片，否则部分 Android Launcher 会出现二次裁切、看起来像异常圆角
 - `frontend/app.json` 已接入上述资源并随 `1.0.0` 版本生效
 
 ## 2. 依赖版本基线
@@ -243,27 +244,58 @@ npm install --legacy-peer-deps --save expo-linking@~55.0.15
 
 2. 源图标要求：1024×1024 PNG，RGBA。
 
-3. 用 `sips`（macOS 内置）从源图标生成各密度传统图标并替换：
+3. 如果要做“方角视觉”，请同时保证：
+
+- `assets/app-icon.png` 的主图形本身就是方角，不要画大圆角矩形
+- `assets/adaptive-icon-foreground.png` 的主体也保持方角
+- adaptive icon 仍会被系统 mask 成不同外轮廓，但图形内部不会出现额外的圆角
+
+4. 用 `qlmanage` 先把矢量源图导出为 PNG，再替换 `assets/`。下面给一份可复用模板：
+
+```bash
+cat > /tmp/lifetool-app-icon.svg <<'SVG'
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <rect width="1024" height="1024" fill="#0F172A"/>
+  <rect x="200" y="205" width="620" height="620" fill="#36C8BE"/>
+  <circle cx="352" cy="350" r="28" fill="#F8FAFC"/>
+  <circle cx="428" cy="350" r="28" fill="#F8FAFC"/>
+  <circle cx="504" cy="350" r="28" fill="#FBBF24"/>
+  <path d="M385 561 L492 668 L657 462" fill="none" stroke="#F8FAFC" stroke-width="58" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
+SVG
+
+qlmanage -t -s 1024 -o /tmp /tmp/lifetool-app-icon.svg >/dev/null 2>&1
+cp /private/tmp/lifetool-app-icon.svg.png frontend/assets/app-icon.png
+```
+
+5. 用 `sips`（macOS 内置）从源图标生成各密度传统图标并替换：
 
 ```bash
 cd frontend
 
-# 替换 ic_launcher.webp（传统图标）
-sips -z 48 48   assets/app-icon.png --out android/app/src/main/res/mipmap-mdpi/ic_launcher.webp
-sips -z 72 72   assets/app-icon.png --out android/app/src/main/res/mipmap-hdpi/ic_launcher.webp
-sips -z 96 96   assets/app-icon.png --out android/app/src/main/res/mipmap-xhdpi/ic_launcher.webp
-sips -z 144 144 assets/app-icon.png --out android/app/src/main/res/mipmap-xxhdpi/ic_launcher.webp
-sips -z 192 192 assets/app-icon.png --out android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.webp
+while read -r density icon_size foreground_size; do
+  sips -z "$icon_size" "$icon_size" assets/app-icon.png --out "/tmp/${density}_ic_launcher.png" >/dev/null
+  cp "/tmp/${density}_ic_launcher.png" "android/app/src/main/res/mipmap-${density}/ic_launcher.webp"
+  cp "/tmp/${density}_ic_launcher.png" "android/app/src/main/res/mipmap-${density}/ic_launcher_round.webp"
 
-# ic_launcher_round.webp 同传统图标
-for d in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
-  cp android/app/src/main/res/mipmap-${d}/ic_launcher.webp android/app/src/main/res/mipmap-${d}/ic_launcher_round.webp
+  sips -z "$foreground_size" "$foreground_size" assets/adaptive-icon-foreground.png --out "/tmp/${density}_ic_launcher_foreground.png" >/dev/null
+  cp "/tmp/${density}_ic_launcher_foreground.png" "android/app/src/main/res/mipmap-${density}/ic_launcher_foreground.webp"
+done <<'EOF'
+mdpi 48 108
+hdpi 72 162
+xhdpi 96 216
+xxhdpi 144 324
+xxxhdpi 192 432
+EOF
+
+for f in android/app/src/main/res/mipmap-*/*launcher*; do
+  file "$f"
 done
 ```
 
-> 说明：macOS 的 `sips` 输出 webp 后缀实际为 PNG 格式，Android 构建工具（AAPT2）可正常处理。如需严格 webp 格式，可用 `cwebp` 转换。
+> 说明：macOS 的 `sips` 对 `.webp` 后缀并不会真正写出 WebP，实际内容通常仍是 PNG，但 Android 构建工具（AAPT2）可正常处理。这里直接沿用当前工程的文件名即可。
 
-4. 重新构建 APK：
+6. 重新构建 APK：
 
 ```bash
 cd frontend/android

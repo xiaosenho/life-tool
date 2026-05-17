@@ -16,9 +16,13 @@ public interface AiAssistantClient {
 
     record ToolResult(String toolName, Map<String, Object> data) {}
 
-    record MediaInput(String kind, String url, String contentType, String assetId) {
+    record MediaInput(String kind, String url, String contentType, String assetId, String ownerUserId) {
         public MediaInput(String kind, String url, String contentType) {
-            this(kind, url, contentType, null);
+            this(kind, url, contentType, null, null);
+        }
+
+        public MediaInput(String kind, String url, String contentType, String assetId) {
+            this(kind, url, contentType, assetId, null);
         }
     }
 }

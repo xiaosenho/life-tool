@@ -4,6 +4,7 @@ import {
   PanResponder,
   ActivityIndicator,
   Alert,
+  AppState,
   Image,
   Keyboard,
   Modal,
@@ -161,11 +162,16 @@ function getDisplayInitial(value: string | null | undefined) {
 
 export default function FriendChatScreen() {
   const router = useRouter();
-  const { friendUserId, friendName } = useLocalSearchParams<{ friendUserId: string; friendName?: string }>();
+  const { friendUserId, friendName, friendAvatarUrl: routeFriendAvatarUrl } = useLocalSearchParams<{
+    friendUserId: string;
+    friendName?: string;
+    friendAvatarUrl?: string;
+  }>();
   const user = useAuthStore((state) => state.user);
   const userId = useAuthStore((state) => state.user?.id ?? "");
   const clearConversationUnread = useFriendBadgeStore((state) => state.clearConversationUnread);
   const sharedConversations = useFriendBadgeStore((state) => state.conversations);
+  const syncFriendBadge = useFriendBadgeStore((state) => state.syncFromConversations);
   const upsertConversation = useFriendBadgeStore((state) => state.upsertConversation);
   const [messages, setMessages] = useState<FriendMessage[]>([]);
   const [draft, setDraft] = useState("");
@@ -199,6 +205,7 @@ export default function FriendChatScreen() {
   const hasInitialScrolledRef = useRef(false);
   const messagesRef = useRef<FriendMessage[]>([]);
   const loadingOlderRef = useRef(false);
+  const avatarRefreshInFlightRef = useRef(false);
   const insets = useSafeAreaInsets();
 
   const title = useMemo(() => friendName || "聊天", [friendName]);
@@ -211,7 +218,10 @@ export default function FriendChatScreen() {
     () => sharedConversations.find((item) => item.friendUserId === friendUserId),
     [friendUserId, sharedConversations]
   );
-  const friendAvatarUrl = useMemo(() => friendConversation?.friendAvatarUrl ?? null, [friendConversation?.friendAvatarUrl]);
+  const friendAvatarUrl = useMemo(
+    () => routeFriendAvatarUrl ?? friendConversation?.friendAvatarUrl ?? null,
+    [friendConversation?.friendAvatarUrl, routeFriendAvatarUrl]
+  );
 
   useEffect(() => {
     messagesRef.current = messages;
@@ -233,14 +243,38 @@ export default function FriendChatScreen() {
         friendUserId,
         friendDisplayName: friendConversation?.friendDisplayName ?? title,
         friendEmail: friendConversation?.friendEmail ?? "",
+        friendAvatarUrl: routeFriendAvatarUrl ?? friendConversation?.friendAvatarUrl ?? null,
         lastMessage,
         lastMessageType,
         lastMessageAt,
         unreadCount: 0
       });
     },
-    [friendConversation?.friendDisplayName, friendConversation?.friendEmail, friendUserId, title, upsertConversation]
+    [
+      friendConversation?.friendAvatarUrl,
+      friendConversation?.friendDisplayName,
+      friendConversation?.friendEmail,
+      friendUserId,
+      routeFriendAvatarUrl,
+      title,
+      upsertConversation
+    ]
   );
+
+  const refreshConversationContext = useCallback(async () => {
+    if (avatarRefreshInFlightRef.current) {
+      return;
+    }
+    avatarRefreshInFlightRef.current = true;
+    try {
+      const response = await friendService.listConversations();
+      if (response.success && response.data) {
+        syncFriendBadge(response.data);
+      }
+    } finally {
+      avatarRefreshInFlightRef.current = false;
+    }
+  }, [syncFriendBadge]);
 
   const loadLatestMessages = useCallback(async ({ silent = false, mergeIntoCurrent = false }: { silent?: boolean; mergeIntoCurrent?: boolean } = {}) => {
     if (!friendUserId) {
@@ -317,6 +351,17 @@ export default function FriendChatScreen() {
     setMessages([]);
     void loadLatestMessages();
   }, [loadLatestMessages]);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener("change", (nextState) => {
+      if (nextState === "active") {
+        void refreshConversationContext();
+      }
+    });
+    return () => {
+      subscription.remove();
+    };
+  }, [refreshConversationContext]);
 
   useEffect(() => {
     const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
@@ -723,7 +768,13 @@ export default function FriendChatScreen() {
                       <View style={[styles.messageRow, mine ? styles.messageRowMine : styles.messageRowOther]}>
                         {!mine ? (
                           friendAvatarUrl ? (
-                            <Image source={{ uri: friendAvatarUrl }} style={styles.avatarImage} />
+                            <Image
+                              source={{ uri: friendAvatarUrl }}
+                              style={styles.avatarImage}
+                              onError={() => {
+                                void refreshConversationContext();
+                              }}
+                            />
                           ) : (
                             <View style={[styles.avatar, styles.avatarFriend]}>
                               <Text style={[styles.avatarText, styles.avatarTextDark]}>{friendAvatarLabel}</Text>

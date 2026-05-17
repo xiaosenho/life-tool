@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  AppState,
   Image,
   LayoutAnimation,
   Pressable,
@@ -55,6 +56,17 @@ const boardDescriptions: Record<BoardKey, string> = {
   streaks: "连续打卡表示连续多少天完成过至少 1 个习惯打卡，中断 1 天会重新开始计算。"
 };
 
+function mergeFriendAvatarsIntoConversations(
+  conversations: FriendConversationSummary[],
+  friends: FriendInfo[]
+) {
+  const friendAvatarMap = new Map(friends.map((friend) => [friend.userId, friend.avatarUrl ?? null]));
+  return conversations.map((conversation) => ({
+    ...conversation,
+    friendAvatarUrl: friendAvatarMap.get(conversation.friendUserId) ?? conversation.friendAvatarUrl ?? null
+  }));
+}
+
 if (UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
@@ -81,6 +93,8 @@ export default function FriendsScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [requestPulseIds, setRequestPulseIds] = useState<string[]>([]);
   const hasMountedRef = useRef(false);
+  const avatarRefreshInFlightRef = useRef(false);
+  const friendsRef = useRef<FriendInfo[]>([]);
 
   const incomingRequests = useMemo(
     () => requests.filter((item) => item.status === "PENDING" && item.toUserId === userId),
@@ -93,6 +107,32 @@ export default function FriendsScreen() {
 
   const activeBoardData = leaderboards[activeBoard];
 
+  useEffect(() => {
+    friendsRef.current = friends;
+  }, [friends]);
+
+  const refreshFriendVisualsSilently = useCallback(async () => {
+    if (avatarRefreshInFlightRef.current) {
+      return;
+    }
+    avatarRefreshInFlightRef.current = true;
+    try {
+      const [friendRes, conversationRes] = await Promise.all([
+        friendService.listFriends(),
+        friendService.listConversations()
+      ]);
+      const nextFriends = friendRes.success && friendRes.data ? friendRes.data : null;
+      if (nextFriends) {
+        setFriends(nextFriends);
+      }
+      if (conversationRes.success && conversationRes.data) {
+        syncFriendBadge(mergeFriendAvatarsIntoConversations(conversationRes.data, nextFriends ?? friendsRef.current));
+      }
+    } finally {
+      avatarRefreshInFlightRef.current = false;
+    }
+  }, [syncFriendBadge]);
+
   const loadFriendData = useCallback(async (silent = false) => {
     if (!silent) {
       setLoading(true);
@@ -104,9 +144,12 @@ export default function FriendsScreen() {
         friendService.listConversations()
       ]);
 
-      if (friendRes.success && friendRes.data) setFriends(friendRes.data);
+      const nextFriends = friendRes.success && friendRes.data ? friendRes.data : null;
+      if (nextFriends) setFriends(nextFriends);
       if (requestRes.success && requestRes.data) setRequests(requestRes.data);
-      if (conversationRes.success && conversationRes.data) syncFriendBadge(conversationRes.data);
+      if (conversationRes.success && conversationRes.data) {
+        syncFriendBadge(mergeFriendAvatarsIntoConversations(conversationRes.data, nextFriends ?? friendsRef.current));
+      }
     } catch (error) {
       Alert.alert("加载失败", error instanceof Error ? error.message : "请稍后重试");
     } finally {
@@ -123,8 +166,11 @@ export default function FriendsScreen() {
         friendService.listFriends(),
         friendService.listConversations()
       ]);
-      if (friendRes.success && friendRes.data) setFriends(friendRes.data);
-      if (conversationRes.success && conversationRes.data) syncFriendBadge(conversationRes.data);
+      const nextFriends = friendRes.success && friendRes.data ? friendRes.data : null;
+      if (nextFriends) setFriends(nextFriends);
+      if (conversationRes.success && conversationRes.data) {
+        syncFriendBadge(mergeFriendAvatarsIntoConversations(conversationRes.data, nextFriends ?? friendsRef.current));
+      }
     } catch (error) {
       Alert.alert("加载失败", error instanceof Error ? error.message : "请稍后重试");
     } finally {
@@ -211,6 +257,17 @@ export default function FriendsScreen() {
     });
     return unsubscribe;
   }, [loadFriendData]);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener("change", (nextState) => {
+      if (nextState === "active") {
+        void refreshFriendVisualsSilently();
+      }
+    });
+    return () => {
+      subscription.remove();
+    };
+  }, [refreshFriendVisualsSilently]);
 
   async function handleRefresh() {
     setRefreshing(true);
@@ -314,7 +371,13 @@ export default function FriendsScreen() {
                 return (
                   <View key={friend.userId} style={styles.friendCard}>
                     {friend.avatarUrl ? (
-                      <Image source={{ uri: friend.avatarUrl }} style={styles.avatarImage} />
+                      <Image
+                        source={{ uri: friend.avatarUrl }}
+                        style={styles.avatarImage}
+                        onError={() => {
+                          void refreshFriendVisualsSilently();
+                        }}
+                      />
                     ) : (
                       <View style={styles.avatar}>
                         <Text style={styles.avatarText}>{friend.displayName.slice(0, 1)}</Text>
@@ -326,7 +389,16 @@ export default function FriendsScreen() {
                     </View>
                     <TouchableOpacity
                       style={styles.secondaryButton}
-                      onPress={() => router.push({ pathname: "/friend-chat", params: { friendUserId: friend.userId, friendName: friend.displayName } })}
+                      onPress={() =>
+                        router.push({
+                          pathname: "/friend-chat",
+                          params: {
+                            friendUserId: friend.userId,
+                            friendName: friend.displayName,
+                            friendAvatarUrl: friend.avatarUrl ?? conversation?.friendAvatarUrl ?? ""
+                          }
+                        })
+                      }
                     >
                       <Text style={styles.secondaryButtonText}>
                         {unreadCount ? `互动(${unreadCount})` : "互动"}
@@ -450,7 +522,16 @@ export default function FriendsScreen() {
                     <Pressable
                       key={friend.userId}
                       style={styles.conversationChip}
-                      onPress={() => router.push({ pathname: "/friend-chat", params: { friendUserId: friend.userId, friendName: friend.displayName } })}
+                      onPress={() =>
+                        router.push({
+                          pathname: "/friend-chat",
+                          params: {
+                            friendUserId: friend.userId,
+                            friendName: friend.displayName,
+                            friendAvatarUrl: friend.avatarUrl ?? conversation?.friendAvatarUrl ?? ""
+                          }
+                        })
+                      }
                     >
                       <Text style={styles.conversationChipText}>{friend.displayName}</Text>
                       {!!unreadCount && (
@@ -476,7 +557,16 @@ export default function FriendsScreen() {
                   <Pressable
                     key={item.friendUserId}
                     style={styles.conversationListItem}
-                    onPress={() => router.push({ pathname: "/friend-chat", params: { friendUserId: item.friendUserId, friendName: item.friendDisplayName } })}
+                    onPress={() =>
+                      router.push({
+                        pathname: "/friend-chat",
+                        params: {
+                          friendUserId: item.friendUserId,
+                          friendName: item.friendDisplayName,
+                          friendAvatarUrl: item.friendAvatarUrl ?? ""
+                        }
+                      })
+                    }
                   >
                     <View style={styles.flexBlock}>
                       <Text style={styles.friendName}>{item.friendDisplayName}</Text>

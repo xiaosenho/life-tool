@@ -232,6 +232,16 @@ public class SpringAiAssistantClient implements AiAssistantClient {
     }
 
     private String fetchAudioAsBase64WithRetry(MediaInput mediaInput) {
+        if (canReadOwnedAudioAsset(mediaInput)) {
+            byte[] bytes = mediaService.readAssetBytes(
+                    mediaInput.ownerUserId(),
+                    mediaInput.assetId(),
+                    "chat_audio");
+            if (bytes.length == 0) {
+                throw new IllegalStateException("Failed to load audio bytes");
+            }
+            return Base64.getEncoder().encodeToString(bytes);
+        }
         String currentUrl = mediaInput.url();
         RuntimeException lastException = null;
         for (int attempt = 1; attempt <= AUDIO_FETCH_RETRY_TIMES; attempt++) {
@@ -261,6 +271,15 @@ public class SpringAiAssistantClient implements AiAssistantClient {
             }
         }
         throw lastException == null ? new IllegalStateException("Failed to load audio bytes") : lastException;
+    }
+
+    private boolean canReadOwnedAudioAsset(MediaInput mediaInput) {
+        return mediaInput != null
+                && "audio".equals(mediaInput.kind())
+                && mediaInput.assetId() != null
+                && !mediaInput.assetId().isBlank()
+                && mediaInput.ownerUserId() != null
+                && !mediaInput.ownerUserId().isBlank();
     }
 
     private String fetchAudioAsBase64(String url) {

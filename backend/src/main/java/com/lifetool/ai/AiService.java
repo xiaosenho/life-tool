@@ -117,7 +117,8 @@ public class AiService {
                                 requestAttachment.kind(),
                                 requestAttachment.url(),
                                 requestAttachment.contentType(),
-                                requestAttachment.assetId()));
+                                requestAttachment.assetId(),
+                                userId));
             } else {
                 assistantContent = assistantClient.chat(sessionId, systemPrompt, history, toolResults);
             }

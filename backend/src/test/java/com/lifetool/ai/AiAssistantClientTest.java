@@ -3,11 +3,21 @@ package com.lifetool.ai;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
+import java.lang.reflect.Method;
+import java.nio.charset.StandardCharsets;
+import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 
 import org.junit.jupiter.api.Test;
+import org.mockito.Answers;
+import org.springframework.ai.chat.client.ChatClient;
+
+import com.lifetool.media.MediaService;
 
 class AiAssistantClientTest {
 
@@ -55,6 +65,41 @@ class AiAssistantClientTest {
     void springAiClientCanBeInstantiated() {
         // Verify SpringAiAssistantClient implements the interface
         assertTrue(AiAssistantClient.class.isAssignableFrom(SpringAiAssistantClient.class));
+    }
+
+    @Test
+    void springAiClientReadsOwnedAudioBytesDirectly() throws Exception {
+        ChatClient.Builder builder = mock(ChatClient.Builder.class, Answers.RETURNS_SELF);
+        when(builder.build()).thenReturn(mock(ChatClient.class));
+        MediaService mediaService = mock(MediaService.class);
+        when(mediaService.readAssetBytes("u1", "asset-audio", "chat_audio"))
+                .thenReturn("hello-audio".getBytes(StandardCharsets.UTF_8));
+
+        SpringAiAssistantClient client = new SpringAiAssistantClient(
+                builder,
+                mock(UserDataTools.class),
+                mediaService,
+                "test-api-key",
+                "https://example.com",
+                "test-model",
+                "/v1/chat/completions");
+
+        Method method = SpringAiAssistantClient.class.getDeclaredMethod(
+                "fetchAudioAsBase64WithRetry",
+                AiAssistantClient.MediaInput.class);
+        method.setAccessible(true);
+
+        String base64 = (String) method.invoke(
+                client,
+                new AiAssistantClient.MediaInput(
+                        "audio",
+                        "https://cos.example.com/expired.mp3",
+                        "audio/mp3",
+                        "asset-audio",
+                        "u1"));
+
+        assertEquals(Base64.getEncoder().encodeToString("hello-audio".getBytes(StandardCharsets.UTF_8)), base64);
+        verify(mediaService).readAssetBytes("u1", "asset-audio", "chat_audio");
     }
 
     @Test
