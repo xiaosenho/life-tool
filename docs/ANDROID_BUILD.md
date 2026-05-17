@@ -6,7 +6,7 @@
 
 - 构建类型：Android release APK
 - 应用包名：`com.anonymous.lifetool`
-- 版本号：`0.1.0`
+- 版本号：`1.0.0`
 - 成功产物：`frontend/android/app/build/outputs/apk/release/app-release.apk`
 - 当前构建环境：
   - macOS 本地
@@ -16,6 +16,12 @@
   - Android SDK：`~/android-sdk`
 
 > 当前 release APK 仍使用本地默认签名流程，后续正式发布应用商店前需要补充生产 keystore、版本号策略和签名密钥保管方案。
+
+## 1.1 当前图标资源
+
+- Expo 通用图标：`frontend/assets/app-icon.png`
+- Android adaptive icon 前景图：`frontend/assets/adaptive-icon-foreground.png`
+- `frontend/app.json` 已接入上述资源并随 `1.0.0` 版本生效
 
 ## 2. 依赖版本基线
 
@@ -208,4 +214,3 @@ npm install --legacy-peer-deps --save expo-linking@~55.0.15
 6. 确认 `frontend/android/local.properties` 指向本机 `ANDROID_HOME`。
 7. 执行 `cd frontend/android && NODE_ENV=production ./gradlew assembleRelease`。
 8. 验证 `app-release.apk` 存在，并记录版本号和构建时间。
-

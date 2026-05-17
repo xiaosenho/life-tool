@@ -13,6 +13,7 @@ Spring Boot Backend
   +-- Redis 7.4
   +-- Tencent Cloud COS
   +-- Spring AI / OpenAI-compatible Provider
+  +-- RSS News Feed Aggregation
 ```
 
 LifeTool 以手机端为主，后端保存权威数据，前端保留 SQLite 本地兜底能力。正常联网时优先调用后端接口；网络失败时写入本地，并向用户提示当前为离线兜底状态，后续需要手动或自动同步。
@@ -26,6 +27,7 @@ LifeTool 以手机端为主，后端保存权威数据，前端保留 SQLite 本
 - expo-router
 - expo-sqlite
 - React Native Web 预览
+- Zustand 共享状态管理（认证、好友未读 / 会话摘要等）
 - 本地 service 层统一访问 API，失败时走 SQLite 兜底
 
 ### Backend
@@ -37,6 +39,7 @@ LifeTool 以手机端为主，后端保存权威数据，前端保留 SQLite 本
 - Maven
 - PostgreSQL 16 / pgvector16
 - Redis 7.4
+- HikariCP 数据库连接池
 - Flyway 迁移文件 + 可开关迁移 runner
 - JDBC/Store 分层；本地和测试可使用内存 Store，`postgres` profile 使用数据库实现
 
@@ -65,9 +68,10 @@ scripts/       本地开发、检查、辅助脚本和可选本地资源
 - 默认优先调用服务端 API。
 - 网络失败时写入本地 SQLite，并提示用户当前数据尚未同步。
 - 管理专注计时、习惯打卡、饮食/记账/纪念日记录入口。
+- 管理新闻轮播、背单词学习与学习进度。
 - 通过后端签发的预签名 URL 上传图片到 COS。
 - 展示 AI 饮食识别结果和后端生成的饮食记录。
-- 展示好友、好友申请、排行榜和轻量对比。
+- 展示好友、好友申请、排行榜、未读状态和轻量对比。
 - 在“我的”页提供 AI 辅助入口、同步状态、账号与隐私相关入口。
 
 客户端不负责：
@@ -119,6 +123,8 @@ Config      安全、AI、COS、迁移和环境配置
 - `meals`：饮食记录和今日/区间汇总。
 - `ledger`：记账流水、预算和月度汇总。
 - `events`：纪念日和重要事件。
+- `news`：国内新闻抓取、RSS 解析、Redis 缓存和预热。
+- `vocab`：词书、单词条目和用户学习进度。
 - `sync`：客户端变更 push/pull。
 - `infra` / `health`：运行状态和基础设施检查。
 
@@ -156,6 +162,13 @@ Config      安全、AI、COS、迁移和环境配置
 8. 后端将识别结果写入当前用户饮食记录，并返回 `mealLogId` 与 `totalCalories`。
 9. 客户端刷新今日饮食统计。
 
+聊天媒体也复用相同的媒体资产链路：
+
+1. 客户端申请上传 token。
+2. 图片或语音直传 COS。
+3. 客户端保存媒体资产记录。
+4. 好友聊天或 AI 对话仅提交 `assetId` 和必要尺寸 / 时长元数据。
+
 原则：
 
 - COS bucket 默认私有读写。
@@ -176,6 +189,11 @@ AI 能力基于 Spring AI 和 LifeTool 业务服务实现，详细设计见 `doc
 - `MockAiAssistantClient`：本地和测试降级。
 - `UserDataTools`：Spring AI `@Tool` 工具集合。
 - `AiChatStore` / `AiMemoryStore`：AI 会话、消息、工具调用、长期记忆存储抽象。
+
+前端当前采用“AI 首页 + 独立 AI 对话页”的结构：
+
+- AI 首页负责近期建议、长期记忆和会话入口。
+- 独立 AI 对话页负责多轮对话、附件发送、输入法与滚动交互。
 
 已开放只读工具：
 
@@ -217,6 +235,7 @@ Records 页承载饮食、记账、纪念日/重要事件三类个人记录。�
 - 事件包含标题、日期、重复规则、提前提醒天数、备注、图片。
 - 本地提醒由客户端调度；服务端保存规则，用于多设备恢复。
 - 周年和倒数天数由客户端展示，服务端提供即将到来的事件列表。
+- 服务端同时返回 `displayDate` 和 `reminderOffsetDays`，支持“提前 N 天提醒实例”在日历中直接落位。
 
 ### 10.3 记账
 
@@ -250,6 +269,9 @@ Records 页承载饮食、记账、纪念日/重要事件三类个人记录。�
 - LedgerTransaction
 - LedgerBudget
 - DailyStats
+- VocabBook
+- VocabEntry
+- UserVocabProgress
 
 ## 12. 安全原则
 
@@ -263,3 +285,10 @@ Records 页承载饮食、记账、纪念日/重要事件三类个人记录。�
 - 云存储密钥不得下发到客户端。
 - AI 请求中不得包含无关个人敏感信息。
 - 生产环境必须通过 `.env` 或云端密钥系统注入数据库、Redis、COS 和 AI Key。
+
+## 13. 最近架构更新
+
+- 好友未读 badge 与“最近互动”会话摘要已提升为前端共享状态，避免底栏、好友列表和聊天页各自维护一份未读数据。
+- `/friends/messages` 已从“全量消息扫描汇总”优化为数据库直接聚合查询，并补充相关索引。
+- 新闻接口增加 Redis 缓存与启动预热，降低今日页首屏等待。
+- 后端 `postgres` profile 已统一采用 HikariCP 连接池配置。

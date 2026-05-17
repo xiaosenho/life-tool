@@ -2,7 +2,8 @@
   "expo": {
     "name": "LifeTool",
     "slug": "life-tool",
-    "version": "0.1.0",
+    "version": "1.0.0",
+    "icon": "./assets/app-icon.png",
     "orientation": "portrait",
     "scheme": "lifetool",
     "userInterfaceStyle": "light",
@@ -26,6 +27,7 @@
     },
     "android": {
       "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon-foreground.png",
         "backgroundColor": "#0F172A"
       },
       "edgeToEdgeEnabled": true,

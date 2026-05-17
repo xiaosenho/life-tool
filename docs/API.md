@@ -239,13 +239,21 @@ deleted
 ```json
 {
   "content": "今天继续加油！",
-  "type": "cheer"
+  "type": "cheer",
+  "attachment": {
+    "assetId": "uuid",
+    "width": 1080,
+    "height": 1440,
+    "durationSeconds": 6
+  }
 }
 ```
 
 说明：
 
-- `type` 当前支持 `text` 和 `cheer`，缺省时按 `text` 处理。
+- `type` 当前支持 `text`、`cheer`、`celebrate`、`hug`、`coffee`、`poke`、`image`、`audio`。
+- `image` / `audio` 类型需配合 `attachment` 传递已上传媒体资产信息。
+- 服务端响应会返回 `attachment.url` 等可直接展示的附件信息。
 - 只有已建立好友关系的双方才允许互发消息。
 
 ### POST /api/friends/messages/{friendUserId}/read
@@ -339,7 +347,37 @@ GET /api/leaderboards/streaks/detail
 - `self` 表示当前用户自己的榜单条目。
 - `gapToPrevious` 表示当前用户与前一名的差距；若当前已是并列第 1，则返回 0。
 
-## 8. Focus Preferences
+## 8. Habits
+
+```text
+POST   /api/habits
+GET    /api/habits
+GET    /api/habits/calendar?from=2026-05-01&to=2026-05-31
+PATCH  /api/habits/{id}
+DELETE /api/habits/{id}
+POST   /api/habits/{id}/checkins
+GET    /api/habits/{id}/checkins
+DELETE /api/habits/{id}/checkins?checkinDate=2026-05-17
+```
+
+### POST /api/habits/{id}/checkins
+
+请求：
+
+```json
+{
+  "count": 1,
+  "note": "今天完成",
+  "checkinDate": "2026-05-17"
+}
+```
+
+说明：
+
+- `checkinDate` 为空时按当前日期处理。
+- 前端可通过 `DELETE /api/habits/{id}/checkins?checkinDate=YYYY-MM-DD` 取消指定日期打卡。
+
+## 9. Focus Preferences
 
 专注偏好用于保存用户默认专注时长。单次专注记录仍通过同步模型中的 `focus_session` 上传。
 
@@ -381,7 +419,7 @@ PATCH /api/focus/preferences
 - `shortBreakMinutes`、`longBreakMinutes` 范围：0 到 60。
 - 客户端可离线保存偏好，联网后通过同步队列或该接口上传。
 
-## 9. Ledger
+## 10. Ledger
 
 ```text
 GET    /api/ledger/transactions?month=2026-05
@@ -473,7 +511,7 @@ transfer
 - 指定 `category` 表示分类预算。
 - 记账数据默认私密，不进入好友汇总。
 
-## 10. Anniversaries And Events
+## 11. Anniversaries And Events
 
 ```text
 GET    /api/events?from=2026-05-01&to=2026-06-30
@@ -511,6 +549,8 @@ GET    /api/events/upcoming?days=30
   "remindDaysBefore": [30, 7, 1],
   "daysUntil": 141,
   "nextOccurrenceDate": "2026-10-01",
+  "displayDate": "2026-09-30",
+  "reminderOffsetDays": 1,
   "note": "提前准备礼物",
   "mediaAssetId": "uuid"
 }
@@ -538,8 +578,11 @@ weekly
 
 - 纪念日和重要事件默认私密。
 - 客户端负责本地通知调度，服务端保存提醒规则用于多设备恢复。
+- `displayDate` 表示当前这条提醒实例实际展示的日期。
+- `reminderOffsetDays` 表示该实例相对事件日期提前了多少天，用于“提前 1 天 / 7 天提醒”等日历视图。
+- `GET /api/events` 除了返回即将到来的事件，也会返回过去的重要非重复事件，便于记录页完整查看。
 
-## 11. Media
+## 12. Media
 
 ```text
 POST /api/media/upload-token
@@ -651,7 +694,7 @@ DELETE /api/media/assets/{id}
 ### 校验规则
 
 - contentType 仅允许 `image/jpeg`、`image/png`、`image/webp`。
-- purpose 仅允许 `meal_photo`、`event_photo`、`avatar`。
+- purpose 仅允许 `meal_photo`、`event_photo`、`avatar`、`friend_chat_image`、`friend_chat_audio`、`ai_chat_image`、`ai_chat_audio`。
 - fileSize 默认最大 10MB（通过 `MEDIA_MAX_IMAGE_BYTES` 配置）。
 
 ### 环境变量
@@ -666,7 +709,7 @@ DELETE /api/media/assets/{id}
 | COS_UPLOAD_TOKEN_TTL_SECONDS | 上传授权有效期（秒） | 300 |
 | MEDIA_MAX_IMAGE_BYTES | 最大图片大小（字节） | 10485760 |
 
-## 12. AI
+## 13. AI
 
 ```text
 POST /api/ai/food-recognition
@@ -767,7 +810,13 @@ DELETE /api/ai/memories/{id}
     "get_focus_summary",
     "get_diet_summary",
     "get_habit_summary"
-  ]
+  ],
+  "attachment": {
+    "assetId": "uuid",
+    "width": 1080,
+    "height": 1440,
+    "durationSeconds": 8
+  }
 }
 ```
 
@@ -798,6 +847,8 @@ DELETE /api/ai/memories/{id}
 - 客户端不能直接调用工具，`enabledTools` 只是本次对话允许使用的工具范围。
 - 工具实际执行由后端 `AiService` 和 `UserDataTools` 完成。
 - 后端必须按当前登录用户注入 `userId`。
+- `attachment` 当前支持图片和语音媒体，统一通过 `mediaAssetId` 关联到 COS 私有资源。
+- AI 会话在语音 / 图片场景下仍复用同一多轮会话接口，不额外拆分独立上传协议。
 
 ### GET /api/ai/chat/sessions/{id}/messages
 
@@ -840,6 +891,11 @@ DELETE /api/ai/memories/{id}
 }
 ```
 
+说明：
+
+- 当前长期记忆采用保守写入策略：仅当用户明确表达稳定偏好时才入库。
+- 助手回复中会附带 `longTermMemorySaved` 字段，表示本轮是否新写入了一条长期记忆。
+
 ### Function Calling 工具
 
 工具由服务端内部注册，不作为公开 API 暴露。MVP 工具：
@@ -853,7 +909,108 @@ DELETE /api/ai/memories/{id}
 | `get_upcoming_events` | 查询当前用户未来纪念日和提醒 |
 | `get_user_profile_context` | 查询当前用户基础偏好和隐私配置 |
 
-## 13. 错误码
+## 14. News
+
+```text
+GET /api/news/top
+```
+
+响应：
+
+```json
+[
+  {
+    "title": "国内精选新闻标题",
+    "source": "联合早报",
+    "url": "https://example.com/news/1",
+    "publishedAt": "Sat, 17 May 2026 09:00:00 +0800",
+    "summary": "新闻摘要",
+    "imageUrl": "https://example.com/cover.jpg"
+  }
+]
+```
+
+说明：
+
+- 当前新闻源为国内 RSS 聚合，优先返回标题、摘要和可提取到的封面图。
+- 服务端使用进程内缓存 + Redis 缓存，默认缓存 5 分钟。
+- 应用启动后会异步预热一次新闻缓存，降低今日页首屏等待时间。
+
+## 15. Vocab
+
+```text
+GET /api/vocab/books
+GET /api/vocab/page?bookCode=cet4&variant=ordered&offset=0&limit=30
+GET /api/vocab/progress?bookCode=cet4&variant=ordered
+PUT /api/vocab/progress
+```
+
+### GET /api/vocab/books
+
+响应：
+
+```json
+[
+  {
+    "code": "cet4",
+    "variant": "ordered",
+    "name": "英语四级",
+    "version": "2026.1",
+    "wordCount": 2000
+  },
+  {
+    "code": "cet4",
+    "variant": "shuffled",
+    "name": "英语四级（乱序）",
+    "version": "2026.1",
+    "wordCount": 2000
+  }
+]
+```
+
+### GET /api/vocab/page
+
+响应：
+
+```json
+{
+  "bookCode": "cet4",
+  "variant": "ordered",
+  "bookName": "英语四级",
+  "offset": 0,
+  "limit": 30,
+  "total": 2000,
+  "entries": [
+    {
+      "seqNo": 1,
+      "word": "abandon",
+      "phonetic": "/əˈbændən/",
+      "meaningZh": "放弃"
+    }
+  ]
+}
+```
+
+### PUT /api/vocab/progress
+
+请求：
+
+```json
+{
+  "bookCode": "cet4",
+  "variant": "ordered",
+  "lastSeqNo": 30,
+  "hideMeaning": true
+}
+```
+
+说明：
+
+- 当前内置六本词书：四级 / 六级 / 考研，各自提供正序和乱序版本。
+- `lastSeqNo` 表示用户当前学到的位置，`hideMeaning` 表示当前词书的中文隐藏偏好。
+- 词条音标优先取原始词书字段，缺失时由后端按同书正序版本回退补齐。
+
+## 16. 错误码
 
 | code | 含义 |
 | --- | --- |

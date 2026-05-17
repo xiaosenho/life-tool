@@ -91,6 +91,9 @@ Dockerfile 采用多阶段构建：
 | `SERVER_PORT` | 后端监听端口 | 8080 |
 | `SPRING_DATASOURCE_URL` | 数据库连接地址 | `jdbc:postgresql://postgres:5432/lifetool` |
 | `SPRING_DATA_REDIS_HOST` | Redis 地址 | `redis` |
+| `SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE` | Hikari 最大连接数 | `16` |
+| `SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE` | Hikari 最小空闲连接数 | `4` |
+| `SPRING_DATASOURCE_HIKARI_CONNECTION_TIMEOUT` | Hikari 获取连接超时（毫秒） | `10000` |
 | `JWT_SECRET` | JWT 签名密钥 | （见模板） |
 | `LIFETOOL_AI_MOCK_ENABLED` | 是否使用 AI mock | true |
 | `AI_API_KEY` | AI 模型 API Key | mock-key |
@@ -211,6 +214,11 @@ AI_API_KEY=<真实API Key>
 AI_CHAT_MODEL=doubao-seed-2-0-mini-260428
 ```
 
+补充说明：
+
+- 当前 `postgres` profile 已统一启用 HikariCP。
+- 不要再配置 `spring.datasource.hikari.pool-name` 这类启动后可能触发 sealed 配置报错的属性，除非明确验证过当前版本可安全设置。
+
 ### 启动
 
 ```bash
@@ -262,6 +270,13 @@ server {
     }
 }
 ```
+
+## 5. 新闻缓存说明
+
+- `/api/news/top` 当前使用进程内缓存 + Redis 缓存。
+- 默认缓存 TTL 为 5 分钟。
+- 应用启动后会异步预热新闻缓存一次。
+- 若生产环境不启用 Redis，接口仍可退化使用进程内缓存，但多实例间不会共享新闻缓存。
 
 SSL 证书推荐使用 [acme.sh](https://github.com/acme-sh/acme.sh) 自动申请 Let's Encrypt。
 

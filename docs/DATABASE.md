@@ -25,6 +25,7 @@
 | 饮食 | `meal_logs`, `meal_items` | 饮食记录与食物条目 | Phase 2 |
 | 记账 | `ledger_transactions`, `ledger_budgets` | 收支流水记录 + 月度预算 | Phase 2 + V2 |
 | 重要事件 | `event_logs`, `anniversary_events` | 重要日期事件记录 + 纪念日重复提醒 | Phase 2 + V2 |
+| 词书 | `vocab_books`, `vocab_entries`, `user_vocab_progress` | 公共词书、单词条目、学习进度 | Phase 2 + V8 |
 | AI | `ai_analysis_jobs`, `ai_chat_sessions`, `ai_chat_messages`, `ai_tool_calls`, `ai_memory_items`, `ai_session_summaries`, `ai_agent_runs` | AI 分析任务、对话、工具调用与记忆 | Phase 2 + AI Framework |
 
 ## 3. 关键关系
@@ -52,6 +53,7 @@ users (1) ──< ai_memory_items
 ai_chat_sessions (1) ──< ai_session_summaries
 ai_chat_messages (1) ──< ai_tool_calls
 ai_chat_sessions (1) ──< ai_agent_runs
+users (1) ──< user_vocab_progress >── (1) vocab_books (1) ──< vocab_entries
 
 media_assets 被以下表通过 media_asset_id 引用：
   - users.avatar_asset_id
@@ -60,6 +62,8 @@ media_assets 被以下表通过 media_asset_id 引用：
   - event_logs.media_asset_id
   - anniversary_events.media_asset_id
   - ai_analysis_jobs.media_asset_id
+  - friend_messages.metadata.assetId（JSON 元数据）
+  - ai_chat_messages.attachment.assetId（AI 对话附件元数据）
 ```
 
 ## 4. 同步版本模型
@@ -132,6 +136,8 @@ media_assets 被以下表通过 media_asset_id 引用：
 - 同步通过 `(user_id, server_version)` 复合索引支持游标拉取。
 - 唯一约束使用部分索引（`WHERE deleted_at IS NULL`）避免软删除冲突（`users.email`）。
 - 用户邮箱唯一索引使用 `lower(email)`，避免大小写不同导致重复账号。
+- 好友会话汇总依赖 `friend_messages` 上的会话维度聚合索引，避免前端轮询时全量扫描消息。
+- 纪念日查询与首页/日历习惯查询已逐步改为批量查询，避免逐天逐条循环打数据库。
 
 ## 7. 命名规范
 
@@ -163,7 +169,12 @@ media_assets 被以下表通过 media_asset_id 引用：
 2. **V2**：补充专注偏好、月度预算、纪念日与重复提醒（TASK-DB-002）。
 3. **V3**：补充 AI Framework 持久化表（AI 工具调用审计、长期记忆、会话摘要、Agent 运行审计）。
 4. **V4**：修复运行期约束与部分状态取值，保证当前后端实现可在真实 PostgreSQL 环境落库。
-5. **V5+**：根据实际需求添加字段、索引或调整约束，不在已发布迁移中过度设计。
+5. **V5**：好友消息表。
+6. **V6**：好友聊天 / AI 聊天媒体附件支持。
+7. **V7**：好友消息会话聚合查询优化索引。
+8. **V8**：背单词词书、词条与学习进度表。
+9. **V9**：统一 `anniversary_events.type` 字段并清理旧 `event_type`。
+10. **V10+**：根据实际需求添加字段、索引或调整约束，不在已发布迁移中过度设计。
 
 ### 9.2 常见变更模式
 
