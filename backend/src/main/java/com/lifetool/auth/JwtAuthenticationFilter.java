@@ -32,9 +32,15 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     }
 
     @Override
+    protected boolean shouldNotFilterErrorDispatch() {
+        return true;
+    }
+
+    @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
                                     FilterChain filterChain) throws ServletException, IOException {
-        if (request.getDispatcherType() == DispatcherType.ASYNC) {
+        DispatcherType dispatcherType = request.getDispatcherType();
+        if (dispatcherType == DispatcherType.ASYNC || dispatcherType == DispatcherType.ERROR) {
             filterChain.doFilter(request, response);
             return;
         }
