@@ -217,6 +217,59 @@ cd frontend
 npm install --legacy-peer-deps --save expo-linking@~55.0.15
 ```
 
+### 7.6 APK 图标显示为 Expo 默认占位图
+
+现象：`app.json` 已配置 `icon` 和 `adaptiveIcon.foregroundImage`，`assets/` 下有 1024×1024 的 PNG 源文件，但安装后桌面图标仍显示蓝色 Expo "E" 图标。
+
+原因：`expo prebuild` 生成的自适应图标（`ic_launcher_foreground.webp`）使用了自定义图片，但传统图标（`ic_launcher.webp` / `ic_launcher_round.webp`）仍使用 Expo 默认占位图。部分 Android 启动器（Launcher）和最近任务列表会优先使用传统图标。
+
+处理：
+
+1. 确认图标配置文件 `app.json`：
+
+```json
+{
+  "expo": {
+    "icon": "./assets/app-icon.png",
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon-foreground.png",
+        "backgroundColor": "#0F172A"
+      }
+    }
+  }
+}
+```
+
+2. 源图标要求：1024×1024 PNG，RGBA。
+
+3. 用 `sips`（macOS 内置）从源图标生成各密度传统图标并替换：
+
+```bash
+cd frontend
+
+# 替换 ic_launcher.webp（传统图标）
+sips -z 48 48   assets/app-icon.png --out android/app/src/main/res/mipmap-mdpi/ic_launcher.webp
+sips -z 72 72   assets/app-icon.png --out android/app/src/main/res/mipmap-hdpi/ic_launcher.webp
+sips -z 96 96   assets/app-icon.png --out android/app/src/main/res/mipmap-xhdpi/ic_launcher.webp
+sips -z 144 144 assets/app-icon.png --out android/app/src/main/res/mipmap-xxhdpi/ic_launcher.webp
+sips -z 192 192 assets/app-icon.png --out android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.webp
+
+# ic_launcher_round.webp 同传统图标
+for d in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
+  cp android/app/src/main/res/mipmap-${d}/ic_launcher.webp android/app/src/main/res/mipmap-${d}/ic_launcher_round.webp
+done
+```
+
+> 说明：macOS 的 `sips` 输出 webp 后缀实际为 PNG 格式，Android 构建工具（AAPT2）可正常处理。如需严格 webp 格式，可用 `cwebp` 转换。
+
+4. 重新构建 APK：
+
+```bash
+cd frontend/android
+./gradlew assembleRelease
+```
+
 ## 8. 下次版本构建 Checklist
 
 1. 确认 `git status`，不要把无关临时文件混入发布。
@@ -226,4 +279,5 @@ npm install --legacy-peer-deps --save expo-linking@~55.0.15
 5. 如果 `android/` 不存在，执行 `CI=1 npx expo prebuild --platform android`。
 6. 确认 `frontend/android/local.properties` 指向本机 `ANDROID_HOME`。
 7. 执行 `cd frontend/android && NODE_ENV=production ./gradlew assembleRelease`。
-8. 验证 `app-release.apk` 存在，并记录版本号和构建时间。
+8. 验证 APK 图标非 Expo 默认占位图（见 7.6）。
+9. 记录版本号和构建时间。
