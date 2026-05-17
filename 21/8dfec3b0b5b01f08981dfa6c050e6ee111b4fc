@@ -1,0 +1,39 @@
+frontend/src/services/friendService.ts
+  5e9b1d4ea49c7ab5 9,51
+backend/src/main/java/com/lifetool/ai/SpringAiAssistantClient.java
+  5e9b1d4ea49c7ab5 30,246,255-260,282-290
+backend/src/main/java/com/lifetool/friends/dto/FriendConversationSummaryResponse.java
+  5e9b1d4ea49c7ab5 9
+frontend/app/_layout.tsx
+  5e9b1d4ea49c7ab5 172-185
+frontend/app/friend-chat.tsx
+  5e9b1d4ea49c7ab5 669
+frontend/src/store/friendBadgeStore.ts
+  5e9b1d4ea49c7ab5 95
+frontend/app/(tabs)/friends.tsx
+  5e9b1d4ea49c7ab5 6,316-322,565-569
+backend/src/main/java/com/lifetool/friends/FriendService.java
+  5e9b1d4ea49c7ab5 15,94,107,168,179,205,303-310
+frontend/src/services/friendRealtimeService.ts
+  5e9b1d4ea49c7ab5 37-38,41
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.14",
+  "base_commit_sha": "218dfec3b0b5b01f08981dfa6c050e6ee111b4fc",
+  "prompts": {
+    "5e9b1d4ea49c7ab5": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_1da79bcd9ffeeLkCkz39KfMBE0",
+        "model": "deepseek/deepseek-v4-pro"
+      },
+      "human_author": "zhouxiaojie <i_zhouxiaojie@cvte.com>",
+      "messages": [],
+      "total_additions": 69,
+      "total_deletions": 13,
+      "accepted_lines": 69,
+      "overriden_lines": 0
+    }
+  }
+}
