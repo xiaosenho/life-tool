@@ -1,6 +1,6 @@
 import { create } from "zustand";
 
-import { FriendConversationSummary } from "@/services/friendService";
+import { FriendConversationSummary, FriendMessage } from "@/services/friendService";
 
 type ConversationUnreadMap = Record<string, number>;
 
@@ -11,6 +11,7 @@ interface FriendBadgeState {
   syncFromConversations: (conversations: FriendConversationSummary[]) => void;
   clearConversationUnread: (friendUserId: string) => void;
   upsertConversation: (conversation: FriendConversationSummary) => void;
+  applyIncomingMessage: (message: FriendMessage, conversation: FriendConversationSummary | null) => void;
   reset: () => void;
 }
 
@@ -76,6 +77,35 @@ export const useFriendBadgeStore = create<FriendBadgeState>((set) => ({
         [conversation.friendUserId]: nextUnreadCount
       };
 
+      return {
+        conversations,
+        conversationUnread,
+        totalUnreadCount: computeTotalUnreadCount(conversationUnread)
+      };
+    }),
+  applyIncomingMessage: (message, conversation) =>
+    set((state) => {
+      const friendUserId = message.fromUserId;
+      const existing = state.conversations.find((item) => item.friendUserId === friendUserId);
+      const unreadCount = Math.max(0, (state.conversationUnread[friendUserId] ?? existing?.unreadCount ?? 0) + 1);
+      const nextConversation: FriendConversationSummary = {
+        friendUserId,
+        friendDisplayName: conversation?.friendDisplayName ?? existing?.friendDisplayName ?? "",
+        friendEmail: conversation?.friendEmail ?? existing?.friendEmail ?? "",
+        lastMessage: conversation?.lastMessage ?? message.content,
+        lastMessageType: conversation?.lastMessageType ?? message.type,
+        lastMessageAt: conversation?.lastMessageAt ?? message.createdAt,
+        unreadCount
+      };
+      const conversations = sortConversations(
+        existing
+          ? state.conversations.map((item) => (item.friendUserId === friendUserId ? nextConversation : item))
+          : [nextConversation, ...state.conversations]
+      );
+      const conversationUnread = {
+        ...state.conversationUnread,
+        [friendUserId]: unreadCount
+      };
       return {
         conversations,
         conversationUnread,

@@ -43,6 +43,7 @@ import { useAuthStore } from "@/store/authStore";
 import { useFriendBadgeStore } from "@/store/friendBadgeStore";
 import { colors } from "@/theme/colors";
 import { formatDateTimeCn } from "@/utils/time";
+import { friendRealtimeService } from "@/services/friendRealtimeService";
 
 const QUICK_INTERACTIONS: Array<{
   type: Exclude<FriendMessageType, "text">;
@@ -122,7 +123,6 @@ function shouldRenderMessageText(content: string | null | undefined) {
 }
 
 export default function FriendChatScreen() {
-  const POLL_INTERVAL_MS = 1000;
   const router = useRouter();
   const { friendUserId, friendName } = useLocalSearchParams<{ friendUserId: string; friendName?: string }>();
   const userId = useAuthStore((state) => state.user?.id ?? "");
@@ -144,7 +144,6 @@ export default function FriendChatScreen() {
   const [recordTouchActive, setRecordTouchActive] = useState(false);
   const [recordGestureActive, setRecordGestureActive] = useState(false);
   const [recordWillCancel, setRecordWillCancel] = useState(false);
-  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const recordFinalizingRef = useRef(false);
   const recordStartingRef = useRef(false);
   const recordHoldTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -216,22 +215,6 @@ export default function FriendChatScreen() {
     }
   }, [clearConversationUnread, friendUserId, scrollToBottom]);
 
-  const stopPolling = useCallback(() => {
-    if (pollingRef.current) {
-      clearInterval(pollingRef.current);
-      pollingRef.current = null;
-    }
-  }, []);
-
-  const startPolling = useCallback(() => {
-    if (pollingRef.current || composerFocused || sending) {
-      return;
-    }
-    pollingRef.current = setInterval(() => {
-      void loadMessages(true);
-    }, POLL_INTERVAL_MS);
-  }, [composerFocused, loadMessages, sending]);
-
   useEffect(() => {
     void loadMessages();
   }, [loadMessages]);
@@ -256,24 +239,40 @@ export default function FriendChatScreen() {
   useFocusEffect(
     useCallback(() => {
       void loadMessages(true);
-      startPolling();
+      const unsubscribe = friendRealtimeService.subscribe({
+        onMessage: (message) => {
+          const related =
+            (message.fromUserId === friendUserId && message.toUserId === userId) ||
+            (message.fromUserId === userId && message.toUserId === friendUserId);
+          if (!related) {
+            return;
+          }
+          setMessages((current) => {
+            if (current.some((item) => item.id === message.id)) {
+              return current;
+            }
+            return [...current, message];
+          });
+          if (message.fromUserId === friendUserId && message.toUserId === userId) {
+            void friendService.markConversationRead(friendUserId);
+            clearConversationUnread(friendUserId);
+          }
+        },
+        onConversationRead: (payload) => {
+          if (payload.friendUserId !== friendUserId) {
+            return;
+          }
+          if (payload.conversation) {
+            upsertConversation(payload.conversation);
+          }
+        }
+      });
 
       return () => {
-        stopPolling();
+        unsubscribe();
       };
-    }, [loadMessages, startPolling, stopPolling])
+    }, [friendUserId, loadMessages, upsertConversation, userId])
   );
-
-  useEffect(() => {
-    if (composerFocused || sending) {
-      stopPolling();
-      return;
-    }
-    startPolling();
-    return () => {
-      stopPolling();
-    };
-  }, [composerFocused, sending, startPolling, stopPolling]);
 
   async function onRefresh() {
     setRefreshing(true);
@@ -294,9 +293,10 @@ export default function FriendChatScreen() {
         return;
       }
       updateConversationSummary(content, type, response.data?.createdAt ?? new Date().toISOString());
+      if (response.data) {
+        setMessages((current) => (current.some((item) => item.id === response.data!.id) ? current : [...current, response.data!]));
+      }
       setDraft("");
-      scrollToBottom(true);
-      await loadMessages(true);
       scrollToBottom(true);
     } finally {
       setSending(false);
@@ -332,7 +332,9 @@ export default function FriendChatScreen() {
         return;
       }
       updateConversationSummary("[图片消息]", "image", response.data?.createdAt ?? new Date().toISOString());
-      await loadMessages(true);
+      if (response.data) {
+        setMessages((current) => (current.some((item) => item.id === response.data!.id) ? current : [...current, response.data!]));
+      }
       scrollToBottom(true);
     } catch (error) {
       Alert.alert("发送失败", error instanceof Error ? error.message : "请稍后重试");
@@ -389,7 +391,9 @@ export default function FriendChatScreen() {
         return;
       }
       updateConversationSummary("[语音消息]", "audio", response.data?.createdAt ?? new Date().toISOString());
-      await loadMessages(true);
+      if (response.data) {
+        setMessages((current) => (current.some((item) => item.id === response.data!.id) ? current : [...current, response.data!]));
+      }
       scrollToBottom(true);
     } catch (error) {
       Alert.alert("语音发送失败", error instanceof Error ? error.message : "请稍后重试");

@@ -6,6 +6,7 @@ import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
 
+import com.lifetool.friends.realtime.FriendRealtimeService;
 import com.lifetool.friends.dto.FriendConversationSummaryResponse;
 import com.lifetool.friends.dto.FriendMessageAttachmentRequest;
 import com.lifetool.friends.dto.FriendMessageResponse;
@@ -21,12 +22,20 @@ public class FriendService {
     private final FriendMessageStore messageStore;
     private final UserRepository userRepo;
     private final MediaService mediaService;
+    private final FriendRealtimeService realtimeService;
 
-    public FriendService(FriendStore store, FriendMessageStore messageStore, UserRepository userRepo, MediaService mediaService) {
+    public FriendService(
+            FriendStore store,
+            FriendMessageStore messageStore,
+            UserRepository userRepo,
+            MediaService mediaService,
+            FriendRealtimeService realtimeService
+    ) {
         this.store = store;
         this.messageStore = messageStore;
         this.userRepo = userRepo;
         this.mediaService = mediaService;
+        this.realtimeService = realtimeService;
     }
 
     public FriendRequest sendRequest(String fromUserId, String targetEmail) {
@@ -43,7 +52,9 @@ public class FriendService {
             throw new FriendException("CONFLICT", "Friend request already pending");
         }
 
-        return store.saveRequest(new FriendRequest(fromUserId, target.getId()));
+        FriendRequest request = store.saveRequest(new FriendRequest(fromUserId, target.getId()));
+        realtimeService.publishRequestCreated(target.getId(), request);
+        return request;
     }
 
     public List<FriendRequest> listRequests(String userId) {
@@ -71,6 +82,8 @@ public class FriendService {
             throw new FriendException("VALIDATION_ERROR", "Invalid action, must be 'accept' or 'reject'");
         }
 
+        realtimeService.publishRequestUpdated(request.getFromUserId(), request);
+        realtimeService.publishRequestUpdated(request.getToUserId(), request);
         return request;
     }
 
@@ -107,7 +120,12 @@ public class FriendService {
         FriendMessage.MessageType messageType = parseMessageType(type);
         FriendMessageAttachment attachment = buildAttachment(userId, messageType, attachmentRequest);
         String normalized = normalizeMessageContent(content, messageType, attachment);
-        return messageStore.save(new FriendMessage(userId, friendUserId, messageType, normalized, attachment));
+        FriendMessage saved = messageStore.save(new FriendMessage(userId, friendUserId, messageType, normalized, attachment));
+        FriendMessageResponse response = toMessageResponse(friendUserId, saved);
+        FriendConversationSummaryResponse conversation = getConversationSummary(friendUserId, userId);
+        String senderDisplayName = userRepo.findById(userId).map(User::getDisplayName).orElse("新消息");
+        realtimeService.publishMessageCreated(friendUserId, response, conversation, senderDisplayName);
+        return saved;
     }
 
     public List<FriendMessage> listConversation(String userId, String friendUserId) {
@@ -121,7 +139,11 @@ public class FriendService {
 
     public int markConversationRead(String userId, String friendUserId) {
         ensureFriends(userId, friendUserId);
-        return messageStore.markConversationRead(userId, friendUserId);
+        int updated = messageStore.markConversationRead(userId, friendUserId);
+        FriendConversationSummaryResponse summary = getConversationSummary(userId, friendUserId);
+        realtimeService.publishConversationRead(friendUserId, userId, updated, getConversationSummary(friendUserId, userId));
+        realtimeService.publishConversationRead(userId, friendUserId, updated, summary);
+        return updated;
     }
 
     public List<FriendConversationSummaryResponse> listConversations(String userId) {
@@ -150,6 +172,29 @@ public class FriendService {
                 })
                 .filter(item -> item != null)
                 .toList();
+    }
+
+    public FriendConversationSummaryResponse getConversationSummary(String userId, String friendUserId) {
+        if (!store.areFriends(userId, friendUserId)) {
+            return null;
+        }
+        var summary = messageStore.getConversationSummary(userId, friendUserId);
+        if (summary == null) {
+            return null;
+        }
+        User friend = userRepo.findById(friendUserId).orElse(null);
+        if (friend == null) {
+            return null;
+        }
+        return new FriendConversationSummaryResponse(
+                summary.friendUserId(),
+                friend.getDisplayName(),
+                friend.getEmail(),
+                summary.lastMessage(),
+                summary.lastMessageType(),
+                summary.lastMessageAt(),
+                summary.unreadCount()
+        );
     }
 
     private void ensureFriends(String userId, String friendUserId) {

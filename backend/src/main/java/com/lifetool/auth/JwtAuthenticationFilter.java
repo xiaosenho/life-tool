@@ -29,9 +29,15 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
                                     FilterChain filterChain) throws ServletException, IOException {
         String header = request.getHeader("Authorization");
+        String queryToken = request.getParameter("access_token");
         log.info("Auth filter request path={}, hasAuthHeader={}, authPrefix={}", request.getRequestURI(), header != null, header == null ? "" : header.substring(0, Math.min(20, header.length())));
+        String token = null;
         if (header != null && header.startsWith("Bearer ")) {
-            String token = header.substring(7);
+            token = header.substring(7);
+        } else if (queryToken != null && !queryToken.isBlank()) {
+            token = queryToken.trim();
+        }
+        if (token != null && !token.isBlank()) {
             boolean valid = jwtProvider.validate(token);
             String tokenType = null;
             if (valid) {

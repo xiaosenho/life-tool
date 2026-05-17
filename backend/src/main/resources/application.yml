@@ -25,3 +25,14 @@ lifetool:
     mock-enabled: ${LIFETOOL_AI_MOCK_ENABLED:true}
     max-tool-rounds: ${LIFETOOL_AI_MAX_TOOL_ROUNDS:3}
     disclaimer: AI 建议仅供参考，不构成医疗、营养、财务或法律结论。
+  push:
+    reminders:
+      scan-delay-ms: ${LIFETOOL_PUSH_REMINDERS_SCAN_DELAY_MS:3600000}
+    aliyun:
+      enabled: ${LIFETOOL_PUSH_ALIYUN_ENABLED:false}
+      access-key-id: ${LIFETOOL_PUSH_ALIYUN_ACCESS_KEY_ID:}
+      access-key-secret: ${LIFETOOL_PUSH_ALIYUN_ACCESS_KEY_SECRET:}
+      app-key: ${LIFETOOL_PUSH_ALIYUN_APP_KEY:}
+      android-activity: ${LIFETOOL_PUSH_ALIYUN_ANDROID_ACTIVITY:com.anonymous.lifetool.MainActivity}
+      android-open-type: ${LIFETOOL_PUSH_ALIYUN_ANDROID_OPEN_TYPE:ACTIVITY}
+      store-offline: ${LIFETOOL_PUSH_ALIYUN_STORE_OFFLINE:true}

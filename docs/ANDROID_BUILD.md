@@ -69,6 +69,19 @@ export ANDROID_SDK_ROOT=~/android-sdk
 export PATH=~/gradle-8.13/bin:$PATH
 ```
 
+如果要构建带阿里云推送能力的 Android 包，还需要额外注入：
+
+```bash
+export LIFETOOL_ALIYUN_PUSH_APP_KEY=<阿里云移动推送 AppKey>
+export LIFETOOL_ALIYUN_PUSH_APP_SECRET=<阿里云移动推送 AppSecret>
+```
+
+当前 Android 包名（也是阿里云移动推送里要填写的 Package Name）是：
+
+```text
+com.anonymous.lifetool
+```
+
 检查环境：
 
 ```bash

@@ -64,7 +64,7 @@ class EventControllerTest {
                         .param("from", LocalDate.now().toString())
                         .param("to", LocalDate.now().plusDays(30).toString()))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.length()").value(1))
+                .andExpect(jsonPath("$.data.length()").value(3))
                 .andExpect(jsonPath("$.data[0].title").value("结婚纪念日"));
     }
 

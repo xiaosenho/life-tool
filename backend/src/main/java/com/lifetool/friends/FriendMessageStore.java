@@ -20,5 +20,7 @@ public interface FriendMessageStore {
 
     List<ConversationSummary> listConversationSummaries(String userId);
 
+    ConversationSummary getConversationSummary(String userId, String friendUserId);
+
     int markConversationRead(String userId, String friendUserId);
 }

@@ -114,6 +114,27 @@ public class JdbcEventStore implements EventStore {
         }
     }
 
+    @Override
+    public List<AnniversaryEvent> findAllActive() {
+        String sql = """
+                SELECT id, user_id, type, title, event_date, repeat_rule, \
+                remind_days_before, note, media_asset_id, created_at, updated_at
+                FROM anniversary_events
+                WHERE deleted_at IS NULL
+                """;
+        List<AnniversaryEvent> events = new ArrayList<>();
+        try (Connection conn = getConnection();
+             var stmt = conn.prepareStatement(sql);
+             ResultSet rs = stmt.executeQuery()) {
+            while (rs.next()) {
+                events.add(mapEvent(rs));
+            }
+            return events;
+        } catch (SQLException ex) {
+            throw new IllegalStateException("Failed to load all active events", ex);
+        }
+    }
+
     private AnniversaryEvent mapEvent(ResultSet rs) throws SQLException {
         AnniversaryEvent event = new AnniversaryEvent();
         event.setId(rs.getString("id"));

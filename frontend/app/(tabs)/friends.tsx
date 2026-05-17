@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  LayoutAnimation,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -10,6 +11,7 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
+  UIManager,
   View
 } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
@@ -27,6 +29,7 @@ import { useFriendBadgeStore } from "@/store/friendBadgeStore";
 import { colors } from "@/theme/colors";
 import { formatDateTimeCn } from "@/utils/time";
 import { FRIEND_MESSAGE_TYPE_LABELS } from "@/services/friendService";
+import { friendRealtimeService } from "@/services/friendRealtimeService";
 
 type TabKey = "friends" | "leaderboards" | "messages";
 type BoardKey = "focus_today" | "focus_week" | "habits_today" | "streaks";
@@ -51,6 +54,10 @@ const boardDescriptions: Record<BoardKey, string> = {
   streaks: "连续打卡表示连续多少天完成过至少 1 个习惯打卡，中断 1 天会重新开始计算。"
 };
 
+if (UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
+
 export default function FriendsScreen() {
   const router = useRouter();
   const userId = useAuthStore((state) => state.user?.id ?? "");
@@ -71,6 +78,7 @@ export default function FriendsScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [requestPulseIds, setRequestPulseIds] = useState<string[]>([]);
   const hasMountedRef = useRef(false);
 
   const incomingRequests = useMemo(
@@ -178,6 +186,30 @@ export default function FriendsScreen() {
     }
     void loadActiveTabData(activeTab, true, activeBoard);
   }, [activeBoard, activeTab, loadActiveTabData]);
+
+  useEffect(() => {
+    const unsubscribe = friendRealtimeService.subscribe({
+      onRequest: (request) => {
+        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+        setRequests((current) => {
+          const exists = current.some((item) => item.id === request.id);
+          return exists ? current.map((item) => (item.id === request.id ? request : item)) : [request, ...current];
+        });
+        setRequestPulseIds((current) => (current.includes(request.id) ? current : [...current, request.id]));
+        setTimeout(() => {
+          setRequestPulseIds((current) => current.filter((id) => id !== request.id));
+        }, 1600);
+      },
+      onRequestUpdated: (request) => {
+        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+        setRequests((current) => current.map((item) => (item.id === request.id ? request : item)));
+        if (request.status === "ACCEPTED") {
+          void loadFriendData(true);
+        }
+      }
+    });
+    return unsubscribe;
+  }, [loadFriendData]);
 
   async function handleRefresh() {
     setRefreshing(true);
@@ -307,10 +339,14 @@ export default function FriendsScreen() {
           <SectionHeader title="好友申请" meta={`${incomingRequests.length + outgoingRequests.length} 条`} />
           <View style={styles.list}>
             {incomingRequests.map((request) => (
-              <View key={request.id} style={styles.requestCard}>
+              <View
+                key={request.id}
+                style={[styles.requestCard, requestPulseIds.includes(request.id) && styles.requestCardHighlight]}
+              >
                 <View style={styles.flexBlock}>
                   <Text style={styles.requestTitle}>收到申请</Text>
                   <Text style={styles.friendMeta}>用户 {shortId(request.fromUserId)}</Text>
+                  {requestPulseIds.includes(request.id) ? <Text style={styles.requestHint}>刚刚收到，已实时更新</Text> : null}
                 </View>
                 <TouchableOpacity style={styles.acceptButton} onPress={() => handleRequest(request.id, "accept")}>
                   <Text style={styles.acceptButtonText}>通过</Text>
@@ -714,6 +750,15 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 10,
     padding: 14
+  },
+  requestCardHighlight: {
+    backgroundColor: "#ECFDF5",
+    borderColor: colors.accent
+  },
+  requestHint: {
+    color: colors.accent,
+    fontSize: 12,
+    fontWeight: "700"
   },
   requestTitle: {
     color: colors.text,

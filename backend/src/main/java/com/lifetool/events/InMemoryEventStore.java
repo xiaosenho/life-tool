@@ -32,4 +32,11 @@ public class InMemoryEventStore implements EventStore {
                 .filter(event -> !event.isDeleted())
                 .toList();
     }
+
+    @Override
+    public List<AnniversaryEvent> findAllActive() {
+        return eventsById.values().stream()
+                .filter(event -> !event.isDeleted())
+                .toList();
+    }
 }

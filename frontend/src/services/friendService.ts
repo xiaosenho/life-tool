@@ -1,4 +1,6 @@
 import { apiClient } from "./apiClient";
+import { API_BASE_URL } from "@/constants/config";
+import { useAuthStore } from "@/store/authStore";
 
 export interface FriendInfo {
   userId: string;
@@ -62,6 +64,35 @@ export interface FriendMessage {
   readAt?: string | null;
 }
 
+export type FriendRealtimeEventType =
+  | "friend_message_created"
+  | "friend_request_created"
+  | "friend_request_updated"
+  | "friend_conversation_read";
+
+export interface FriendRealtimeEvent<T = unknown> {
+  id: string;
+  type: FriendRealtimeEventType;
+  userId: string;
+  createdAt: string;
+  payload: T;
+}
+
+export interface FriendMessageEventPayload {
+  message: FriendMessage;
+  conversation: FriendConversationSummary | null;
+}
+
+export interface FriendRequestEventPayload {
+  request: FriendRequest;
+}
+
+export interface FriendReadEventPayload {
+  friendUserId: string;
+  updated: number;
+  conversation: FriendConversationSummary | null;
+}
+
 export const friendService = {
   listFriends() {
     return apiClient.get<FriendInfo[]>("/friends");
@@ -106,5 +137,15 @@ export const friendService = {
 
   markConversationRead(friendUserId: string) {
     return apiClient.post<{ updated: number }>(`/friends/messages/${friendUserId}/read`);
+  },
+
+  createEventStreamUrl() {
+    const token = useAuthStore.getState().token;
+    if (!token) {
+      return null;
+    }
+    const url = new URL(`${API_BASE_URL}/friends/events/stream`);
+    url.searchParams.set("access_token", token);
+    return url.toString();
   }
 };

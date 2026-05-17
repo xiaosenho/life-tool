@@ -82,6 +82,7 @@ GET  /api/me
 ## 3. Device
 
 ```text
+GET   /api/devices
 POST  /api/devices
 PATCH /api/devices/{id}
 ```
@@ -89,8 +90,28 @@ PATCH /api/devices/{id}
 用途：
 
 - 注册移动设备。
-- 保存 push token。
+- 保存 push token / 厂商 deviceId。
 - 标记设备最后活跃时间。
+- 为离线推送绑定安装实例。
+
+### POST /api/devices
+
+请求：
+
+```json
+{
+  "installationId": "device_may17_xxx",
+  "deviceName": "Xiaomi 14",
+  "deviceType": "android",
+  "pushToken": "optional-token",
+  "vendorDeviceId": "aliyun-device-id",
+  "pushProvider": "aliyun",
+  "pushEnabled": true,
+  "metadata": {
+    "platform": "android"
+  }
+}
+```
 
 ## 4. Sync
 
@@ -185,6 +206,7 @@ GET    /api/friends/messages
 GET    /api/friends/messages/{friendUserId}
 POST   /api/friends/messages/{friendUserId}
 POST   /api/friends/messages/{friendUserId}/read
+GET    /api/friends/events/stream
 ```
 
 好友申请状态：
@@ -217,6 +239,71 @@ deleted
 ### GET /api/friends/messages/{friendUserId}
 
 响应：
+
+```json
+[
+  {
+    "id": "uuid",
+    "fromUserId": "uuid",
+    "toUserId": "uuid",
+    "type": "text",
+    "content": "晚上继续加油",
+    "attachment": null,
+    "createdAt": "2026-05-17T10:00:00Z",
+    "readAt": null
+  }
+]
+```
+
+### GET /api/friends/events/stream
+
+用途：
+
+- 取代好友聊天页和底栏未读的短轮询。
+- 服务端在新消息、好友申请、申请状态变化、已读回执时推送事件。
+
+SSE 事件名：
+
+```text
+friend_message_created
+friend_request_created
+friend_request_updated
+friend_conversation_read
+ping
+connected
+```
+
+`friend_message_created` 示例：
+
+```json
+{
+  "id": "uuid",
+  "type": "FRIEND_MESSAGE_CREATED",
+  "userId": "uuid",
+  "createdAt": "2026-05-17T10:00:00Z",
+  "payload": {
+    "message": {
+      "id": "uuid",
+      "fromUserId": "friend-id",
+      "toUserId": "self-id",
+      "type": "text",
+      "content": "在吗",
+      "attachment": null,
+      "createdAt": "2026-05-17T10:00:00Z",
+      "readAt": null
+    },
+    "conversation": {
+      "friendUserId": "friend-id",
+      "friendDisplayName": "Alex",
+      "friendEmail": "alex@example.com",
+      "lastMessage": "在吗",
+      "lastMessageType": "text",
+      "lastMessageAt": "2026-05-17T10:00:00Z",
+      "unreadCount": 1
+    }
+  }
+}
+```
 
 ```json
 [
@@ -577,10 +664,11 @@ weekly
 说明：
 
 - 纪念日和重要事件默认私密。
-- 客户端负责本地通知调度，服务端保存提醒规则用于多设备恢复。
+- 客户端可负责本地通知调度，服务端保存提醒规则并可复用阿里云推送执行离线提醒。
 - `displayDate` 表示当前这条提醒实例实际展示的日期。
 - `reminderOffsetDays` 表示该实例相对事件日期提前了多少天，用于“提前 1 天 / 7 天提醒”等日历视图。
 - `GET /api/events` 除了返回即将到来的事件，也会返回过去的重要非重复事件，便于记录页完整查看。
+- 服务端纪念日提醒默认每小时补扫一次，但同一天同一提醒只会推送一次；可通过 `LIFETOOL_PUSH_REMINDERS_SCAN_DELAY_MS` 调整扫描周期。
 
 ## 12. Media
 

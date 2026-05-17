@@ -1,14 +1,17 @@
 import { useEffect } from "react";
-import { Text, TextInput } from "react-native";
+import { Platform, Text, TextInput } from "react-native";
 import { Stack, useRouter, useSegments } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useAuthStore } from "@/store/authStore";
 import { initDatabase } from "@/db/database";
 import { authService } from "@/services/authService";
 import { authStorage } from "@/services/authStorage";
+import { deviceService } from "@/services/deviceService";
+import { nativePushService } from "@/services/nativePushService";
+import { friendRealtimeService } from "@/services/friendRealtimeService";
 
 export default function RootLayout() {
-  const { isAuthenticated, isLoading, setLoading, restoreAuth, setAuth } = useAuthStore();
+  const { isAuthenticated, isLoading, setLoading, restoreAuth, setAuth, token } = useAuthStore();
   const segments = useSegments();
   const router = useRouter();
 
@@ -85,6 +88,49 @@ export default function RootLayout() {
       router.replace("/");
     }
   }, [isAuthenticated, segments, isLoading]);
+
+  useEffect(() => {
+    if (!isAuthenticated || !token) {
+      friendRealtimeService.disconnect();
+      return;
+    }
+    friendRealtimeService.connect();
+    return () => {
+      friendRealtimeService.disconnect();
+    };
+  }, [isAuthenticated, token]);
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      return;
+    }
+    let cancelled = false;
+    const registerDevice = async () => {
+      const nativeInfo = await nativePushService.getRegistrationInfo();
+      if (cancelled) {
+        return;
+      }
+      await deviceService.register({
+        deviceName: Platform.select({
+          android: "Android",
+          ios: "iPhone",
+          default: "Web"
+        })!,
+        pushToken: nativeInfo.pushToken,
+        vendorDeviceId: nativeInfo.vendorDeviceId,
+        pushProvider: nativeInfo.provider,
+        pushEnabled: !!nativeInfo.vendorDeviceId || !!nativeInfo.pushToken,
+        metadata: {
+          platform: Platform.OS,
+          initialized: nativeInfo.initialized
+        }
+      });
+    };
+    void registerDevice();
+    return () => {
+      cancelled = true;
+    };
+  }, [isAuthenticated]);
 
   if (isLoading) {
     return null;

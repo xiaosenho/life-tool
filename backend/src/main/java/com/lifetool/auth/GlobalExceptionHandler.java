@@ -8,6 +8,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import com.lifetool.ai.AiException;
 import com.lifetool.common.ApiResponse;
+import com.lifetool.devices.DeviceException;
 import com.lifetool.events.EventException;
 import com.lifetool.focus.FocusException;
 import com.lifetool.friends.FriendException;
@@ -129,6 +130,17 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiResponse<Void>> handleVocab(VocabException ex) {
         HttpStatus status = switch (ex.getCode()) {
             case "NOT_FOUND" -> HttpStatus.NOT_FOUND;
+            default -> HttpStatus.BAD_REQUEST;
+        };
+        return ResponseEntity.status(status).body(ApiResponse.fail(ex.getCode(), ex.getMessage()));
+    }
+
+    @ExceptionHandler(DeviceException.class)
+    public ResponseEntity<ApiResponse<Void>> handleDevice(DeviceException ex) {
+        HttpStatus status = switch (ex.getCode()) {
+            case "NOT_FOUND" -> HttpStatus.NOT_FOUND;
+            case "FORBIDDEN" -> HttpStatus.FORBIDDEN;
+            case "CONFLICT" -> HttpStatus.CONFLICT;
             default -> HttpStatus.BAD_REQUEST;
         };
         return ResponseEntity.status(status).body(ApiResponse.fail(ex.getCode(), ex.getMessage()));

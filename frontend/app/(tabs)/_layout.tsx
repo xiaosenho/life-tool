@@ -1,13 +1,12 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Tabs, useFocusEffect } from "expo-router";
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect } from "react";
 
 import { colors } from "@/theme/colors";
-import { friendService } from "@/services/friendService";
+import { friendRealtimeService } from "@/services/friendRealtimeService";
 import { useFriendBadgeStore } from "@/store/friendBadgeStore";
 
 type IconName = keyof typeof Ionicons.glyphMap;
-const BADGE_POLL_INTERVAL_MS = 3000;
 
 const tabIcons: Record<string, IconName> = {
   index: "today-outline",
@@ -20,48 +19,26 @@ const tabIcons: Record<string, IconName> = {
 
 export default function TabLayout() {
   const friendUnreadCount = useFriendBadgeStore((state) => state.totalUnreadCount);
-  const syncFromConversations = useFriendBadgeStore((state) => state.syncFromConversations);
-  const reset = useFriendBadgeStore((state) => state.reset);
-  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  const loadFriendUnread = useCallback(async () => {
-    try {
-      const response = await friendService.listConversations();
-      if (!response.success || !response.data) {
-        reset();
-        return;
-      }
-      syncFromConversations(response.data);
-    } catch {
-      reset();
-    }
-  }, [reset, syncFromConversations]);
+  const applyIncomingMessage = useFriendBadgeStore((state) => state.applyIncomingMessage);
+  const clearConversationUnread = useFriendBadgeStore((state) => state.clearConversationUnread);
 
   useFocusEffect(
     useCallback(() => {
-      void loadFriendUnread();
-    }, [loadFriendUnread])
+      const unsubscribe = friendRealtimeService.subscribe({
+        onMessage: (message, conversation) => {
+          applyIncomingMessage(message, conversation);
+        },
+        onConversationRead: (payload) => {
+          if (payload.conversation) {
+            useFriendBadgeStore.getState().upsertConversation(payload.conversation);
+          } else {
+            clearConversationUnread(payload.friendUserId);
+          }
+        }
+      });
+      return unsubscribe;
+    }, [applyIncomingMessage, clearConversationUnread])
   );
-
-  useEffect(() => {
-    if (pollingRef.current) {
-      clearInterval(pollingRef.current);
-      pollingRef.current = null;
-    }
-
-    void loadFriendUnread();
-
-    pollingRef.current = setInterval(() => {
-      void loadFriendUnread();
-    }, BADGE_POLL_INTERVAL_MS);
-
-    return () => {
-      if (pollingRef.current) {
-        clearInterval(pollingRef.current);
-        pollingRef.current = null;
-      }
-    };
-  }, [loadFriendUnread]);
 
   return (
     <Tabs

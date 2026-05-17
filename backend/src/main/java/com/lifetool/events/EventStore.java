@@ -9,4 +9,6 @@ public interface EventStore {
     Optional<AnniversaryEvent> findById(String id);
 
     List<AnniversaryEvent> findByUserId(String userId);
+
+    List<AnniversaryEvent> findAllActive();
 }

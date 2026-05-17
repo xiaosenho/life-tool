@@ -154,6 +154,77 @@ public class JdbcFriendMessageStore implements FriendMessageStore {
     }
 
     @Override
+    public ConversationSummary getConversationSummary(String userId, String friendUserId) {
+        String sql = """
+                WITH scoped AS (
+                    SELECT
+                        CASE
+                            WHEN from_user_id = ?::uuid THEN to_user_id
+                            ELSE from_user_id
+                        END AS friend_user_id,
+                        from_user_id,
+                        to_user_id,
+                        message_type,
+                        content,
+                        created_at,
+                        read_at
+                    FROM friend_messages
+                    WHERE (from_user_id = ?::uuid OR to_user_id = ?::uuid)
+                      AND deleted_at IS NULL
+                ),
+                ranked AS (
+                    SELECT
+                        friend_user_id,
+                        content,
+                        message_type,
+                        created_at,
+                        ROW_NUMBER() OVER (PARTITION BY friend_user_id ORDER BY created_at DESC, content DESC) AS row_num
+                    FROM scoped
+                ),
+                unread AS (
+                    SELECT
+                        friend_user_id,
+                        COUNT(*)::int AS unread_count
+                    FROM scoped
+                    WHERE to_user_id = ?::uuid
+                      AND read_at IS NULL
+                    GROUP BY friend_user_id
+                )
+                SELECT
+                    ranked.friend_user_id,
+                    ranked.content,
+                    ranked.message_type,
+                    ranked.created_at,
+                    COALESCE(unread.unread_count, 0) AS unread_count
+                FROM ranked
+                LEFT JOIN unread ON unread.friend_user_id = ranked.friend_user_id
+                WHERE ranked.row_num = 1
+                  AND ranked.friend_user_id = ?::uuid
+                """;
+        try (Connection conn = getConnection();
+             var stmt = conn.prepareStatement(sql)) {
+            stmt.setString(1, userId);
+            stmt.setString(2, userId);
+            stmt.setString(3, userId);
+            stmt.setString(4, userId);
+            stmt.setString(5, friendUserId);
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (!rs.next()) {
+                    return null;
+                }
+                return new ConversationSummary(
+                        rs.getString("friend_user_id"),
+                        rs.getString("content"),
+                        rs.getString("message_type"),
+                        rs.getTimestamp("created_at").toInstant(),
+                        rs.getInt("unread_count"));
+            }
+        } catch (SQLException ex) {
+            throw new IllegalStateException("Failed to query friend conversation summary", ex);
+        }
+    }
+
+    @Override
     public int markConversationRead(String userId, String friendUserId) {
         String sql = """
                 UPDATE friend_messages

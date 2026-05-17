@@ -212,12 +212,20 @@ AI_BASE_URL=https://ark.cn-beijing.volces.com/api/v3
 AI_CHAT_COMPLETIONS_PATH=/chat/completions
 AI_API_KEY=<真实API Key>
 AI_CHAT_MODEL=doubao-seed-2-0-mini-260428
+LIFETOOL_PUSH_ALIYUN_ENABLED=true
+LIFETOOL_PUSH_ALIYUN_ACCESS_KEY_ID=<阿里云RAM AccessKeyId>
+LIFETOOL_PUSH_ALIYUN_ACCESS_KEY_SECRET=<阿里云RAM AccessKeySecret>
+LIFETOOL_PUSH_ALIYUN_APP_KEY=<阿里云移动推送AppKey>
+LIFETOOL_PUSH_ALIYUN_ANDROID_ACTIVITY=com.anonymous.lifetool.MainActivity
+LIFETOOL_PUSH_ALIYUN_ANDROID_OPEN_TYPE=ACTIVITY
+LIFETOOL_PUSH_ALIYUN_STORE_OFFLINE=true
 ```
 
 补充说明：
 
 - 当前 `postgres` profile 已统一启用 HikariCP。
 - 不要再配置 `spring.datasource.hikari.pool-name` 这类启动后可能触发 sealed 配置报错的属性，除非明确验证过当前版本可安全设置。
+- Android 构建机还需要额外注入 `LIFETOOL_ALIYUN_PUSH_APP_KEY` 与 `LIFETOOL_ALIYUN_PUSH_APP_SECRET`，用于写入 `/Users/zhouxiaojie/Documents/Codex/2026-05-13/new-chat/frontend/android/app/src/main/AndroidManifest.xml`。
 
 ### 启动
 

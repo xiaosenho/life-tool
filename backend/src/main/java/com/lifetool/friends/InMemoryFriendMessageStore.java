@@ -72,6 +72,14 @@ public class InMemoryFriendMessageStore implements FriendMessageStore {
     }
 
     @Override
+    public ConversationSummary getConversationSummary(String userId, String friendUserId) {
+        return listConversationSummaries(userId).stream()
+                .filter(summary -> summary.friendUserId().equals(friendUserId))
+                .findFirst()
+                .orElse(null);
+    }
+
+    @Override
     public int markConversationRead(String userId, String friendUserId) {
         int updated = 0;
         Instant now = Instant.now();
