@@ -4,6 +4,8 @@ export interface User {
   id: string;
   email: string;
   displayName: string;
+  avatarAssetId?: string | null;
+  avatarUrl?: string | null;
 }
 
 export interface AuthResponse {
@@ -123,5 +125,34 @@ export const authService = {
       throw new Error(response.error?.message || "获取用户信息失败");
     }
     return response.data;
+  },
+
+  async updateProfile(input: { displayName?: string; avatarAssetId?: string | null }): Promise<User> {
+    if (MOCK_ENABLED) {
+      const current = await import("@/store/authStore")
+        .then(({ useAuthStore }) => useAuthStore.getState().user);
+      return {
+        id: current?.id ?? "1",
+        email: current?.email ?? "test@example.com",
+        displayName: input.displayName ?? current?.displayName ?? "测试用户",
+        avatarAssetId: input.avatarAssetId ?? current?.avatarAssetId ?? null,
+        avatarUrl: current?.avatarUrl ?? null,
+      };
+    }
+    const response = await apiClient.patch<User>("/me/profile", input);
+    if (!response.success || !response.data) {
+      throw new Error(response.error?.message || "资料更新失败");
+    }
+    return response.data;
+  },
+
+  async changePassword(input: { currentPassword: string; newPassword: string }): Promise<void> {
+    if (MOCK_ENABLED) {
+      return;
+    }
+    const response = await apiClient.post<void>("/me/password", input);
+    if (!response.success) {
+      throw new Error(response.error?.message || "密码修改失败");
+    }
   },
 };

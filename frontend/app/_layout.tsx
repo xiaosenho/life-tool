@@ -9,9 +9,11 @@ import { authStorage } from "@/services/authStorage";
 import { deviceService } from "@/services/deviceService";
 import { nativePushService } from "@/services/nativePushService";
 import { friendRealtimeService } from "@/services/friendRealtimeService";
+import { colors } from "@/theme/colors";
+import { useFriendBadgeStore } from "@/store/friendBadgeStore";
 
 export default function RootLayout() {
-  const { isAuthenticated, isLoading, setLoading, restoreAuth, setAuth, token } = useAuthStore();
+  const { isAuthenticated, isLoading, setLoading, restoreAuth, setAuth, clearAuth, token } = useAuthStore();
   const segments = useSegments();
   const router = useRouter();
 
@@ -61,6 +63,11 @@ export default function RootLayout() {
             setAuth(refreshed.user, refreshed.accessToken, refreshed.refreshToken);
           }
         } catch (error) {
+          const code = (error as { code?: string } | null)?.code;
+          if (code === "UNAUTHORIZED" || code === "INVALID_TOKEN") {
+            if (!cancelled) clearAuth();
+            return;
+          }
           console.warn("刷新登录状态失败，保留本地登录态：", error);
         }
       } catch (error) {
@@ -98,6 +105,25 @@ export default function RootLayout() {
     return () => {
       friendRealtimeService.disconnect();
     };
+  }, [isAuthenticated, token]);
+
+  useEffect(() => {
+    if (!isAuthenticated || !token) {
+      return;
+    }
+    const unsubscribe = friendRealtimeService.subscribe({
+      onMessage: (message, conversation) => {
+        useFriendBadgeStore.getState().applyIncomingMessage(message, conversation);
+      },
+      onConversationRead: (payload) => {
+        if (payload.conversation) {
+          useFriendBadgeStore.getState().upsertConversation(payload.conversation);
+        } else {
+          useFriendBadgeStore.getState().clearConversationUnread(payload.friendUserId);
+        }
+      },
+    });
+    return unsubscribe;
   }, [isAuthenticated, token]);
 
   useEffect(() => {
@@ -146,7 +172,16 @@ export default function RootLayout() {
         <Stack.Screen name="meal-upload" options={{ headerShown: true, headerTitle: "饮食拍照" }} />
         <Stack.Screen name="friend-chat" options={{ headerShown: true, headerTitle: "好友互动" }} />
         <Stack.Screen name="news-webview" options={{ headerShown: true, headerTitle: "新闻" }} />
-        <Stack.Screen name="vocab" options={{ headerShown: true, headerTitle: "背单词" }} />
+        <Stack.Screen
+          name="vocab"
+          options={{
+            headerShown: true,
+            headerTitle: "背单词",
+            headerStyle: { backgroundColor: colors.background },
+            headerShadowVisible: false,
+            headerTitleStyle: { color: colors.text, fontWeight: "800" },
+          }}
+        />
       </Stack>
       <StatusBar style="dark" />
     </>

@@ -1,7 +1,9 @@
 package com.lifetool.ai;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
@@ -124,5 +126,12 @@ class AiServiceFoodRecognitionRetryTest {
         assertEquals(null, response.mealLogId());
         assertEquals(BigDecimal.ZERO, response.totalCalories());
         verify(mealService, never()).recordAiRecognition(any(), any(), any(), any());
+    }
+
+    @Test
+    void shouldPersistFoodRecognitionRequiresPositiveCaloriesAndFoodSignal() {
+        assertTrue(MealService.shouldPersistAiRecognition("鸡蛋一份。总热量约 80 千卡。"));
+        assertFalse(MealService.shouldPersistAiRecognition("画面较模糊，无法估算。"));
+        assertFalse(MealService.shouldPersistAiRecognition("未识别到食物，不会记录饮食。总热量约 0 千卡"));
     }
 }

@@ -22,7 +22,8 @@ public class InMemoryEventStore implements EventStore {
 
     @Override
     public Optional<AnniversaryEvent> findById(String id) {
-        return Optional.ofNullable(eventsById.get(id));
+        return Optional.ofNullable(eventsById.get(id))
+                .filter(event -> !event.isDeleted());
     }
 
     @Override

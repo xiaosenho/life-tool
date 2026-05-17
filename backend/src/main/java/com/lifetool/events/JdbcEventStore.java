@@ -35,10 +35,12 @@ public class JdbcEventStore implements EventStore {
 
     @Override
     public AnniversaryEvent save(AnniversaryEvent event) {
+        Instant updatedAt = event.getUpdatedAt() != null ? event.getUpdatedAt() : Instant.now();
+        Instant deletedAt = event.isDeleted() ? updatedAt : null;
         String sql = """
                 INSERT INTO anniversary_events (id, user_id, type, title, event_date, \
-                repeat_rule, remind_days_before, note, media_asset_id, created_at, updated_at)
-                VALUES (?::uuid, ?::uuid, ?, ?, ?, ?, ?::jsonb, ?, ?::uuid, ?, ?)
+                repeat_rule, remind_days_before, note, media_asset_id, created_at, updated_at, deleted_at)
+                VALUES (?::uuid, ?::uuid, ?, ?, ?, ?, ?::jsonb, ?, ?::uuid, ?, ?, ?)
                 ON CONFLICT (id) DO UPDATE SET
                   type = EXCLUDED.type,
                   title = EXCLUDED.title,
@@ -47,7 +49,8 @@ public class JdbcEventStore implements EventStore {
                   remind_days_before = EXCLUDED.remind_days_before,
                   note = EXCLUDED.note,
                   media_asset_id = EXCLUDED.media_asset_id,
-                  updated_at = now()
+                  updated_at = EXCLUDED.updated_at,
+                  deleted_at = EXCLUDED.deleted_at
                 """;
         try (Connection conn = getConnection();
              var stmt = conn.prepareStatement(sql)) {
@@ -61,7 +64,8 @@ public class JdbcEventStore implements EventStore {
             stmt.setString(8, event.getNote());
             stmt.setString(9, event.getMediaAssetId());
             stmt.setTimestamp(10, event.getCreatedAt() != null ? Timestamp.from(event.getCreatedAt()) : null);
-            stmt.setTimestamp(11, Timestamp.from(Instant.now()));
+            stmt.setTimestamp(11, Timestamp.from(updatedAt));
+            stmt.setTimestamp(12, deletedAt == null ? null : Timestamp.from(deletedAt));
             stmt.executeUpdate();
             return event;
         } catch (SQLException ex) {
@@ -73,7 +77,7 @@ public class JdbcEventStore implements EventStore {
     public Optional<AnniversaryEvent> findById(String id) {
         String sql = """
                 SELECT id, user_id, type, title, event_date, repeat_rule, \
-                remind_days_before, note, media_asset_id, created_at, updated_at
+                remind_days_before, note, media_asset_id, created_at, updated_at, deleted_at
                 FROM anniversary_events
                 WHERE id = ?::uuid AND deleted_at IS NULL
                 """;
@@ -95,7 +99,7 @@ public class JdbcEventStore implements EventStore {
     public List<AnniversaryEvent> findByUserId(String userId) {
         String sql = """
                 SELECT id, user_id, type, title, event_date, repeat_rule, \
-                remind_days_before, note, media_asset_id, created_at, updated_at
+                remind_days_before, note, media_asset_id, created_at, updated_at, deleted_at
                 FROM anniversary_events
                 WHERE user_id = ?::uuid AND deleted_at IS NULL
                 """;
@@ -118,7 +122,7 @@ public class JdbcEventStore implements EventStore {
     public List<AnniversaryEvent> findAllActive() {
         String sql = """
                 SELECT id, user_id, type, title, event_date, repeat_rule, \
-                remind_days_before, note, media_asset_id, created_at, updated_at
+                remind_days_before, note, media_asset_id, created_at, updated_at, deleted_at
                 FROM anniversary_events
                 WHERE deleted_at IS NULL
                 """;
@@ -148,6 +152,7 @@ public class JdbcEventStore implements EventStore {
         event.setMediaAssetId(rs.getString("media_asset_id"));
         event.setCreatedAt(rs.getTimestamp("created_at") != null ? rs.getTimestamp("created_at").toInstant() : null);
         event.setUpdatedAt(rs.getTimestamp("updated_at") != null ? rs.getTimestamp("updated_at").toInstant() : null);
+        event.setDeleted(rs.getTimestamp("deleted_at") != null);
         return event;
     }
 

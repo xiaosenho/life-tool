@@ -4,11 +4,11 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import com.lifetool.auth.dto.AuthResponse;
-import com.lifetool.auth.dto.AuthResponse.UserDto;
 import com.lifetool.auth.dto.LoginRequest;
 import com.lifetool.auth.dto.RefreshRequest;
 import com.lifetool.auth.dto.RegisterRequest;
 import com.lifetool.users.User;
+import com.lifetool.users.UserProfileService;
 import com.lifetool.users.UserRepository;
 
 @Service
@@ -17,11 +17,14 @@ public class AuthService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtProvider jwtProvider;
+    private final UserProfileService userProfileService;
 
-    public AuthService(UserRepository userRepository, PasswordEncoder passwordEncoder, JwtProvider jwtProvider) {
+    public AuthService(UserRepository userRepository, PasswordEncoder passwordEncoder, JwtProvider jwtProvider,
+                       UserProfileService userProfileService) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtProvider = jwtProvider;
+        this.userProfileService = userProfileService;
     }
 
     public AuthResponse register(RegisterRequest req) {
@@ -63,6 +66,6 @@ public class AuthService {
         return new AuthResponse(
                 jwtProvider.generateAccessToken(user.getId()),
                 jwtProvider.generateRefreshToken(user.getId()),
-                new UserDto(user.getId(), user.getEmail(), user.getDisplayName()));
+                userProfileService.toDto(user));
     }
 }

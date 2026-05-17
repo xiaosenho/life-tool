@@ -12,9 +12,15 @@ public interface FriendMessageStore {
     ) {
     }
 
+    record ConversationPage(
+            List<FriendMessage> messages,
+            boolean hasMore
+    ) {
+    }
+
     FriendMessage save(FriendMessage message);
 
-    List<FriendMessage> listConversation(String userId, String friendUserId);
+    ConversationPage listConversation(String userId, String friendUserId, int limit, java.time.Instant beforeCreatedAt, String beforeId);
 
     List<FriendMessage> listByUser(String userId);
 

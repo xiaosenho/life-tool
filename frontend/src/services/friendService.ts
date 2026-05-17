@@ -64,6 +64,12 @@ export interface FriendMessage {
   readAt?: string | null;
 }
 
+export interface FriendMessagePage {
+  messages: FriendMessage[];
+  limit: number;
+  hasMore: boolean;
+}
+
 export type FriendRealtimeEventType =
   | "friend_message_created"
   | "friend_request_created"
@@ -122,8 +128,19 @@ export const friendService = {
     return apiClient.get<FriendConversationSummary[]>("/friends/messages");
   },
 
-  listMessages(friendUserId: string) {
-    return apiClient.get<FriendMessage[]>(`/friends/messages/${friendUserId}`);
+  listMessages(friendUserId: string, options?: { limit?: number; beforeCreatedAt?: string; beforeId?: string }) {
+    const params = new URLSearchParams();
+    if (options?.limit) {
+      params.set("limit", String(options.limit));
+    }
+    if (options?.beforeCreatedAt) {
+      params.set("beforeCreatedAt", options.beforeCreatedAt);
+    }
+    if (options?.beforeId) {
+      params.set("beforeId", options.beforeId);
+    }
+    const suffix = params.toString() ? `?${params.toString()}` : "";
+    return apiClient.get<FriendMessagePage>(`/friends/messages/${friendUserId}${suffix}`);
   },
 
   sendMessage(

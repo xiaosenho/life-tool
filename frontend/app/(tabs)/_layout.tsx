@@ -1,9 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
-import { Tabs, useFocusEffect } from "expo-router";
-import { useCallback, useEffect } from "react";
+import { Tabs } from "expo-router";
 
 import { colors } from "@/theme/colors";
-import { friendRealtimeService } from "@/services/friendRealtimeService";
 import { useFriendBadgeStore } from "@/store/friendBadgeStore";
 
 type IconName = keyof typeof Ionicons.glyphMap;
@@ -19,26 +17,6 @@ const tabIcons: Record<string, IconName> = {
 
 export default function TabLayout() {
   const friendUnreadCount = useFriendBadgeStore((state) => state.totalUnreadCount);
-  const applyIncomingMessage = useFriendBadgeStore((state) => state.applyIncomingMessage);
-  const clearConversationUnread = useFriendBadgeStore((state) => state.clearConversationUnread);
-
-  useFocusEffect(
-    useCallback(() => {
-      const unsubscribe = friendRealtimeService.subscribe({
-        onMessage: (message, conversation) => {
-          applyIncomingMessage(message, conversation);
-        },
-        onConversationRead: (payload) => {
-          if (payload.conversation) {
-            useFriendBadgeStore.getState().upsertConversation(payload.conversation);
-          } else {
-            clearConversationUnread(payload.friendUserId);
-          }
-        }
-      });
-      return unsubscribe;
-    }, [applyIncomingMessage, clearConversationUnread])
-  );
 
   return (
     <Tabs

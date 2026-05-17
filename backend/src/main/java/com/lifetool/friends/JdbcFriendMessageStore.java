@@ -21,6 +21,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 @Profile("postgres")
 public class JdbcFriendMessageStore implements FriendMessageStore {
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+    private static final int EXTRA_ROW_FOR_HAS_MORE = 1;
 
     private final DataSource dataSource;
 
@@ -57,16 +58,52 @@ public class JdbcFriendMessageStore implements FriendMessageStore {
     }
 
     @Override
-    public List<FriendMessage> listConversation(String userId, String friendUserId) {
+    public ConversationPage listConversation(String userId, String friendUserId, int limit, Instant beforeCreatedAt, String beforeId) {
         String sql = """
                 SELECT id, from_user_id, to_user_id, message_type, content, metadata, created_at, read_at
                 FROM friend_messages
                 WHERE ((from_user_id = ?::uuid AND to_user_id = ?::uuid)
                     OR (from_user_id = ?::uuid AND to_user_id = ?::uuid))
                   AND deleted_at IS NULL
-                ORDER BY created_at ASC
+                  AND (
+                    ?::timestamptz IS NULL
+                    OR created_at < ?::timestamptz
+                    OR (created_at = ?::timestamptz AND (? IS NOT NULL AND id::text < ?))
+                  )
+                ORDER BY created_at DESC, id::text DESC
+                LIMIT ?
                 """;
-        return queryMessages(sql, userId, friendUserId, friendUserId, userId);
+        List<FriendMessage> results = new ArrayList<>();
+        try (Connection conn = getConnection();
+             var stmt = conn.prepareStatement(sql)) {
+            stmt.setString(1, userId);
+            stmt.setString(2, friendUserId);
+            stmt.setString(3, friendUserId);
+            stmt.setString(4, userId);
+            Timestamp cursorTimestamp = beforeCreatedAt == null ? null : Timestamp.from(beforeCreatedAt);
+            stmt.setTimestamp(5, cursorTimestamp);
+            stmt.setTimestamp(6, cursorTimestamp);
+            stmt.setTimestamp(7, cursorTimestamp);
+            if (beforeId == null || beforeId.isBlank()) {
+                stmt.setString(8, null);
+                stmt.setString(9, null);
+            } else {
+                stmt.setString(8, beforeId);
+                stmt.setString(9, beforeId);
+            }
+            stmt.setInt(10, limit + EXTRA_ROW_FOR_HAS_MORE);
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    results.add(mapMessage(rs));
+                }
+            }
+        } catch (SQLException ex) {
+            throw new IllegalStateException("Failed to query friend messages", ex);
+        }
+        boolean hasMore = results.size() > limit;
+        List<FriendMessage> page = hasMore ? new ArrayList<>(results.subList(0, limit)) : results;
+        page.sort(java.util.Comparator.comparing(FriendMessage::getCreatedAt).thenComparing(FriendMessage::getId));
+        return new ConversationPage(page, hasMore);
     }
 
     @Override

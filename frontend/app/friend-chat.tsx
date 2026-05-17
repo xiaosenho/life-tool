@@ -24,7 +24,6 @@ import { Audio } from "expo-av";
 
 import { Screen } from "@/components/Screen";
 import {
-  FRIEND_MESSAGE_TYPE_LABELS,
   FriendMessage,
   FriendMessageType,
   friendService
@@ -42,7 +41,7 @@ import {
 import { useAuthStore } from "@/store/authStore";
 import { useFriendBadgeStore } from "@/store/friendBadgeStore";
 import { colors } from "@/theme/colors";
-import { formatDateTimeCn } from "@/utils/time";
+import { formatDateCn, formatDateTimeCn } from "@/utils/time";
 import { friendRealtimeService } from "@/services/friendRealtimeService";
 
 const QUICK_INTERACTIONS: Array<{
@@ -95,36 +94,75 @@ const QUICK_INTERACTIONS: Array<{
   }
 ];
 
+const ATTACHMENT_PLACEHOLDER_PATTERN = /^\[(语音|图片)(消息)?\]$/;
+const HISTORY_DIVIDER_GAP_MS = 60 * 60 * 1000;
+const MESSAGE_PAGE_SIZE = 50;
+const LOAD_MORE_TRIGGER_OFFSET = 80;
+
 function mergeMessagesPreservingMediaUrl(previous: FriendMessage[], incoming: FriendMessage[]) {
   const previousById = new Map(previous.map((message) => [message.id, message]));
-  return incoming.map((message) => {
+  const merged = new Map<string, FriendMessage>();
+  [...previous, ...incoming].forEach((message) => {
     const previousMessage = previousById.get(message.id);
     if (
-      !previousMessage?.attachment?.url ||
-      !message.attachment ||
-      previousMessage.attachment.assetId !== message.attachment.assetId ||
-      previousMessage.attachment.kind !== message.attachment.kind
+      previousMessage?.attachment?.url &&
+      message.attachment &&
+      previousMessage.attachment.assetId === message.attachment.assetId &&
+      previousMessage.attachment.kind === message.attachment.kind &&
+      !message.attachment.url
     ) {
-      return message;
+      merged.set(message.id, {
+        ...message,
+        attachment: {
+          ...message.attachment,
+          url: previousMessage.attachment.url
+        }
+      });
+      return;
     }
-    return {
-      ...message,
-      attachment: {
-        ...message.attachment,
-        url: previousMessage.attachment.url
-      }
-    };
+    merged.set(message.id, message);
+  });
+  return Array.from(merged.values()).sort((left, right) => {
+    const timeDiff = new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime();
+    return timeDiff !== 0 ? timeDiff : left.id.localeCompare(right.id);
   });
 }
 
 function shouldRenderMessageText(content: string | null | undefined) {
   const normalized = content?.trim();
-  return !!normalized && normalized !== "[语音消息]" && normalized !== "[图片消息]";
+  return !!normalized && !ATTACHMENT_PLACEHOLDER_PATTERN.test(normalized);
+}
+
+function shouldShowHistoryDivider(currentCreatedAt: string, previousCreatedAt?: string) {
+  if (!previousCreatedAt) {
+    return true;
+  }
+
+  const currentDate = new Date(currentCreatedAt);
+  const previousDate = new Date(previousCreatedAt);
+  if (Number.isNaN(currentDate.getTime()) || Number.isNaN(previousDate.getTime())) {
+    return false;
+  }
+
+  if (formatDateCn(currentDate) !== formatDateCn(previousDate)) {
+    return true;
+  }
+
+  return currentDate.getTime() - previousDate.getTime() >= HISTORY_DIVIDER_GAP_MS;
+}
+
+function getDisplayInitial(value: string | null | undefined) {
+  const normalized = value?.trim();
+  if (!normalized) {
+    return "我";
+  }
+  return normalized.slice(0, 1).toUpperCase();
 }
 
 export default function FriendChatScreen() {
   const router = useRouter();
   const { friendUserId, friendName } = useLocalSearchParams<{ friendUserId: string; friendName?: string }>();
+  const user = useAuthStore((state) => state.user);
   const userId = useAuthStore((state) => state.user?.id ?? "");
   const clearConversationUnread = useFriendBadgeStore((state) => state.clearConversationUnread);
   const sharedConversations = useFriendBadgeStore((state) => state.conversations);
@@ -132,9 +170,11 @@ export default function FriendChatScreen() {
   const [messages, setMessages] = useState<FriendMessage[]>([]);
   const [draft, setDraft] = useState("");
   const [loading, setLoading] = useState(true);
+  const [loadingOlder, setLoadingOlder] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [sending, setSending] = useState(false);
   const [uploadingMedia, setUploadingMedia] = useState(false);
+  const [hasMoreHistory, setHasMoreHistory] = useState(true);
   const [recording, setRecording] = useState<Audio.Recording | null>(null);
   const [playingAudioId, setPlayingAudioId] = useState<string | null>(null);
   const [audioProgress, setAudioProgress] = useState<Record<string, number>>({});
@@ -152,15 +192,29 @@ export default function FriendChatScreen() {
   const hasEnteredCancelZoneRef = useRef(false);
   const recordWillCancelRef = useRef(false);
   const scrollViewRef = useRef<ScrollView | null>(null);
+  const scrollOffsetRef = useRef(0);
+  const contentHeightRef = useRef(0);
+  const pendingScrollRestoreRef = useRef<{ previousOffset: number; previousHeight: number } | null>(null);
   const soundRef = useRef<Audio.Sound | null>(null);
   const hasInitialScrolledRef = useRef(false);
+  const messagesRef = useRef<FriendMessage[]>([]);
+  const loadingOlderRef = useRef(false);
   const insets = useSafeAreaInsets();
 
   const title = useMemo(() => friendName || "聊天", [friendName]);
+  const selfAvatarLabel = useMemo(
+    () => getDisplayInitial(user?.displayName || user?.email),
+    [user?.displayName, user?.email]
+  );
+  const friendAvatarLabel = useMemo(() => getDisplayInitial(title), [title]);
   const friendConversation = useMemo(
     () => sharedConversations.find((item) => item.friendUserId === friendUserId),
     [friendUserId, sharedConversations]
   );
+
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
 
   const scrollToBottom = useCallback((animated = true) => {
     requestAnimationFrame(() => {
@@ -187,7 +241,7 @@ export default function FriendChatScreen() {
     [friendConversation?.friendDisplayName, friendConversation?.friendEmail, friendUserId, title, upsertConversation]
   );
 
-  const loadMessages = useCallback(async (silent = false) => {
+  const loadLatestMessages = useCallback(async ({ silent = false, mergeIntoCurrent = false }: { silent?: boolean; mergeIntoCurrent?: boolean } = {}) => {
     if (!friendUserId) {
       return;
     }
@@ -195,9 +249,17 @@ export default function FriendChatScreen() {
       setLoading(true);
     }
     try {
-      const response = await friendService.listMessages(friendUserId);
+      const response = await friendService.listMessages(friendUserId, { limit: MESSAGE_PAGE_SIZE });
       if (response.success && response.data) {
-        setMessages((current) => mergeMessagesPreservingMediaUrl(current, response.data ?? []));
+        setMessages((current) => {
+          if (mergeIntoCurrent) {
+            return mergeMessagesPreservingMediaUrl(current, response.data?.messages ?? []);
+          }
+          return mergeMessagesPreservingMediaUrl([], response.data?.messages ?? []);
+        });
+        if (!mergeIntoCurrent || messagesRef.current.length === 0) {
+          setHasMoreHistory(response.data.hasMore);
+        }
         await friendService.markConversationRead(friendUserId);
         clearConversationUnread(friendUserId);
         if (!hasInitialScrolledRef.current) {
@@ -206,6 +268,7 @@ export default function FriendChatScreen() {
         }
       } else {
         setMessages([]);
+        setHasMoreHistory(false);
       }
     } catch (error) {
       Alert.alert("加载失败", error instanceof Error ? error.message : "请稍后重试");
@@ -215,9 +278,44 @@ export default function FriendChatScreen() {
     }
   }, [clearConversationUnread, friendUserId, scrollToBottom]);
 
+  const loadOlderMessages = useCallback(async () => {
+    if (!friendUserId || loading || loadingOlderRef.current || !hasMoreHistory || messagesRef.current.length === 0) {
+      return;
+    }
+    const oldestMessage = messagesRef.current[0];
+    if (!oldestMessage) {
+      return;
+    }
+    loadingOlderRef.current = true;
+    setLoadingOlder(true);
+    try {
+      const response = await friendService.listMessages(friendUserId, {
+        limit: MESSAGE_PAGE_SIZE,
+        beforeCreatedAt: oldestMessage.createdAt,
+        beforeId: oldestMessage.id
+      });
+      if (response.success && response.data) {
+        pendingScrollRestoreRef.current = {
+          previousOffset: scrollOffsetRef.current,
+          previousHeight: contentHeightRef.current
+        };
+        setMessages((current) => mergeMessagesPreservingMediaUrl(current, [...(response.data?.messages ?? []), ...current]));
+        setHasMoreHistory(response.data.hasMore);
+      }
+    } catch (error) {
+      Alert.alert("加载历史失败", error instanceof Error ? error.message : "请稍后重试");
+    } finally {
+      loadingOlderRef.current = false;
+      setLoadingOlder(false);
+    }
+  }, [friendUserId, hasMoreHistory, loading]);
+
   useEffect(() => {
-    void loadMessages();
-  }, [loadMessages]);
+    hasInitialScrolledRef.current = false;
+    setHasMoreHistory(true);
+    setMessages([]);
+    void loadLatestMessages();
+  }, [loadLatestMessages]);
 
   useEffect(() => {
     const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
@@ -238,7 +336,11 @@ export default function FriendChatScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      void loadMessages(true);
+      if (messagesRef.current.length === 0) {
+        void loadLatestMessages({ silent: true });
+      } else {
+        void loadLatestMessages({ silent: true, mergeIntoCurrent: true });
+      }
       const unsubscribe = friendRealtimeService.subscribe({
         onMessage: (message) => {
           const related =
@@ -271,12 +373,12 @@ export default function FriendChatScreen() {
       return () => {
         unsubscribe();
       };
-    }, [friendUserId, loadMessages, upsertConversation, userId])
+    }, [friendUserId, loadLatestMessages, upsertConversation, userId])
   );
 
   async function onRefresh() {
     setRefreshing(true);
-    await loadMessages(true);
+    await loadLatestMessages({ silent: true, mergeIntoCurrent: true });
   }
 
   async function sendMessage(type: FriendMessageType = "text") {
@@ -575,63 +677,117 @@ export default function FriendChatScreen() {
                 styles.messageList,
                 { paddingBottom: Math.max(insets.bottom + 24, 36) }
               ]}
+              onContentSizeChange={(_, height) => {
+                const pendingRestore = pendingScrollRestoreRef.current;
+                if (pendingRestore) {
+                  const delta = height - pendingRestore.previousHeight;
+                  scrollViewRef.current?.scrollTo({
+                    y: pendingRestore.previousOffset + Math.max(delta, 0),
+                    animated: false
+                  });
+                  pendingScrollRestoreRef.current = null;
+                }
+                contentHeightRef.current = height;
+              }}
+              onScroll={(event) => {
+                scrollOffsetRef.current = event.nativeEvent.contentOffset.y;
+                if (scrollOffsetRef.current <= LOAD_MORE_TRIGGER_OFFSET) {
+                  void loadOlderMessages();
+                }
+              }}
+              scrollEventThrottle={16}
               keyboardShouldPersistTaps="handled"
               refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />}
             >
+              {loadingOlder ? (
+                <View style={styles.historyLoadingRow}>
+                  <ActivityIndicator size="small" color={colors.accent} />
+                  <Text style={styles.historyLoadingText}>正在加载更早消息...</Text>
+                </View>
+              ) : null}
               {messages.length === 0 ? (
                 <Text style={styles.emptyText}>还没有消息，发一句鼓励开始吧。</Text>
               ) : (
-                messages.map((item) => {
+                messages.map((item, index) => {
                   const mine = item.fromUserId === userId;
+                  const previousMessage = index > 0 ? messages[index - 1] : undefined;
+                  const showHistoryDivider = shouldShowHistoryDivider(item.createdAt, previousMessage?.createdAt);
                   return (
-                    <View key={item.id} style={[styles.messageBubble, mine ? styles.messageBubbleMine : styles.messageBubbleOther]}>
-                      {item.attachment?.kind === "image" && item.attachment.url ? (
-                        <TouchableOpacity activeOpacity={0.9} onPress={() => setPreviewImageUrl(item.attachment?.url ?? null)}>
-                          <Image
-                            source={{ uri: item.attachment.url }}
-                            style={styles.messageImage}
-                            resizeMode="cover"
-                          />
-                        </TouchableOpacity>
+                    <View key={item.id} style={styles.messageGroup}>
+                      {showHistoryDivider ? (
+                        <View style={styles.historyDividerWrap}>
+                          <Text style={styles.historyDividerText}>{formatDateTimeCn(item.createdAt)}</Text>
+                        </View>
                       ) : null}
-                      {item.attachment?.kind === "audio" ? (
-                        <TouchableOpacity
-                          style={[styles.audioBubble, mine && styles.audioBubbleMine]}
-                          onPress={() => playAudio(item)}
-                        >
-                          <Ionicons
-                            name={playingAudioId === item.id ? "pause-circle-outline" : "play-circle-outline"}
-                            size={20}
-                            color={mine ? colors.surface : colors.accent}
-                          />
-                          <View style={styles.audioInfo}>
-                            <Text style={[styles.audioText, mine && styles.audioTextMine]}>
-                              {item.attachment.durationSeconds ? `${item.attachment.durationSeconds}s 语音` : "语音消息"}
-                            </Text>
-                            <View style={[styles.waveTrack, mine && styles.waveTrackMine]}>
-                              {Array.from({ length: 16 }).map((_, index) => {
-                                const activeCount = Math.round((audioProgress[item.id] ?? 0) * 16);
-                                return (
-                                  <View
-                                    key={`${item.id}-wave-${index}`}
-                                    style={[
-                                      styles.waveBar,
-                                      mine && styles.waveBarMine,
-                                      index < activeCount && (mine ? styles.waveBarActiveMine : styles.waveBarActive)
-                                    ]}
-                                  />
-                                );
-                              })}
-                            </View>
+                      <View style={[styles.messageRow, mine ? styles.messageRowMine : styles.messageRowOther]}>
+                        {!mine ? (
+                          <View style={[styles.avatar, styles.avatarFriend]}>
+                            <Text style={[styles.avatarText, styles.avatarTextDark]}>{friendAvatarLabel}</Text>
                           </View>
-                        </TouchableOpacity>
-                      ) : null}
-                      {shouldRenderMessageText(item.content) ? (
-                        <Text style={[styles.messageText, mine && styles.messageTextMine]}>{item.content}</Text>
-                      ) : null}
-                      <Text style={[styles.messageMeta, mine && styles.messageMetaMine]}>
-                        {FRIEND_MESSAGE_TYPE_LABELS[item.type]} · {formatDateTimeCn(item.createdAt)}
-                      </Text>
+                        ) : null}
+                        <View style={[styles.messageColumn, mine && styles.messageColumnMine]}>
+                          <View style={[styles.messageBubble, mine ? styles.messageBubbleMine : styles.messageBubbleOther]}>
+                            {item.attachment?.kind === "image" && item.attachment.url ? (
+                              <TouchableOpacity activeOpacity={0.9} onPress={() => setPreviewImageUrl(item.attachment?.url ?? null)}>
+                                <Image
+                                  source={{ uri: item.attachment.url }}
+                                  style={styles.messageImage}
+                                  resizeMode="cover"
+                                />
+                              </TouchableOpacity>
+                            ) : null}
+                            {item.attachment?.kind === "audio" ? (
+                              <TouchableOpacity
+                                style={[styles.audioBubble, mine && styles.audioBubbleMine]}
+                                onPress={() => playAudio(item)}
+                              >
+                                <Ionicons
+                                  name={playingAudioId === item.id ? "pause-circle-outline" : "play-circle-outline"}
+                                  size={20}
+                                  color={mine ? colors.surface : colors.accent}
+                                />
+                                <View style={styles.audioInfo}>
+                                  {item.attachment.durationSeconds ? (
+                                    <Text style={[styles.audioText, mine && styles.audioTextMine]}>
+                                      {item.attachment.durationSeconds}s
+                                    </Text>
+                                  ) : null}
+                                  <View style={[styles.waveTrack, mine && styles.waveTrackMine]}>
+                                    {Array.from({ length: 16 }).map((_, index) => {
+                                      const activeCount = Math.round((audioProgress[item.id] ?? 0) * 16);
+                                      return (
+                                        <View
+                                          key={`${item.id}-wave-${index}`}
+                                          style={[
+                                            styles.waveBar,
+                                            mine && styles.waveBarMine,
+                                            index < activeCount && (mine ? styles.waveBarActiveMine : styles.waveBarActive)
+                                          ]}
+                                        />
+                                      );
+                                    })}
+                                  </View>
+                                </View>
+                              </TouchableOpacity>
+                            ) : null}
+                            {shouldRenderMessageText(item.content) ? (
+                              <Text style={[styles.messageText, mine && styles.messageTextMine]}>{item.content}</Text>
+                            ) : null}
+                            <Text style={[styles.messageMeta, mine && styles.messageMetaMine]}>
+                              {formatDateTimeCn(item.createdAt)}
+                            </Text>
+                          </View>
+                        </View>
+                        {mine ? (
+                          user?.avatarUrl ? (
+                            <Image source={{ uri: user.avatarUrl }} style={styles.avatarImage} />
+                          ) : (
+                            <View style={[styles.avatar, styles.avatarMine]}>
+                              <Text style={styles.avatarText}>{selfAvatarLabel}</Text>
+                            </View>
+                          )
+                        ) : null}
+                      </View>
                     </View>
                   );
                 })
@@ -775,6 +931,32 @@ export default function FriendChatScreen() {
 }
 
 const styles = StyleSheet.create({
+  avatar: {
+    alignItems: "center",
+    borderRadius: 999,
+    height: 34,
+    justifyContent: "center",
+    width: 34
+  },
+  avatarFriend: {
+    backgroundColor: "#E0E7FF"
+  },
+  avatarImage: {
+    borderRadius: 999,
+    height: 34,
+    width: 34
+  },
+  avatarMine: {
+    backgroundColor: colors.accent
+  },
+  avatarText: {
+    color: colors.surface,
+    fontSize: 13,
+    fontWeight: "800"
+  },
+  avatarTextDark: {
+    color: "#3730A3"
+  },
   audioInfo: {
     flex: 1,
     gap: 6,
@@ -782,8 +964,10 @@ const styles = StyleSheet.create({
   },
   audioBubble: {
     alignItems: "center",
-    backgroundColor: "#EEF2FF",
+    backgroundColor: "#ECFDF5",
+    borderColor: "#A7F3D0",
     borderRadius: 12,
+    borderWidth: 1,
     flexDirection: "row",
     gap: 8,
     marginBottom: 8,
@@ -794,7 +978,8 @@ const styles = StyleSheet.create({
     paddingVertical: 10
   },
   audioBubbleMine: {
-    backgroundColor: "#0F766E"
+    backgroundColor: "#115E59",
+    borderColor: "rgba(255,255,255,0.22)"
   },
   audioText: {
     color: colors.text,
@@ -833,6 +1018,32 @@ const styles = StyleSheet.create({
     lineHeight: 21,
     paddingVertical: 20,
     textAlign: "center"
+  },
+  historyDividerText: {
+    color: colors.muted,
+    fontSize: 12,
+    fontWeight: "600"
+  },
+  historyDividerWrap: {
+    alignItems: "center",
+    alignSelf: "center",
+    backgroundColor: "#E2E8F0",
+    borderRadius: 999,
+    marginBottom: 2,
+    paddingHorizontal: 12,
+    paddingVertical: 6
+  },
+  historyLoadingRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 8,
+    justifyContent: "center",
+    paddingBottom: 4
+  },
+  historyLoadingText: {
+    color: colors.muted,
+    fontSize: 12,
+    fontWeight: "600"
   },
   input: {
     backgroundColor: colors.surface,
@@ -920,7 +1131,7 @@ const styles = StyleSheet.create({
   },
   messageBubble: {
     borderRadius: 18,
-    maxWidth: "88%",
+    maxWidth: "100%",
     paddingHorizontal: 14,
     paddingVertical: 12
   },
@@ -934,11 +1145,21 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     borderWidth: 1
   },
+  messageColumn: {
+    maxWidth: "82%",
+    minWidth: 0
+  },
+  messageColumnMine: {
+    alignItems: "flex-end"
+  },
   messageList: {
     flexGrow: 1,
     gap: 10,
     paddingBottom: 18,
     paddingTop: 4
+  },
+  messageGroup: {
+    gap: 8
   },
   bottomAnchor: {
     height: 1
@@ -950,6 +1171,17 @@ const styles = StyleSheet.create({
   },
   messageMetaMine: {
     color: "#CCFBF1"
+  },
+  messageRow: {
+    alignItems: "flex-end",
+    flexDirection: "row",
+    gap: 10
+  },
+  messageRowMine: {
+    justifyContent: "flex-end"
+  },
+  messageRowOther: {
+    justifyContent: "flex-start"
   },
   messageText: {
     color: colors.text,

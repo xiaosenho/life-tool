@@ -246,7 +246,11 @@ public class AiService {
     }
 
     public FoodRecognitionResponse recognizeFood(String userId, FoodRecognitionRequest request) {
-        String systemPrompt = "你是一个专业的营养师。请识别用户上传图片中的食物，估算每种食物的重量、热量（千卡）以及蛋白质/脂肪/碳水化合物含量（克），最后必须用“总热量约 N 千卡”给出总热量估算。";
+        String systemPrompt = """
+                你是一个专业的营养师。请先判断图片主体是否包含可记录饮食的食物或饮品。
+                如果图片不是食物/饮品，或无法确认是食物/饮品，只回复“未识别到食物，不会记录饮食。总热量约 0 千卡”，不要编造热量。
+                如果确认是食物/饮品，请识别每种食物，估算重量、热量（千卡）以及蛋白质/脂肪/碳水化合物含量（克），最后必须用“总热量约 N 千卡”给出总热量估算。
+                """;
 
         String userText = request.customPrompt() != null && !request.customPrompt().isBlank()
                 ? request.customPrompt()

@@ -9,6 +9,7 @@ import org.springframework.stereotype.Service;
 import com.lifetool.friends.realtime.FriendRealtimeService;
 import com.lifetool.friends.dto.FriendConversationSummaryResponse;
 import com.lifetool.friends.dto.FriendMessageAttachmentRequest;
+import com.lifetool.friends.dto.FriendMessagePageResponse;
 import com.lifetool.friends.dto.FriendMessageResponse;
 import com.lifetool.media.MediaAsset;
 import com.lifetool.media.MediaService;
@@ -17,6 +18,8 @@ import com.lifetool.users.UserRepository;
 
 @Service
 public class FriendService {
+    private static final int DEFAULT_MESSAGE_PAGE_LIMIT = 50;
+    private static final int MAX_MESSAGE_PAGE_LIMIT = 100;
 
     private final FriendStore store;
     private final FriendMessageStore messageStore;
@@ -128,9 +131,16 @@ public class FriendService {
         return saved;
     }
 
-    public List<FriendMessage> listConversation(String userId, String friendUserId) {
+    public FriendMessagePageResponse listConversation(String userId, String friendUserId, Integer limit, java.time.Instant beforeCreatedAt, String beforeId) {
         ensureFriends(userId, friendUserId);
-        return messageStore.listConversation(userId, friendUserId);
+        int normalizedLimit = normalizeMessagePageLimit(limit);
+        FriendMessageStore.ConversationPage page = messageStore.listConversation(userId, friendUserId, normalizedLimit, beforeCreatedAt, beforeId);
+        return new FriendMessagePageResponse(
+                page.messages().stream()
+                        .map(message -> toMessageResponse(userId, message))
+                        .toList(),
+                normalizedLimit,
+                page.hasMore());
     }
 
     public FriendMessageResponse toMessageResponse(String viewerUserId, FriendMessage message) {
@@ -201,6 +211,13 @@ public class FriendService {
         if (!store.areFriends(userId, friendUserId)) {
             throw new FriendException("FORBIDDEN", "Only friends can interact");
         }
+    }
+
+    private int normalizeMessagePageLimit(Integer limit) {
+        if (limit == null) {
+            return DEFAULT_MESSAGE_PAGE_LIMIT;
+        }
+        return Math.max(1, Math.min(limit, MAX_MESSAGE_PAGE_LIMIT));
     }
 
     private FriendMessage.MessageType parseMessageType(String type) {

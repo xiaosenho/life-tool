@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { ReactNode } from "react";
+import type { ComponentProps, ReactNode } from "react";
 import {
   ActivityIndicator,
   Alert,
   Image,
   Modal,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -50,6 +51,8 @@ type CalendarDayDetail = {
   events: AnniversaryEvent[];
 };
 
+type DetailSectionIconName = ComponentProps<typeof MaterialCommunityIcons>["name"];
+
 const CATEGORIES = ["餐饮", "交通", "购物", "住房", "娱乐", "医疗", "工资", "其他"];
 const EVENT_TYPES: { value: EventType; label: string }[] = [
   { value: "anniversary", label: "纪念日" },
@@ -93,12 +96,39 @@ function formatMealType(value: string) {
   );
 }
 
+function formatEventTypeLabel(value: EventType) {
+  return (
+    {
+      anniversary: "纪念日",
+      birthday: "生日",
+      important_day: "重要日",
+      todo_reminder: "提醒",
+    }[value] ?? value
+  );
+}
+
 function buildEventDate(year: number, month: number, day: number) {
   return `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 }
 
 function daysInMonthFor(year: number, month: number) {
   return new Date(year, month, 0).getDate();
+}
+
+function sanitizeNumberInput(value: string, maxLength: number) {
+  return value.replace(/\D/g, "").slice(0, maxLength);
+}
+
+function parseBoundedNumber(value: string, min: number, max: number) {
+  if (!value) return null;
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed)) return null;
+  return Math.max(min, Math.min(max, parsed));
+}
+
+function habitExistsOnDate(habit: Habit, date: string) {
+  const createdDate = String(habit.created_at || "").slice(0, 10);
+  return !createdDate || createdDate <= date;
 }
 
 export default function RecordsScreen() {
@@ -142,6 +172,8 @@ export default function RecordsScreen() {
   const [eventYear, setEventYear] = useState(initialEventDate.getFullYear());
   const [eventMonth, setEventMonth] = useState(initialEventDate.getMonth() + 1);
   const [eventDay, setEventDay] = useState(initialEventDate.getDate());
+  const [eventMonthInput, setEventMonthInput] = useState(String(initialEventDate.getMonth() + 1));
+  const [eventDayInput, setEventDayInput] = useState(String(initialEventDate.getDate()));
   const [upcomingEvents, setUpcomingEvents] = useState<AnniversaryEvent[]>([]);
   const [allSavedEvents, setAllSavedEvents] = useState<AnniversaryEvent[]>([]);
   const [calendarMonth, setCalendarMonth] = useState(currentMonth());
@@ -168,6 +200,9 @@ export default function RecordsScreen() {
   );
 
   const eventDateDisplay = useMemo(() => {
+    if ((repeatRule === "yearly" && (!eventMonthInput || !eventDayInput)) || (repeatRule === "monthly" && !eventDayInput)) {
+      return "请填写日期";
+    }
     if (repeatRule === "yearly") {
       return `每年 ${eventMonth} 月 ${eventDay} 日`;
     }
@@ -175,7 +210,7 @@ export default function RecordsScreen() {
       return `每月 ${eventDay} 日`;
     }
     return eventDate;
-  }, [eventDate, eventDay, eventMonth, repeatRule]);
+  }, [eventDate, eventDay, eventDayInput, eventMonth, eventMonthInput, repeatRule]);
 
   const historicalOneTimeEvents = useMemo(
     () =>
@@ -191,6 +226,7 @@ export default function RecordsScreen() {
     const maxDay = daysInMonthFor(eventYear, eventMonth);
     if (eventDay > maxDay) {
       setEventDay(maxDay);
+      setEventDayInput(String(maxDay));
     }
   }, [eventYear, eventMonth, eventDay]);
 
@@ -198,6 +234,37 @@ export default function RecordsScreen() {
     const normalizedDay = Math.min(eventDay, daysInMonthFor(eventYear, eventMonth));
     setEventDate(buildEventDate(eventYear, eventMonth, normalizedDay));
   }, [eventYear, eventMonth, eventDay]);
+
+  function updateEventMonthInput(value: string) {
+    const next = sanitizeNumberInput(value, 2);
+    setEventMonthInput(next);
+    const parsed = parseBoundedNumber(next, 1, 12);
+    if (parsed !== null) {
+      setEventMonth(parsed);
+    }
+  }
+
+  function updateEventDayInput(value: string) {
+    const next = sanitizeNumberInput(value, 2);
+    setEventDayInput(next);
+    const parsed = parseBoundedNumber(next, 1, 31);
+    if (parsed !== null) {
+      setEventDay(parsed);
+    }
+  }
+
+  function normalizeEventMonthInput() {
+    const parsed = parseBoundedNumber(eventMonthInput, 1, 12) ?? eventMonth;
+    setEventMonth(parsed);
+    setEventMonthInput(String(parsed));
+  }
+
+  function normalizeEventDayInput() {
+    const parsed = parseBoundedNumber(eventDayInput, 1, 31) ?? eventDay;
+    const next = Math.min(parsed, daysInMonthFor(eventYear, eventMonth));
+    setEventDay(next);
+    setEventDayInput(String(next));
+  }
 
   const loadDiet = useCallback(async () => {
     setDietLoading(true);
@@ -459,8 +526,9 @@ export default function RecordsScreen() {
           const date = formatDateCn(current);
           const inMonth = current.getMonth() === monthIndex;
 
+          const habitsForDate = activeHabits.filter((habit) => habitExistsOnDate(habit, date));
           const completedHabitIds = completedHabitIdsByDate.get(date) ?? new Set<string>();
-          const allHabitsDone = activeHabits.length > 0 && activeHabits.every((habit) => completedHabitIds.has(habit.id));
+          const allHabitsDone = habitsForDate.length > 0 && habitsForDate.every((habit) => completedHabitIds.has(habit.id));
 
           return {
             date,
@@ -497,7 +565,7 @@ export default function RecordsScreen() {
       setCalendarDetail({
         focus,
         habits: {
-          all: habitData.habits.filter((habit) => !habit.is_archived),
+          all: habitData.habits.filter((habit) => !habit.is_archived && habitExistsOnDate(habit, date)),
           checkins: habitData.checkins,
         },
         meals: mealsRes.success && mealsRes.data ? mealsRes.data : [],
@@ -521,6 +589,14 @@ export default function RecordsScreen() {
   async function submitEvent() {
     if (!eventTitle.trim()) {
       Alert.alert("提示", "请输入事件标题。");
+      return;
+    }
+    if (repeatRule === "yearly" && (!eventMonthInput || !eventDayInput)) {
+      Alert.alert("提示", "请填写每年的月和日。");
+      return;
+    }
+    if (repeatRule === "monthly" && !eventDayInput) {
+      Alert.alert("提示", "请填写每月几号。");
       return;
     }
 
@@ -548,13 +624,31 @@ export default function RecordsScreen() {
     }
   }
 
-  async function deleteEvent(id: string) {
+  async function performDeleteEvent(id: string) {
     try {
       await eventService.deleteEvent(id);
       await loadEvents();
+      await loadCalendarMonth(calendarMonth);
+      await loadCalendarDetail(selectedDate);
     } catch (error) {
       Alert.alert("删除失败", error instanceof Error ? error.message : "请稍后重试。");
     }
+  }
+
+  function deleteEvent(id: string) {
+    const message = "这会删除该纪念日/提醒本身，以及它后续生成的所有提醒。";
+    if (Platform.OS === "web") {
+      const confirmed = typeof window === "undefined" ? true : window.confirm(`删除整个提醒？\n${message}`);
+      if (confirmed) {
+        void performDeleteEvent(id);
+      }
+      return;
+    }
+
+    Alert.alert("删除整个提醒", message, [
+      { text: "取消", style: "cancel" },
+      { text: "删除", style: "destructive", onPress: () => void performDeleteEvent(id) },
+    ]);
   }
 
   async function deleteMeal(id: string) {
@@ -911,15 +1005,10 @@ export default function RecordsScreen() {
                       <Text style={styles.repeatFieldLabel}>月</Text>
                       <TextInput
                         style={styles.input}
-                        value={String(eventMonth)}
-                        onChangeText={(value) => {
-                          const next = Number(value.replace(/\D/g, ""));
-                          if (!Number.isFinite(next)) {
-                            setEventMonth(1);
-                            return;
-                          }
-                          setEventMonth(Math.max(1, Math.min(12, next)));
-                        }}
+                        value={eventMonthInput}
+                        onChangeText={updateEventMonthInput}
+                        onBlur={normalizeEventMonthInput}
+                        onSubmitEditing={normalizeEventMonthInput}
                         keyboardType="number-pad"
                         maxLength={2}
                       />
@@ -928,15 +1017,10 @@ export default function RecordsScreen() {
                       <Text style={styles.repeatFieldLabel}>日</Text>
                       <TextInput
                         style={styles.input}
-                        value={String(eventDay)}
-                        onChangeText={(value) => {
-                          const next = Number(value.replace(/\D/g, ""));
-                          if (!Number.isFinite(next)) {
-                            setEventDay(1);
-                            return;
-                          }
-                          setEventDay(Math.max(1, Math.min(31, next)));
-                        }}
+                        value={eventDayInput}
+                        onChangeText={updateEventDayInput}
+                        onBlur={normalizeEventDayInput}
+                        onSubmitEditing={normalizeEventDayInput}
                         keyboardType="number-pad"
                         maxLength={2}
                       />
@@ -948,15 +1032,10 @@ export default function RecordsScreen() {
                     <Text style={styles.repeatFieldLabel}>每月几号</Text>
                     <TextInput
                       style={styles.input}
-                      value={String(eventDay)}
-                      onChangeText={(value) => {
-                        const next = Number(value.replace(/\D/g, ""));
-                        if (!Number.isFinite(next)) {
-                          setEventDay(1);
-                          return;
-                        }
-                        setEventDay(Math.max(1, Math.min(31, next)));
-                      }}
+                      value={eventDayInput}
+                      onChangeText={updateEventDayInput}
+                      onBlur={normalizeEventDayInput}
+                      onSubmitEditing={normalizeEventDayInput}
                       keyboardType="number-pad"
                       maxLength={2}
                     />
@@ -1121,24 +1200,34 @@ export default function RecordsScreen() {
                   <Text style={styles.emptyText}>当天没有纪念日或提醒。</Text>
                 ) : (
                   calendarDetail.events.map((event) => (
-                    <View key={`${event.id}-${event.displayDate ?? event.nextOccurrenceDate}-${event.reminderOffsetDays ?? 0}`} style={styles.transactionRow}>
+                    <View
+                      key={`${event.id}-${event.displayDate ?? event.nextOccurrenceDate}-${event.reminderOffsetDays ?? 0}`}
+                      style={[styles.transactionRow, styles.eventRowHighlight]}
+                    >
                       <View style={styles.transactionMain}>
                         <Text style={styles.transactionTitle}>{event.title}</Text>
                         <Text style={styles.transactionMeta}>
                           {event.reminderOffsetDays && event.reminderOffsetDays > 0
                             ? `提前 ${event.reminderOffsetDays} 天提醒`
-                            : event.type}
+                            : formatEventTypeLabel(event.type)}
                         </Text>
                       </View>
-                      <Text style={[styles.transactionAmount, styles.eventCountdown]}>
-                        {event.reminderOffsetDays && event.reminderOffsetDays > 0 ? "提醒" : "当天"}
-                      </Text>
+                      <View style={styles.detailTag}>
+                        <MaterialCommunityIcons name="calendar-star-outline" size={14} color="#7C3AED" />
+                        <Text style={styles.detailTagText}>
+                          {event.reminderOffsetDays && event.reminderOffsetDays > 0 ? "提醒" : "当天"}
+                        </Text>
+                      </View>
                     </View>
                   ))
                 )}
 
                 <DetailSection
                   label="专注"
+                  icon="timer-outline"
+                  accentColor="#2563EB"
+                  accentBackground="#DBEAFE"
+                  countLabel={`${calendarDetail.focus.sessionCount} 次`}
                   expanded={calendarSectionsExpanded.focus}
                   onToggle={() =>
                     setCalendarSectionsExpanded((current) => ({ ...current, focus: !current.focus }))
@@ -1157,6 +1246,10 @@ export default function RecordsScreen() {
 
                 <DetailSection
                   label="习惯"
+                  icon="check-decagram-outline"
+                  accentColor="#0F766E"
+                  accentBackground="#CCFBF1"
+                  countLabel={`${calendarDetail.habits.all.length} 项`}
                   expanded={calendarSectionsExpanded.habits}
                   onToggle={() =>
                     setCalendarSectionsExpanded((current) => ({ ...current, habits: !current.habits }))
@@ -1184,6 +1277,10 @@ export default function RecordsScreen() {
 
                 <DetailSection
                   label="饮食"
+                  icon="silverware-fork-knife"
+                  accentColor="#059669"
+                  accentBackground="#D1FAE5"
+                  countLabel={`${calendarDetail.meals.length} 条`}
                   expanded={calendarSectionsExpanded.meals}
                   onToggle={() =>
                     setCalendarSectionsExpanded((current) => ({ ...current, meals: !current.meals }))
@@ -1206,6 +1303,10 @@ export default function RecordsScreen() {
 
                 <DetailSection
                   label="记账"
+                  icon="wallet-outline"
+                  accentColor="#D97706"
+                  accentBackground="#FEF3C7"
+                  countLabel={`${calendarDetail.transactions.length} 笔`}
                   expanded={calendarSectionsExpanded.transactions}
                   onToggle={() =>
                     setCalendarSectionsExpanded((current) => ({ ...current, transactions: !current.transactions }))
@@ -1270,19 +1371,35 @@ function TabButton({ label, active, onPress }: { label: string; active: boolean;
 
 function DetailSection({
   label,
+  icon,
+  accentColor,
+  accentBackground,
+  countLabel,
   expanded,
   onToggle,
   children,
 }: {
   label: string;
+  icon: DetailSectionIconName;
+  accentColor: string;
+  accentBackground: string;
+  countLabel: string;
   expanded: boolean;
   onToggle: () => void;
   children: ReactNode;
 }) {
   return (
-    <View style={styles.detailSection}>
+    <View style={[styles.detailSection, { borderLeftColor: accentColor, backgroundColor: accentBackground }]}>
       <TouchableOpacity style={styles.detailSectionHeader} onPress={onToggle} activeOpacity={0.85}>
-        <Text style={styles.detailLabel}>{label}</Text>
+        <View style={styles.detailSectionTitleWrap}>
+          <View style={[styles.detailSectionIconWrap, { backgroundColor: colors.surface }]}>
+            <MaterialCommunityIcons name={icon} size={16} color={accentColor} />
+          </View>
+          <View>
+            <Text style={[styles.detailLabel, styles.detailSectionTitle]}>{label}</Text>
+            <Text style={styles.detailSectionCount}>{countLabel}</Text>
+          </View>
+        </View>
         <View style={styles.detailSectionAction}>
           <Text style={styles.detailSectionActionText}>{expanded ? "收起" : "展开查看"}</Text>
           <MaterialCommunityIcons
@@ -1446,8 +1563,18 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     marginTop: 6,
   },
+  detailSectionCount: {
+    color: colors.muted,
+    fontSize: 12,
+    fontWeight: "600",
+    marginTop: 2,
+  },
   detailSection: {
+    borderLeftWidth: 4,
+    borderRadius: 16,
     gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
   },
   detailSectionAction: {
     alignItems: "center",
@@ -1463,6 +1590,38 @@ const styles = StyleSheet.create({
     alignItems: "center",
     flexDirection: "row",
     justifyContent: "space-between",
+  },
+  detailSectionIconWrap: {
+    alignItems: "center",
+    borderRadius: 10,
+    height: 32,
+    justifyContent: "center",
+    width: 32,
+  },
+  detailSectionTitle: {
+    color: colors.text,
+    fontSize: 13,
+    marginTop: 0,
+  },
+  detailSectionTitleWrap: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 10,
+  },
+  detailTag: {
+    alignItems: "center",
+    alignSelf: "center",
+    backgroundColor: "#F3E8FF",
+    borderRadius: 999,
+    flexDirection: "row",
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  detailTagText: {
+    color: "#7C3AED",
+    fontSize: 12,
+    fontWeight: "700",
   },
   detailMeta: {
     color: colors.muted,
@@ -1486,6 +1645,11 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
     paddingVertical: 10,
+  },
+  eventRowHighlight: {
+    backgroundColor: "#FAF5FF",
+    borderRadius: 14,
+    paddingHorizontal: 12,
   },
   eventCountdown: {
     color: colors.accent,

@@ -29,11 +29,23 @@ public class AliyunPushNotificationService implements PushNotificationService {
     @Override
     public void pushToUser(PushNotificationCommand command) {
         if (properties.getAppKey() == null || properties.getAccessKeyId() == null || properties.getAccessKeySecret() == null) {
-            log.warn("Aliyun push skipped, missing credentials");
+            log.warn("Aliyun push skipped, missing credentials. targetUserId={}, title={}, scene={}",
+                    command.targetUserId(), command.title(), command.extras() == null ? null : command.extras().get("scene"));
             return;
         }
-        for (Device device : deviceService.listPushableDevices(command.targetUserId())) {
+        var devices = deviceService.listPushableDevices(command.targetUserId());
+        log.info("Aliyun push triggered. targetUserId={}, title={}, deviceCount={}, scene={}",
+                command.targetUserId(), command.title(), devices.size(),
+                command.extras() == null ? null : command.extras().get("scene"));
+        if (devices.isEmpty()) {
+            log.info("Aliyun push skipped, no pushable devices. targetUserId={}, title={}",
+                    command.targetUserId(), command.title());
+            return;
+        }
+        for (Device device : devices) {
             if (device.getVendorDeviceId() == null || device.getVendorDeviceId().isBlank()) {
+                log.info("Aliyun push skipped device without vendorDeviceId. targetUserId={}, deviceId={}",
+                        command.targetUserId(), device.getId());
                 continue;
             }
             try {
@@ -44,7 +56,11 @@ public class AliyunPushNotificationService implements PushNotificationService {
                 if (command.deepLink() != null && !command.deepLink().isBlank()) {
                     extras.put("deepLink", command.deepLink());
                 }
+                log.info("Aliyun push attempt. targetUserId={}, deviceId={}, deviceType={}, scene={}",
+                        command.targetUserId(), device.getId(), device.getDeviceType(), extras.get("scene"));
                 pushByReflection(device, command, extras);
+                log.info("Aliyun push success. targetUserId={}, deviceId={}, title={}",
+                        command.targetUserId(), device.getId(), command.title());
             } catch (Exception ex) {
                 log.warn("Aliyun push failed for userId={}, deviceId={}, message={}",
                         command.targetUserId(), device.getId(), ex.getMessage());

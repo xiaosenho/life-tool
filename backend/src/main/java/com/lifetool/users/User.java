@@ -9,6 +9,7 @@ public class User {
     private String email;
     private String passwordHash;
     private String displayName;
+    private String avatarAssetId;
     private Instant createdAt;
 
     public User(String email, String passwordHash, String displayName) {
@@ -19,11 +20,12 @@ public class User {
         this.createdAt = Instant.now();
     }
 
-    public User(String id, String email, String passwordHash, String displayName, Instant createdAt) {
+    public User(String id, String email, String passwordHash, String displayName, String avatarAssetId, Instant createdAt) {
         this.id = id;
         this.email = email;
         this.passwordHash = passwordHash;
         this.displayName = displayName;
+        this.avatarAssetId = avatarAssetId;
         this.createdAt = createdAt;
     }
 
@@ -31,5 +33,10 @@ public class User {
     public String getEmail() { return email; }
     public String getPasswordHash() { return passwordHash; }
     public String getDisplayName() { return displayName; }
+    public String getAvatarAssetId() { return avatarAssetId; }
     public Instant getCreatedAt() { return createdAt; }
+
+    public void setPasswordHash(String passwordHash) { this.passwordHash = passwordHash; }
+    public void setDisplayName(String displayName) { this.displayName = displayName; }
+    public void setAvatarAssetId(String avatarAssetId) { this.avatarAssetId = avatarAssetId; }
 }

@@ -13,6 +13,9 @@ import org.springframework.stereotype.Repository;
 @Repository
 @Profile("!postgres")
 public class InMemoryFriendMessageStore implements FriendMessageStore {
+    private static final Comparator<FriendMessage> DESCENDING_CONVERSATION_ORDER = Comparator
+            .comparing(FriendMessage::getCreatedAt, Comparator.reverseOrder())
+            .thenComparing(FriendMessage::getId, Comparator.reverseOrder());
 
     private final CopyOnWriteArrayList<FriendMessage> messages = new CopyOnWriteArrayList<>();
 
@@ -24,11 +27,19 @@ public class InMemoryFriendMessageStore implements FriendMessageStore {
     }
 
     @Override
-    public List<FriendMessage> listConversation(String userId, String friendUserId) {
-        return messages.stream()
+    public ConversationPage listConversation(String userId, String friendUserId, int limit, Instant beforeCreatedAt, String beforeId) {
+        List<FriendMessage> results = messages.stream()
                 .filter(message -> isConversation(message, userId, friendUserId))
-                .sorted(Comparator.comparing(FriendMessage::getCreatedAt))
+                .filter(message -> isBeforeCursor(message, beforeCreatedAt, beforeId))
+                .sorted(DESCENDING_CONVERSATION_ORDER)
+                .limit((long) limit + 1)
                 .toList();
+        boolean hasMore = results.size() > limit;
+        List<FriendMessage> page = hasMore ? results.subList(0, limit) : results;
+        List<FriendMessage> ascending = page.stream()
+                .sorted(Comparator.comparing(FriendMessage::getCreatedAt).thenComparing(FriendMessage::getId))
+                .toList();
+        return new ConversationPage(ascending, hasMore);
     }
 
     @Override
@@ -97,5 +108,22 @@ public class InMemoryFriendMessageStore implements FriendMessageStore {
     private boolean isConversation(FriendMessage message, String userId, String friendUserId) {
         return (message.getFromUserId().equals(userId) && message.getToUserId().equals(friendUserId))
                 || (message.getFromUserId().equals(friendUserId) && message.getToUserId().equals(userId));
+    }
+
+    private boolean isBeforeCursor(FriendMessage message, Instant beforeCreatedAt, String beforeId) {
+        if (beforeCreatedAt == null) {
+            return true;
+        }
+        int createdAtComparison = message.getCreatedAt().compareTo(beforeCreatedAt);
+        if (createdAtComparison < 0) {
+            return true;
+        }
+        if (createdAtComparison > 0) {
+            return false;
+        }
+        if (beforeId == null || beforeId.isBlank()) {
+            return false;
+        }
+        return message.getId().compareTo(beforeId) < 0;
     }
 }

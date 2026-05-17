@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useLayoutEffect, useRef } from "react";
-import { router, useNavigation } from "expo-router";
+import React, { useState, useEffect, useRef } from "react";
+import { router } from "expo-router";
 import {
   View,
   Text,
@@ -17,7 +17,6 @@ const PRESET_MINUTES = [15, 25, 45, 60];
 const DEFAULT_MINUTES = 25;
 
 export default function FocusScreen() {
-  const navigation = useNavigation();
   const [timeLeft, setTimeLeft] = useState(DEFAULT_MINUTES * 60);
   const [targetMinutes, setTargetMinutes] = useState(DEFAULT_MINUTES);
   const [defaultMinutes, setDefaultMinutes] = useState(DEFAULT_MINUTES);
@@ -34,18 +33,6 @@ export default function FocusScreen() {
     loadPreference();
     loadTodayStats();
   }, []);
-
-  useLayoutEffect(() => {
-    navigation.setOptions({
-      headerShown: true,
-      headerTitle: "专注",
-      headerRight: () => (
-        <TouchableOpacity style={styles.headerVocabButton} onPress={() => router.push("/vocab")} activeOpacity={0.85}>
-          <Text style={styles.headerVocabButtonText}>可以背单词啦</Text>
-        </TouchableOpacity>
-      ),
-    });
-  }, [navigation]);
 
   useEffect(() => {
     if (isActive && timeLeft > 0) {
@@ -229,7 +216,16 @@ export default function FocusScreen() {
   const canEditTarget = !startedAt;
 
   return (
-    <Screen>
+    <Screen
+      title="专注"
+      scrollable={false}
+      contentContainerStyle={styles.screenContent}
+      headerRight={
+        <TouchableOpacity style={styles.headerVocabButton} onPress={() => router.push("/vocab")} activeOpacity={0.85}>
+          <Text style={styles.headerVocabButtonText}>背单词</Text>
+        </TouchableOpacity>
+      }
+    >
       <ScrollView contentContainerStyle={styles.container}>
         {offlineNotice && (
           <View style={styles.offlineBanner}>
@@ -353,6 +349,9 @@ export default function FocusScreen() {
 }
 
 const styles = StyleSheet.create({
+  screenContent: {
+    flex: 1,
+  },
   container: {
     flexGrow: 1,
     paddingHorizontal: 16,

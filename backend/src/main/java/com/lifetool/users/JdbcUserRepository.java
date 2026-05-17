@@ -31,7 +31,7 @@ public class JdbcUserRepository implements UserRepository {
     @Override
     public Optional<User> findById(String id) {
         String sql = """
-                SELECT id, email, password_hash, display_name, created_at
+                SELECT id, email, password_hash, display_name, avatar_asset_id, created_at
                 FROM users
                 WHERE id = ?::uuid AND deleted_at IS NULL
                 """;
@@ -53,7 +53,7 @@ public class JdbcUserRepository implements UserRepository {
                 .map(id -> "?::uuid")
                 .collect(Collectors.joining(", "));
         String sql = """
-                SELECT id, email, password_hash, display_name, created_at
+                SELECT id, email, password_hash, display_name, avatar_asset_id, created_at
                 FROM users
                 WHERE id IN (%s) AND deleted_at IS NULL
                 """.formatted(placeholders);
@@ -78,7 +78,7 @@ public class JdbcUserRepository implements UserRepository {
     @Override
     public Optional<User> findByEmail(String email) {
         String sql = """
-                SELECT id, email, password_hash, display_name, created_at
+                SELECT id, email, password_hash, display_name, avatar_asset_id, created_at
                 FROM users
                 WHERE lower(email) = lower(?) AND deleted_at IS NULL
                 """;
@@ -88,12 +88,13 @@ public class JdbcUserRepository implements UserRepository {
     @Override
     public User save(User user) {
         String sql = """
-                INSERT INTO users (id, email, password_hash, display_name, created_at, updated_at)
-                VALUES (?::uuid, ?, ?, ?, ?, ?)
+                INSERT INTO users (id, email, password_hash, display_name, avatar_asset_id, created_at, updated_at)
+                VALUES (?::uuid, ?, ?, ?, ?::uuid, ?, ?)
                 ON CONFLICT (id) DO UPDATE SET
                   email = EXCLUDED.email,
                   password_hash = EXCLUDED.password_hash,
                   display_name = EXCLUDED.display_name,
+                  avatar_asset_id = EXCLUDED.avatar_asset_id,
                   updated_at = now()
                 """;
         try (Connection conn = getConnection();
@@ -102,8 +103,9 @@ public class JdbcUserRepository implements UserRepository {
             stmt.setString(2, user.getEmail());
             stmt.setString(3, user.getPasswordHash());
             stmt.setString(4, user.getDisplayName());
-            stmt.setTimestamp(5, Timestamp.from(user.getCreatedAt()));
-            stmt.setTimestamp(6, Timestamp.from(Instant.now()));
+            stmt.setString(5, user.getAvatarAssetId());
+            stmt.setTimestamp(6, Timestamp.from(user.getCreatedAt()));
+            stmt.setTimestamp(7, Timestamp.from(Instant.now()));
             stmt.executeUpdate();
             return user;
         } catch (SQLException ex) {
@@ -146,6 +148,7 @@ public class JdbcUserRepository implements UserRepository {
                 rs.getString("email"),
                 rs.getString("password_hash"),
                 rs.getString("display_name"),
+                rs.getString("avatar_asset_id"),
                 rs.getTimestamp("created_at").toInstant());
     }
 

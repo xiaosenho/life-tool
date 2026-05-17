@@ -186,12 +186,52 @@ class FriendControllerTest {
         mockMvc.perform(get("/api/friends/messages/" + extractMyUserId(tokenA))
                         .header("Authorization", "Bearer " + tokenB))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data[0].content").value("今天专注很棒，继续加油！"));
+                .andExpect(jsonPath("$.data.messages[0].content").value("今天专注很棒，继续加油！"));
 
         mockMvc.perform(post("/api/friends/messages/" + extractMyUserId(tokenA) + "/read")
                         .header("Authorization", "Bearer " + tokenB))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.updated").value(1));
+    }
+
+    @Test
+    void friendsCanPaginateMessages() throws Exception {
+        String bobEmail = getBobEmail();
+        String requestId = sendRequest(tokenA, bobEmail);
+        acceptRequest(tokenB, requestId);
+
+        for (int index = 1; index <= 55; index++) {
+            mockMvc.perform(post("/api/friends/messages/" + userIdB)
+                            .header("Authorization", "Bearer " + tokenA)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"content\":\"第" + index + "条消息\"}"))
+                    .andExpect(status().isCreated());
+        }
+
+        MvcResult firstPageResult = mockMvc.perform(get("/api/friends/messages/" + userIdB)
+                        .header("Authorization", "Bearer " + tokenA)
+                        .param("limit", "50"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.limit").value(50))
+                .andExpect(jsonPath("$.data.hasMore").value(true))
+                .andExpect(jsonPath("$.data.messages.length()").value(50))
+                .andExpect(jsonPath("$.data.messages[0].content").value("第6条消息"))
+                .andExpect(jsonPath("$.data.messages[49].content").value("第55条消息"))
+                .andReturn();
+
+        JsonNode firstPage = objectMapper.readTree(firstPageResult.getResponse().getContentAsString()).get("data");
+        JsonNode oldestLoadedMessage = firstPage.get("messages").get(0);
+
+        mockMvc.perform(get("/api/friends/messages/" + userIdB)
+                        .header("Authorization", "Bearer " + tokenA)
+                        .param("limit", "50")
+                        .param("beforeCreatedAt", oldestLoadedMessage.get("createdAt").asText())
+                        .param("beforeId", oldestLoadedMessage.get("id").asText()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.hasMore").value(false))
+                .andExpect(jsonPath("$.data.messages.length()").value(5))
+                .andExpect(jsonPath("$.data.messages[0].content").value("第1条消息"))
+                .andExpect(jsonPath("$.data.messages[4].content").value("第5条消息"));
     }
 
     @Test

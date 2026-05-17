@@ -14,10 +14,12 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.lifetool.common.ApiResponse;
 import com.lifetool.friends.dto.FriendConversationSummaryResponse;
+import com.lifetool.friends.dto.FriendMessagePageResponse;
 import com.lifetool.friends.dto.FriendMessageResponse;
 import com.lifetool.friends.dto.SendFriendMessageRequest;
 
@@ -85,12 +87,13 @@ public class FriendController {
     }
 
     @GetMapping("/messages/{friendUserId}")
-    public ResponseEntity<ApiResponse<List<FriendMessageResponse>>> listConversation(
+    public ResponseEntity<ApiResponse<FriendMessagePageResponse>> listConversation(
             @AuthenticationPrincipal String userId,
-            @PathVariable String friendUserId) {
-        return ResponseEntity.ok(ApiResponse.ok(friendService.listConversation(userId, friendUserId).stream()
-                .map(message -> friendService.toMessageResponse(userId, message))
-                .toList()));
+            @PathVariable String friendUserId,
+            @RequestParam(required = false) Integer limit,
+            @RequestParam(required = false) java.time.Instant beforeCreatedAt,
+            @RequestParam(required = false) String beforeId) {
+        return ResponseEntity.ok(ApiResponse.ok(friendService.listConversation(userId, friendUserId, limit, beforeCreatedAt, beforeId)));
     }
 
     @PostMapping("/messages/{friendUserId}")

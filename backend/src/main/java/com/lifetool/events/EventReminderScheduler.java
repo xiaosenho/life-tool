@@ -36,17 +36,25 @@ public class EventReminderScheduler {
     @Scheduled(fixedDelayString = "${lifetool.push.reminders.scan-delay-ms:3600000}")
     public void scanAndPushDueReminders() {
         LocalDate today = LocalDate.now(clock);
+        int scanned = 0;
+        int due = 0;
+        int skippedDuplicate = 0;
         int pushed = 0;
         for (AnniversaryEvent event : eventStore.findAllActive()) {
+            scanned++;
             ReminderMatch match = findReminderMatch(event, today);
             if (match == null) {
                 continue;
             }
+            due++;
             String markerKey = buildMarkerKey(event, match.displayDate());
             LocalDate existing = sentReminderMarkers.putIfAbsent(markerKey, today);
             if (existing != null && existing.equals(today)) {
+                skippedDuplicate++;
                 continue;
             }
+            log.info("Anniversary reminder push due. eventId={}, userId={}, displayDate={}, offsetDays={}",
+                    event.getId(), event.getUserId(), match.displayDate(), match.offsetDays());
             pushNotificationService.pushToUser(new PushNotificationCommand(
                     buildTitle(event, match.offsetDays()),
                     buildBody(event, match.nextOccurrenceDate(), match.offsetDays()),
@@ -63,9 +71,8 @@ public class EventReminderScheduler {
             ));
             pushed++;
         }
-        if (pushed > 0) {
-            log.info("Anniversary reminder push completed, pushed={}", pushed);
-        }
+        log.info("Anniversary reminder scan completed. date={}, scanned={}, due={}, pushed={}, skippedDuplicate={}",
+                today, scanned, due, pushed, skippedDuplicate);
         cleanupMarkers(today.minusDays(2));
     }
 

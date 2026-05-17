@@ -33,6 +33,7 @@ import {
   uploadChatImage
 } from "@/services/chatMediaService";
 import { cachedAiMessages, cachedAiSession, setCachedAiMessages, setCachedAiSession } from "@/features/ai/aiChatCache";
+import { useAuthStore } from "@/store/authStore";
 import { colors } from "@/theme/colors";
 
 const toolLabels: Record<string, string> = {
@@ -53,12 +54,23 @@ const defaultEnabledTools = [
   "get_user_profile_context"
 ];
 
+const ATTACHMENT_PLACEHOLDER_PATTERN = /^\[(语音|图片)(消息)?\]$/;
+
 function shouldRenderMessageText(content: string | null | undefined) {
   const normalized = content?.trim();
-  return !!normalized && normalized !== "[语音消息]" && normalized !== "[图片消息]";
+  return !!normalized && !ATTACHMENT_PLACEHOLDER_PATTERN.test(normalized);
+}
+
+function getDisplayInitial(value: string | null | undefined) {
+  const normalized = value?.trim();
+  if (!normalized) {
+    return "我";
+  }
+  return normalized.slice(0, 1).toUpperCase();
 }
 
 export default function AiChatScreen() {
+  const user = useAuthStore((state) => state.user);
   const [session, setSession] = useState<ChatSession | null>(cachedAiSession);
   const [messages, setMessages] = useState<ChatMessage[]>(cachedAiMessages);
   const [input, setInput] = useState("");
@@ -85,6 +97,10 @@ export default function AiChatScreen() {
   const hasInitialScrolledRef = useRef(false);
   const soundRef = useRef<Audio.Sound | null>(null);
   const insets = useSafeAreaInsets();
+  const selfAvatarLabel = useMemo(
+    () => getDisplayInitial(user?.displayName || user?.email),
+    [user?.displayName, user?.email]
+  );
 
   const scrollToBottom = useCallback((animated = true) => {
     requestAnimationFrame(() => {
@@ -491,61 +507,83 @@ export default function AiChatScreen() {
               ]}
               keyboardShouldPersistTaps="handled"
             >
-              {messages.map((message) => (
-                <View style={styles.messageRow}>
-                  <View
-                    style={[styles.messageBubble, message.role === "user" ? styles.userBubble : styles.aiBubble]}
-                  >
-                    {message.attachment?.kind === "image" && message.attachment.url ? (
-                      <TouchableOpacity activeOpacity={0.9} onPress={() => setPreviewImageUrl(message.attachment?.url ?? null)}>
-                        <Image source={{ uri: message.attachment.url }} style={styles.messageImage} resizeMode="cover" />
-                      </TouchableOpacity>
+              {messages.map((message) => {
+                const mine = message.role === "user";
+                const messageKey = message.id ?? message.messageId ?? `${message.role}-${message.createdAt}`;
+                return (
+                  <View key={messageKey} style={[styles.messageRow, mine ? styles.messageRowMine : styles.messageRowOther]}>
+                    {!mine ? (
+                      <View style={[styles.avatar, styles.aiAvatar]}>
+                        <Ionicons name="hardware-chip-outline" size={16} color={colors.surface} />
+                      </View>
                     ) : null}
-                    {message.attachment?.kind === "audio" ? (
-                      <TouchableOpacity
-                        style={[styles.audioBubble, message.role === "user" && styles.audioBubbleMine]}
-                        onPress={() => playAudio(message)}
+                    <View style={[styles.messageColumn, mine && styles.messageColumnMine]}>
+                      <View
+                        style={[styles.messageBubble, mine ? styles.userBubble : styles.aiBubble]}
                       >
-                        <Ionicons
-                          name={playingAudioId === (message.id ?? message.messageId ?? null) ? "pause-circle-outline" : "play-circle-outline"}
-                          size={20}
-                          color={message.role === "user" ? colors.surface : colors.accent}
-                        />
-                        <View style={styles.audioInfo}>
-                          <Text style={message.role === "user" ? styles.audioTextMine : styles.audioText}>
-                            {message.attachment.durationSeconds ? `${message.attachment.durationSeconds}s 语音` : "语音消息"}
-                          </Text>
-                          <View style={[styles.waveTrack, message.role === "user" && styles.waveTrackMine]}>
-                            {Array.from({ length: 16 }).map((_, index) => {
-                              const currentId = message.id ?? message.messageId ?? "";
-                              const activeCount = Math.round((audioProgress[currentId] ?? 0) * 16);
-                              return (
-                                <View
-                                  key={`${currentId}-wave-${index}`}
-                                  style={[
-                                    styles.waveBar,
-                                    message.role === "user" && styles.waveBarMine,
-                                    index < activeCount && (message.role === "user" ? styles.waveBarActiveMine : styles.waveBarActive)
-                                  ]}
-                                />
-                              );
-                            })}
-                          </View>
+                        {message.attachment?.kind === "image" && message.attachment.url ? (
+                          <TouchableOpacity activeOpacity={0.9} onPress={() => setPreviewImageUrl(message.attachment?.url ?? null)}>
+                            <Image source={{ uri: message.attachment.url }} style={styles.messageImage} resizeMode="cover" />
+                          </TouchableOpacity>
+                        ) : null}
+                        {message.attachment?.kind === "audio" ? (
+                          <TouchableOpacity
+                            style={[styles.audioBubble, mine && styles.audioBubbleMine]}
+                            onPress={() => playAudio(message)}
+                          >
+                            <Ionicons
+                              name={playingAudioId === (message.id ?? message.messageId ?? null) ? "pause-circle-outline" : "play-circle-outline"}
+                              size={20}
+                              color={mine ? colors.surface : colors.accent}
+                            />
+                            <View style={styles.audioInfo}>
+                              {message.attachment.durationSeconds ? (
+                                <Text style={mine ? styles.audioTextMine : styles.audioText}>
+                                  {message.attachment.durationSeconds}s
+                                </Text>
+                              ) : null}
+                              <View style={[styles.waveTrack, mine && styles.waveTrackMine]}>
+                                {Array.from({ length: 16 }).map((_, index) => {
+                                  const currentId = message.id ?? message.messageId ?? "";
+                                  const activeCount = Math.round((audioProgress[currentId] ?? 0) * 16);
+                                  return (
+                                    <View
+                                      key={`${currentId}-wave-${index}`}
+                                      style={[
+                                        styles.waveBar,
+                                        mine && styles.waveBarMine,
+                                        index < activeCount && (mine ? styles.waveBarActiveMine : styles.waveBarActive)
+                                      ]}
+                                    />
+                                  );
+                                })}
+                              </View>
+                            </View>
+                          </TouchableOpacity>
+                        ) : null}
+                        {shouldRenderMessageText(message.content) ? (
+                          <Text style={mine ? styles.userText : styles.aiText}>{message.content}</Text>
+                        ) : null}
+                      </View>
+                      {!mine && message.longTermMemorySaved ? (
+                        <View style={styles.memoryHint}>
+                          <Ionicons name="sparkles-outline" size={14} color={colors.accent} />
+                          <Text style={styles.memoryHintText}>已记住你的长期偏好</Text>
                         </View>
-                      </TouchableOpacity>
-                    ) : null}
-                    {shouldRenderMessageText(message.content) ? (
-                      <Text style={message.role === "user" ? styles.userText : styles.aiText}>{message.content}</Text>
+                      ) : null}
+                    </View>
+                    {mine ? (
+                      user?.avatarUrl ? (
+                        <Image source={{ uri: user.avatarUrl }} style={styles.avatarImage} />
+                      ) : (
+                        <View style={[styles.avatar, styles.userAvatar]}>
+                          <Text style={styles.avatarText}>{selfAvatarLabel}</Text>
+                        </View>
+                      )
                     ) : null}
                   </View>
-                  {message.role === "assistant" && message.longTermMemorySaved ? (
-                    <View style={styles.memoryHint}>
-                      <Ionicons name="sparkles-outline" size={14} color={colors.accent} />
-                      <Text style={styles.memoryHintText}>已记住你的长期偏好</Text>
-                    </View>
-                  ) : null}
-                </View>
-              ))}
+                );
+              })}
               <View style={styles.bottomAnchor} />
             </ScrollView>
           )}
@@ -666,6 +704,9 @@ export default function AiChatScreen() {
 }
 
 const styles = StyleSheet.create({
+  aiAvatar: {
+    backgroundColor: "#334155"
+  },
   audioInfo: {
     flex: 1,
     gap: 6,
@@ -673,8 +714,10 @@ const styles = StyleSheet.create({
   },
   audioBubble: {
     alignItems: "center",
-    backgroundColor: "#EEF2FF",
+    backgroundColor: "#ECFDF5",
+    borderColor: "#A7F3D0",
     borderRadius: 12,
+    borderWidth: 1,
     flexDirection: "row",
     gap: 8,
     marginBottom: 8,
@@ -685,7 +728,8 @@ const styles = StyleSheet.create({
     paddingVertical: 10
   },
   audioBubbleMine: {
-    backgroundColor: "#0F766E"
+    backgroundColor: "#115E59",
+    borderColor: "rgba(255,255,255,0.22)"
   },
   audioText: {
     color: colors.text,
@@ -698,6 +742,23 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "600",
     flexShrink: 1
+  },
+  avatar: {
+    alignItems: "center",
+    borderRadius: 999,
+    height: 34,
+    justifyContent: "center",
+    width: 34
+  },
+  avatarImage: {
+    borderRadius: 999,
+    height: 34,
+    width: 34
+  },
+  avatarText: {
+    color: colors.surface,
+    fontSize: 13,
+    fontWeight: "800"
   },
   aiBubble: {
     alignSelf: "flex-start",
@@ -804,9 +865,16 @@ const styles = StyleSheet.create({
   },
   messageBubble: {
     borderRadius: 14,
-    maxWidth: "92%",
+    maxWidth: "100%",
     paddingHorizontal: 14,
     paddingVertical: 12
+  },
+  messageColumn: {
+    maxWidth: "84%",
+    minWidth: 0
+  },
+  messageColumnMine: {
+    alignItems: "flex-end"
   },
   messageImage: {
     borderRadius: 12,
@@ -836,7 +904,15 @@ const styles = StyleSheet.create({
   },
   messageRow: {
     alignItems: "flex-start",
+    flexDirection: "row",
+    gap: 10,
     minWidth: 0
+  },
+  messageRowMine: {
+    justifyContent: "flex-end"
+  },
+  messageRowOther: {
+    justifyContent: "flex-start"
   },
   previewCloseButton: {
     alignItems: "center",
@@ -940,6 +1016,9 @@ const styles = StyleSheet.create({
   },
   userBubble: {
     alignSelf: "flex-end",
+    backgroundColor: colors.accent
+  },
+  userAvatar: {
     backgroundColor: colors.accent
   },
   userText: {

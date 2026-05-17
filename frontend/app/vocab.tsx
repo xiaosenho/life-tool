@@ -129,7 +129,7 @@ export default function VocabScreen() {
   const progressRatio = total > 0 ? Math.min(Math.max(currentSeqNo / total, 0), 1) : 0;
 
   return (
-    <Screen scrollable={false} contentContainerStyle={styles.screenContent}>
+    <Screen scrollable={false} edges={['left', 'right', 'bottom']} contentContainerStyle={styles.screenContent}>
       <View style={styles.screenBody}>
         <ScrollView contentContainerStyle={styles.scrollContent}>
           <View style={styles.headerCard}>
@@ -251,7 +251,7 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   screenContent: {
-    paddingTop: 8,
+    paddingTop: 0,
   },
   scrollContent: {
     paddingBottom: 120,

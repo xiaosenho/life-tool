@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.context.annotation.Lazy;
 
 import com.lifetool.ai.AiAssistantClient;
+import com.lifetool.common.TimeSupport;
 import com.lifetool.media.MediaService;
 import com.lifetool.meals.dto.MealDetailResponse;
 import com.lifetool.meals.dto.MealRecordResponse;
@@ -30,13 +31,19 @@ public class MealService {
             "没有食物",
             "图中无食物",
             "看起来不是食物",
-            "疑似不是食物");
+            "疑似不是食物",
+            "无法判断为食物",
+            "不会记录饮食",
+            "不建议记录为饮食");
     private static final Pattern TOTAL_CALORIES_PATTERN = Pattern.compile(
             "(?:总热量|合计|总计|总摄入|总共)[^0-9]{0,30}(\\d+(?:\\.\\d+)?)\\s*(?:千卡|大卡|kcal|Kcal|KCAL|卡路里)?");
     private static final Pattern CALORIES_PATTERN = Pattern.compile(
             "(\\d+(?:\\.\\d+)?)\\s*(?:千卡|大卡|kcal|Kcal|KCAL)");
-    private static final String MEAL_RECOGNITION_PROMPT =
-            "你是一个专业的营养师。请识别用户上传图片中的食物，估算每种食物的重量、热量（千卡）以及蛋白质/脂肪/碳水化合物含量（克），最后必须用“总热量约 N 千卡”给出总热量估算。";
+    private static final String MEAL_RECOGNITION_PROMPT = """
+            你是一个专业的营养师。请先判断图片主体是否包含可记录饮食的食物或饮品。
+            如果图片不是食物/饮品，或无法确认是食物/饮品，只回复“未识别到食物，不会记录饮食。总热量约 0 千卡”，不要编造热量。
+            如果确认是食物/饮品，请识别每种食物，估算重量、热量（千卡）以及蛋白质/脂肪/碳水化合物含量（克），最后必须用“总热量约 N 千卡”给出总热量估算。
+            """;
 
     private final MealStore mealStore;
     private final MediaService mediaService;
@@ -62,7 +69,7 @@ public class MealService {
 
     public static boolean shouldPersistAiRecognition(String aiResult) {
         Optional<BigDecimal> totalCalories = extractTotalCalories(aiResult);
-        if (totalCalories.isPresent() && totalCalories.get().compareTo(BigDecimal.ZERO) <= 0) {
+        if (totalCalories.isEmpty() || totalCalories.get().compareTo(BigDecimal.ZERO) <= 0) {
             return false;
         }
         return !containsNonFoodHint(aiResult);
@@ -164,7 +171,7 @@ public class MealService {
                 return normalized;
             }
         }
-        LocalTime now = LocalTime.now();
+        LocalTime now = LocalTime.now(TimeSupport.BUSINESS_CLOCK);
         if (now.isBefore(LocalTime.of(11, 0))) {
             return "breakfast";
         }

@@ -1,5 +1,7 @@
 package com.lifetool.friends.realtime;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import com.lifetool.friends.FriendRequest;
@@ -10,6 +12,7 @@ import com.lifetool.push.PushNotificationService;
 
 @Service
 public class FriendRealtimeService {
+    private static final Logger log = LoggerFactory.getLogger(FriendRealtimeService.class);
 
     private final FriendRealtimeBroker broker;
     private final PushNotificationService pushNotificationService;
@@ -31,6 +34,8 @@ public class FriendRealtimeService {
                 new FriendMessageEventPayload(message, conversation)
         );
         if (!delivered) {
+            log.info("Friend SSE offline, fallback to push. recipientUserId={}, messageId={}, fromUserId={}",
+                    recipientUserId, message.id(), message.fromUserId());
             pushNotificationService.pushToUser(new PushNotificationCommand(
                     senderDisplayName,
                     summarizeMessage(message),
@@ -51,6 +56,8 @@ public class FriendRealtimeService {
                 new FriendRequestEventPayload(request)
         );
         if (!delivered) {
+            log.info("Friend request SSE offline, fallback to push. targetUserId={}, requestId={}",
+                    targetUserId, request.getId());
             pushNotificationService.pushToUser(new PushNotificationCommand(
                     "新的好友申请",
                     "有人想添加你为好友",
