@@ -22,6 +22,7 @@ import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from "expo-rou
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Audio } from "expo-av";
 
+import { CachedAvatar } from "@/components/CachedAvatar";
 import { Screen } from "@/components/Screen";
 import {
   FriendMessage,
@@ -758,8 +759,9 @@ export default function FriendChatScreen() {
                       <View style={[styles.messageRow, mine ? styles.messageRowMine : styles.messageRowOther]}>
                         {!mine ? (
                           friendAvatarUrl ? (
-                            <Image
-                              source={{ uri: friendAvatarUrl }}
+                            <CachedAvatar
+                              uri={friendAvatarUrl}
+                              cacheKey={friendConversation?.friendAvatarAssetId ?? friendUserId}
                               style={styles.avatarImage}
                               onError={() => {
                                 void refreshConversationContext();
@@ -826,7 +828,11 @@ export default function FriendChatScreen() {
                         </View>
                         {mine ? (
                           user?.avatarUrl ? (
-                            <Image source={{ uri: user.avatarUrl }} style={styles.avatarImage} />
+                            <CachedAvatar
+                              uri={user.avatarUrl}
+                              cacheKey={user.avatarAssetId ?? user.id}
+                              style={styles.avatarImage}
+                            />
                           ) : (
                             <View style={[styles.avatar, styles.avatarMine]}>
                               <Text style={styles.avatarText}>{selfAvatarLabel}</Text>

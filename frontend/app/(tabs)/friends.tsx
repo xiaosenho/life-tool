@@ -3,7 +3,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
-  Image,
   LayoutAnimation,
   Pressable,
   RefreshControl,
@@ -17,6 +16,7 @@ import {
 } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 
+import { CachedAvatar } from "@/components/CachedAvatar";
 import { Screen } from "@/components/Screen";
 import {
   FriendConversationSummary,
@@ -101,14 +101,15 @@ if (UIManager.setLayoutAnimationEnabledExperimental) {
 export default function FriendsScreen() {
   const router = useRouter();
   const userId = useAuthStore((state) => state.user?.id ?? "");
+  const friends = useFriendBadgeStore((state) => state.friends);
   const sharedConversations = useFriendBadgeStore((state) => state.conversations);
+  const syncFriends = useFriendBadgeStore((state) => state.syncFriends);
   const syncFriendBadge = useFriendBadgeStore((state) => state.syncFromConversations);
   const replaceFriendBadgeConversations = useFriendBadgeStore((state) => state.replaceConversations);
   const conversationUnread = useFriendBadgeStore((state) => state.conversationUnread);
   const [activeTab, setActiveTab] = useState<TabKey>("friends");
   const [activeBoard, setActiveBoard] = useState<BoardKey>("focus_today");
   const [email, setEmail] = useState("");
-  const [friends, setFriends] = useState<FriendInfo[]>([]);
   const [requests, setRequests] = useState<FriendRequest[]>([]);
   const [leaderboards, setLeaderboards] = useState<Record<BoardKey, LeaderboardDetailResponse | null>>({
     focus_today: null,
@@ -122,7 +123,6 @@ export default function FriendsScreen() {
   const [requestPulseIds, setRequestPulseIds] = useState<string[]>([]);
   const hasMountedRef = useRef(false);
   const avatarRefreshInFlightRef = useRef(false);
-  const friendsRef = useRef<FriendInfo[]>([]);
 
   const incomingRequests = useMemo(
     () => requests.filter((item) => item.status === "PENDING" && item.toUserId === userId),
@@ -135,10 +135,6 @@ export default function FriendsScreen() {
 
   const activeBoardData = leaderboards[activeBoard];
 
-  useEffect(() => {
-    friendsRef.current = friends;
-  }, [friends]);
-
   const refreshFriendVisualsSilently = useCallback(async () => {
     if (avatarRefreshInFlightRef.current) {
       return;
@@ -149,17 +145,22 @@ export default function FriendsScreen() {
         friendService.listFriends(),
         friendService.listConversations()
       ]);
-      const nextFriends = friendRes.success && friendRes.data ? friendRes.data : null;
+      const currentFriends = useFriendBadgeStore.getState().friends;
+      const nextFriends = friendRes.success && friendRes.data
+        ? mergeFriendsPreservingAvatarUrl(currentFriends, friendRes.data)
+        : null;
       if (nextFriends) {
-        setFriends(nextFriends);
+        syncFriends(nextFriends);
       }
       if (conversationRes.success && conversationRes.data) {
-        replaceFriendBadgeConversations(conversationRes.data);
+        replaceFriendBadgeConversations(
+          mergeFriendAvatarsIntoConversations(conversationRes.data, nextFriends ?? currentFriends)
+        );
       }
     } finally {
       avatarRefreshInFlightRef.current = false;
     }
-  }, [replaceFriendBadgeConversations]);
+  }, [replaceFriendBadgeConversations, syncFriends]);
 
   const loadFriendData = useCallback(async (silent = false) => {
     if (!silent) {
@@ -172,20 +173,21 @@ export default function FriendsScreen() {
         friendService.listConversations()
       ]);
 
+      const currentFriends = useFriendBadgeStore.getState().friends;
       const nextFriends = friendRes.success && friendRes.data
-        ? mergeFriendsPreservingAvatarUrl(friendsRef.current, friendRes.data)
+        ? mergeFriendsPreservingAvatarUrl(currentFriends, friendRes.data)
         : null;
-      if (nextFriends) setFriends(nextFriends);
+      if (nextFriends) syncFriends(nextFriends);
       if (requestRes.success && requestRes.data) setRequests(requestRes.data);
       if (conversationRes.success && conversationRes.data) {
-        syncFriendBadge(mergeFriendAvatarsIntoConversations(conversationRes.data, nextFriends ?? friendsRef.current));
+        syncFriendBadge(mergeFriendAvatarsIntoConversations(conversationRes.data, nextFriends ?? currentFriends));
       }
     } catch (error) {
       Alert.alert("加载失败", error instanceof Error ? error.message : "请稍后重试");
     } finally {
       setLoading(false);
     }
-  }, [syncFriendBadge]);
+  }, [syncFriendBadge, syncFriends]);
 
   const loadMessagesData = useCallback(async (silent = false) => {
     if (!silent) {
@@ -196,19 +198,20 @@ export default function FriendsScreen() {
         friendService.listFriends(),
         friendService.listConversations()
       ]);
+      const currentFriends = useFriendBadgeStore.getState().friends;
       const nextFriends = friendRes.success && friendRes.data
-        ? mergeFriendsPreservingAvatarUrl(friendsRef.current, friendRes.data)
+        ? mergeFriendsPreservingAvatarUrl(currentFriends, friendRes.data)
         : null;
-      if (nextFriends) setFriends(nextFriends);
+      if (nextFriends) syncFriends(nextFriends);
       if (conversationRes.success && conversationRes.data) {
-        syncFriendBadge(mergeFriendAvatarsIntoConversations(conversationRes.data, nextFriends ?? friendsRef.current));
+        syncFriendBadge(mergeFriendAvatarsIntoConversations(conversationRes.data, nextFriends ?? currentFriends));
       }
     } catch (error) {
       Alert.alert("加载失败", error instanceof Error ? error.message : "请稍后重试");
     } finally {
       setLoading(false);
     }
-  }, [syncFriendBadge]);
+  }, [syncFriendBadge, syncFriends]);
 
   const loadLeaderboardData = useCallback(async (boardKey: BoardKey, silent = false) => {
     if (!silent) {
@@ -392,8 +395,9 @@ export default function FriendsScreen() {
                 return (
                   <View key={friend.userId} style={styles.friendCard}>
                     {friend.avatarUrl ? (
-                      <Image
-                        source={{ uri: friend.avatarUrl }}
+                      <CachedAvatar
+                        uri={friend.avatarUrl}
+                        cacheKey={friend.avatarAssetId ?? friend.userId}
                         style={styles.avatarImage}
                         onError={() => {
                           void refreshFriendVisualsSilently();

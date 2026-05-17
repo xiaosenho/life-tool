@@ -1,13 +1,15 @@
 import { create } from "zustand";
 
-import { FriendConversationSummary, FriendMessage } from "@/services/friendService";
+import { FriendConversationSummary, FriendInfo, FriendMessage } from "@/services/friendService";
 
 type ConversationUnreadMap = Record<string, number>;
 
 interface FriendBadgeState {
+  friends: FriendInfo[];
   conversations: FriendConversationSummary[];
   conversationUnread: ConversationUnreadMap;
   totalUnreadCount: number;
+  syncFriends: (friends: FriendInfo[]) => void;
   syncFromConversations: (conversations: FriendConversationSummary[]) => void;
   replaceConversations: (conversations: FriendConversationSummary[]) => void;
   clearConversationUnread: (friendUserId: string) => void;
@@ -26,6 +28,18 @@ function sortConversations(conversations: FriendConversationSummary[]) {
   );
 }
 
+function mergeFriendAvatarUrl(existing: FriendInfo | undefined, incoming: FriendInfo) {
+  if (
+    existing?.avatarAssetId &&
+    incoming.avatarAssetId &&
+    existing.avatarAssetId === incoming.avatarAssetId &&
+    existing.avatarUrl
+  ) {
+    return existing.avatarUrl;
+  }
+  return incoming.avatarUrl ?? existing?.avatarUrl ?? null;
+}
+
 function mergeConversationAvatarUrl(
   existing: FriendConversationSummary | undefined,
   incoming: FriendConversationSummary
@@ -42,9 +56,23 @@ function mergeConversationAvatarUrl(
 }
 
 export const useFriendBadgeStore = create<FriendBadgeState>((set) => ({
+  friends: [],
   conversations: [],
   conversationUnread: {},
   totalUnreadCount: 0,
+  syncFriends: (friends) =>
+    set((state) => {
+      const existingByUserId = new Map(state.friends.map((item) => [item.userId, item]));
+      return {
+        friends: friends.map((item) => {
+          const existing = existingByUserId.get(item.userId);
+          return {
+            ...item,
+            avatarUrl: mergeFriendAvatarUrl(existing, item)
+          };
+        })
+      };
+    }),
   syncFromConversations: (conversations) => {
     set((state) => {
       const existingByFriendId = new Map(state.conversations.map((item) => [item.friendUserId, item]));
@@ -67,17 +95,26 @@ export const useFriendBadgeStore = create<FriendBadgeState>((set) => ({
       };
     });
   },
-  replaceConversations: (conversations) => {
-    const conversationUnread = conversations.reduce<ConversationUnreadMap>((result, item) => {
-      result[item.friendUserId] = item.unreadCount || 0;
-      return result;
-    }, {});
-    set({
-      conversations: sortConversations(conversations),
-      conversationUnread,
-      totalUnreadCount: computeTotalUnreadCount(conversationUnread)
-    });
-  },
+  replaceConversations: (conversations) =>
+    set((state) => {
+      const existingByFriendId = new Map(state.conversations.map((item) => [item.friendUserId, item]));
+      const mergedConversations = conversations.map((item) => {
+        const existing = existingByFriendId.get(item.friendUserId);
+        return {
+          ...item,
+          friendAvatarUrl: mergeConversationAvatarUrl(existing, item)
+        };
+      });
+      const conversationUnread = mergedConversations.reduce<ConversationUnreadMap>((result, item) => {
+        result[item.friendUserId] = item.unreadCount || 0;
+        return result;
+      }, {});
+      return {
+        conversations: sortConversations(mergedConversations),
+        conversationUnread,
+        totalUnreadCount: computeTotalUnreadCount(conversationUnread)
+      };
+    }),
   clearConversationUnread: (friendUserId) =>
     set((state) => {
       if (!state.conversationUnread[friendUserId]) {
@@ -162,6 +199,7 @@ export const useFriendBadgeStore = create<FriendBadgeState>((set) => ({
     }),
   reset: () =>
     set({
+      friends: [],
       conversations: [],
       conversationUnread: {},
       totalUnreadCount: 0

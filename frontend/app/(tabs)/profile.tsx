@@ -5,7 +5,6 @@ import { router } from "expo-router";
 import {
   ActivityIndicator,
   Alert,
-  Image,
   Modal,
   Pressable,
   StyleSheet,
@@ -15,6 +14,7 @@ import {
   View,
 } from "react-native";
 
+import { CachedAvatar } from "@/components/CachedAvatar";
 import { Screen } from "@/components/Screen";
 import { useAuthStore } from "@/store/authStore";
 import { colors } from "@/theme/colors";
@@ -64,6 +64,17 @@ export default function ProfileScreen() {
     setPendingCount(pending);
   };
 
+  const clearLocalAvatarState = (nextAvatarAssetId?: string | null) => {
+    if (!user) {
+      return;
+    }
+    updateUser({
+      ...user,
+      avatarAssetId: nextAvatarAssetId ?? null,
+      avatarUrl: null
+    });
+  };
+
   const handleSync = async () => {
     setIsSyncing(true);
     try {
@@ -102,10 +113,14 @@ export default function ProfileScreen() {
         fileSize: asset.fileSize,
         type: asset.mimeType ?? "image/jpeg",
       });
+      clearLocalAvatarState(uploaded.id);
       const updated = await authService.updateProfile({ avatarAssetId: uploaded.id });
       updateUser(updated);
       Alert.alert("头像已更新", "新的头像已经保存。");
     } catch (error) {
+      if (user) {
+        updateUser(user);
+      }
       Alert.alert("头像上传失败", error instanceof Error ? error.message : "请稍后重试。");
     } finally {
       setIsUploadingAvatar(false);
@@ -114,10 +129,14 @@ export default function ProfileScreen() {
 
   const handleRemoveAvatar = async () => {
     try {
+      clearLocalAvatarState(null);
       const updated = await authService.updateProfile({ avatarAssetId: "" });
       updateUser(updated);
       Alert.alert("已移除头像", "现在会显示昵称首字。");
     } catch (error) {
+      if (user) {
+        updateUser(user);
+      }
       Alert.alert("操作失败", error instanceof Error ? error.message : "请稍后重试。");
     }
   };
@@ -194,7 +213,11 @@ export default function ProfileScreen() {
       <View style={styles.hero}>
         <View style={styles.avatarWrap}>
           {user?.avatarUrl ? (
-            <Image source={{ uri: user.avatarUrl }} style={styles.avatarImage} />
+            <CachedAvatar
+              uri={user.avatarUrl}
+              cacheKey={user.avatarAssetId ?? user.id}
+              style={styles.avatarImage}
+            />
           ) : (
             <Text style={styles.avatarInitial}>{avatarInitial}</Text>
           )}

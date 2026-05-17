@@ -20,6 +20,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Audio } from "expo-av";
 
+import { CachedAvatar } from "@/components/CachedAvatar";
 import { Screen } from "@/components/Screen";
 import { aiService, ChatMessage, ChatSession } from "@/services/aiService";
 import {
@@ -574,7 +575,11 @@ export default function AiChatScreen() {
                     </View>
                     {mine ? (
                       user?.avatarUrl ? (
-                        <Image source={{ uri: user.avatarUrl }} style={styles.avatarImage} />
+                        <CachedAvatar
+                          uri={user.avatarUrl}
+                          cacheKey={user.avatarAssetId ?? user.id}
+                          style={styles.avatarImage}
+                        />
                       ) : (
                         <View style={[styles.avatar, styles.userAvatar]}>
                           <Text style={styles.avatarText}>{selfAvatarLabel}</Text>
