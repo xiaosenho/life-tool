@@ -3,7 +3,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
-  AppState,
   Image,
   LayoutAnimation,
   Pressable,
@@ -60,11 +59,39 @@ function mergeFriendAvatarsIntoConversations(
   conversations: FriendConversationSummary[],
   friends: FriendInfo[]
 ) {
-  const friendAvatarMap = new Map(friends.map((friend) => [friend.userId, friend.avatarUrl ?? null]));
+  const friendAvatarMap = new Map(
+    friends.map((friend) => [friend.userId, { avatarAssetId: friend.avatarAssetId ?? null, avatarUrl: friend.avatarUrl ?? null }])
+  );
   return conversations.map((conversation) => ({
     ...conversation,
-    friendAvatarUrl: friendAvatarMap.get(conversation.friendUserId) ?? conversation.friendAvatarUrl ?? null
+    friendAvatarAssetId:
+      friendAvatarMap.get(conversation.friendUserId)?.avatarAssetId ?? conversation.friendAvatarAssetId ?? null,
+    friendAvatarUrl:
+      friendAvatarMap.get(conversation.friendUserId)?.avatarAssetId &&
+      friendAvatarMap.get(conversation.friendUserId)?.avatarAssetId === conversation.friendAvatarAssetId &&
+      conversation.friendAvatarUrl
+        ? conversation.friendAvatarUrl
+        : friendAvatarMap.get(conversation.friendUserId)?.avatarUrl ?? conversation.friendAvatarUrl ?? null
   }));
+}
+
+function mergeFriendsPreservingAvatarUrl(current: FriendInfo[], incoming: FriendInfo[]) {
+  const currentByUserId = new Map(current.map((friend) => [friend.userId, friend]));
+  return incoming.map((friend) => {
+    const existing = currentByUserId.get(friend.userId);
+    if (
+      existing?.avatarAssetId &&
+      friend.avatarAssetId &&
+      existing.avatarAssetId === friend.avatarAssetId &&
+      existing.avatarUrl
+    ) {
+      return {
+        ...friend,
+        avatarUrl: existing.avatarUrl
+      };
+    }
+    return friend;
+  });
 }
 
 if (UIManager.setLayoutAnimationEnabledExperimental) {
@@ -76,6 +103,7 @@ export default function FriendsScreen() {
   const userId = useAuthStore((state) => state.user?.id ?? "");
   const sharedConversations = useFriendBadgeStore((state) => state.conversations);
   const syncFriendBadge = useFriendBadgeStore((state) => state.syncFromConversations);
+  const replaceFriendBadgeConversations = useFriendBadgeStore((state) => state.replaceConversations);
   const conversationUnread = useFriendBadgeStore((state) => state.conversationUnread);
   const [activeTab, setActiveTab] = useState<TabKey>("friends");
   const [activeBoard, setActiveBoard] = useState<BoardKey>("focus_today");
@@ -126,12 +154,12 @@ export default function FriendsScreen() {
         setFriends(nextFriends);
       }
       if (conversationRes.success && conversationRes.data) {
-        syncFriendBadge(mergeFriendAvatarsIntoConversations(conversationRes.data, nextFriends ?? friendsRef.current));
+        replaceFriendBadgeConversations(conversationRes.data);
       }
     } finally {
       avatarRefreshInFlightRef.current = false;
     }
-  }, [syncFriendBadge]);
+  }, [replaceFriendBadgeConversations]);
 
   const loadFriendData = useCallback(async (silent = false) => {
     if (!silent) {
@@ -144,7 +172,9 @@ export default function FriendsScreen() {
         friendService.listConversations()
       ]);
 
-      const nextFriends = friendRes.success && friendRes.data ? friendRes.data : null;
+      const nextFriends = friendRes.success && friendRes.data
+        ? mergeFriendsPreservingAvatarUrl(friendsRef.current, friendRes.data)
+        : null;
       if (nextFriends) setFriends(nextFriends);
       if (requestRes.success && requestRes.data) setRequests(requestRes.data);
       if (conversationRes.success && conversationRes.data) {
@@ -166,7 +196,9 @@ export default function FriendsScreen() {
         friendService.listFriends(),
         friendService.listConversations()
       ]);
-      const nextFriends = friendRes.success && friendRes.data ? friendRes.data : null;
+      const nextFriends = friendRes.success && friendRes.data
+        ? mergeFriendsPreservingAvatarUrl(friendsRef.current, friendRes.data)
+        : null;
       if (nextFriends) setFriends(nextFriends);
       if (conversationRes.success && conversationRes.data) {
         syncFriendBadge(mergeFriendAvatarsIntoConversations(conversationRes.data, nextFriends ?? friendsRef.current));
@@ -257,17 +289,6 @@ export default function FriendsScreen() {
     });
     return unsubscribe;
   }, [loadFriendData]);
-
-  useEffect(() => {
-    const subscription = AppState.addEventListener("change", (nextState) => {
-      if (nextState === "active") {
-        void refreshFriendVisualsSilently();
-      }
-    });
-    return () => {
-      subscription.remove();
-    };
-  }, [refreshFriendVisualsSilently]);
 
   async function handleRefresh() {
     setRefreshing(true);

@@ -6,6 +6,7 @@ public record FriendConversationSummaryResponse(
         String friendUserId,
         String friendDisplayName,
         String friendEmail,
+        String friendAvatarAssetId,
         String friendAvatarUrl,
         String lastMessage,
         String lastMessageType,

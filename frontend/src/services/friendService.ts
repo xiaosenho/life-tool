@@ -6,6 +6,7 @@ export interface FriendInfo {
   userId: string;
   email: string;
   displayName: string;
+  avatarAssetId?: string | null;
   avatarUrl?: string | null;
 }
 
@@ -48,6 +49,7 @@ export interface FriendConversationSummary {
   friendUserId: string;
   friendDisplayName: string;
   friendEmail: string;
+  friendAvatarAssetId?: string | null;
   friendAvatarUrl?: string | null;
   lastMessage: string;
   lastMessageType: FriendMessageMediaType;

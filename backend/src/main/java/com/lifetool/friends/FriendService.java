@@ -91,7 +91,7 @@ public class FriendService {
         return request;
     }
 
-    public record FriendInfo(String userId, String email, String displayName, String avatarUrl) {}
+    public record FriendInfo(String userId, String email, String displayName, String avatarAssetId, String avatarUrl) {}
 
     public List<FriendInfo> listFriends(String userId) {
         List<String> friendIds = store.findFriendships(userId).stream()
@@ -104,7 +104,12 @@ public class FriendService {
         return friendIds.stream()
                 .map(friendsById::get)
                 .filter(friend -> friend != null)
-                .map(friend -> new FriendInfo(friend.getId(), friend.getEmail(), friend.getDisplayName(), resolveAvatarUrl(friend)))
+                .map(friend -> new FriendInfo(
+                        friend.getId(),
+                        friend.getEmail(),
+                        friend.getDisplayName(),
+                        friend.getAvatarAssetId(),
+                        resolveAvatarUrl(friend)))
                 .toList();
     }
 
@@ -165,7 +170,12 @@ public class FriendService {
                 .distinct()
                 .toList();
         Map<String, FriendInfo> friends = userRepo.findByIds(friendIds).values().stream()
-                .collect(Collectors.toMap(User::getId, user -> new FriendInfo(user.getId(), user.getEmail(), user.getDisplayName(), resolveAvatarUrl(user))));
+                .collect(Collectors.toMap(User::getId, user -> new FriendInfo(
+                        user.getId(),
+                        user.getEmail(),
+                        user.getDisplayName(),
+                        user.getAvatarAssetId(),
+                        resolveAvatarUrl(user))));
         return messageStore.listConversationSummaries(userId).stream()
                 .map(summary -> {
                     FriendInfo info = friends.get(summary.friendUserId());
@@ -176,6 +186,7 @@ public class FriendService {
                             summary.friendUserId(),
                             info.displayName(),
                             info.email(),
+                            info.avatarAssetId(),
                             info.avatarUrl(),
                             summary.lastMessage(),
                             summary.lastMessageType(),
@@ -202,6 +213,7 @@ public class FriendService {
                 summary.friendUserId(),
                 friend.getDisplayName(),
                 friend.getEmail(),
+                friend.getAvatarAssetId(),
                 resolveAvatarUrl(friend),
                 summary.lastMessage(),
                 summary.lastMessageType(),

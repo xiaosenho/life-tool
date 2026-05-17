@@ -4,7 +4,6 @@ import {
   PanResponder,
   ActivityIndicator,
   Alert,
-  AppState,
   Image,
   Keyboard,
   Modal,
@@ -171,7 +170,7 @@ export default function FriendChatScreen() {
   const userId = useAuthStore((state) => state.user?.id ?? "");
   const clearConversationUnread = useFriendBadgeStore((state) => state.clearConversationUnread);
   const sharedConversations = useFriendBadgeStore((state) => state.conversations);
-  const syncFriendBadge = useFriendBadgeStore((state) => state.syncFromConversations);
+  const replaceFriendBadgeConversations = useFriendBadgeStore((state) => state.replaceConversations);
   const upsertConversation = useFriendBadgeStore((state) => state.upsertConversation);
   const [messages, setMessages] = useState<FriendMessage[]>([]);
   const [draft, setDraft] = useState("");
@@ -219,7 +218,7 @@ export default function FriendChatScreen() {
     [friendUserId, sharedConversations]
   );
   const friendAvatarUrl = useMemo(
-    () => routeFriendAvatarUrl ?? friendConversation?.friendAvatarUrl ?? null,
+    () => friendConversation?.friendAvatarUrl ?? routeFriendAvatarUrl ?? null,
     [friendConversation?.friendAvatarUrl, routeFriendAvatarUrl]
   );
 
@@ -243,7 +242,8 @@ export default function FriendChatScreen() {
         friendUserId,
         friendDisplayName: friendConversation?.friendDisplayName ?? title,
         friendEmail: friendConversation?.friendEmail ?? "",
-        friendAvatarUrl: routeFriendAvatarUrl ?? friendConversation?.friendAvatarUrl ?? null,
+        friendAvatarAssetId: friendConversation?.friendAvatarAssetId ?? null,
+        friendAvatarUrl: friendConversation?.friendAvatarUrl ?? routeFriendAvatarUrl ?? null,
         lastMessage,
         lastMessageType,
         lastMessageAt,
@@ -251,6 +251,7 @@ export default function FriendChatScreen() {
       });
     },
     [
+      friendConversation?.friendAvatarAssetId,
       friendConversation?.friendAvatarUrl,
       friendConversation?.friendDisplayName,
       friendConversation?.friendEmail,
@@ -269,12 +270,12 @@ export default function FriendChatScreen() {
     try {
       const response = await friendService.listConversations();
       if (response.success && response.data) {
-        syncFriendBadge(response.data);
+        replaceFriendBadgeConversations(response.data);
       }
     } finally {
       avatarRefreshInFlightRef.current = false;
     }
-  }, [syncFriendBadge]);
+  }, [replaceFriendBadgeConversations]);
 
   const loadLatestMessages = useCallback(async ({ silent = false, mergeIntoCurrent = false }: { silent?: boolean; mergeIntoCurrent?: boolean } = {}) => {
     if (!friendUserId) {
@@ -351,17 +352,6 @@ export default function FriendChatScreen() {
     setMessages([]);
     void loadLatestMessages();
   }, [loadLatestMessages]);
-
-  useEffect(() => {
-    const subscription = AppState.addEventListener("change", (nextState) => {
-      if (nextState === "active") {
-        void refreshConversationContext();
-      }
-    });
-    return () => {
-      subscription.remove();
-    };
-  }, [refreshConversationContext]);
 
   useEffect(() => {
     const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
