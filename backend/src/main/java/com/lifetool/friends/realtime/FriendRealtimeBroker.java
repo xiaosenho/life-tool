@@ -28,7 +28,9 @@ public class FriendRealtimeBroker {
         emitter.onCompletion(() -> removeEmitter(userId, emitter));
         emitter.onTimeout(() -> removeEmitter(userId, emitter));
         emitter.onError(error -> removeEmitter(userId, emitter));
-        sendRaw(emitter, "connected", Map.of("connectedAt", Instant.now().toString()));
+        if (!sendRaw(emitter, "connected", Map.of("connectedAt", Instant.now().toString()))) {
+            cleanupEmitter(userId, emitter, new IOException("SSE initial send failed"));
+        }
         return emitter;
     }
 
@@ -36,7 +38,7 @@ public class FriendRealtimeBroker {
         return !emittersByUserId.getOrDefault(userId, new CopyOnWriteArrayList<>()).isEmpty();
     }
 
-    public void publish(String userId, FriendEventType type, Object payload) {
+    public boolean publish(String userId, FriendEventType type, Object payload) {
         FriendRealtimeEvent event = new FriendRealtimeEvent(
                 UUID.randomUUID().toString(),
                 type,
@@ -46,25 +48,30 @@ public class FriendRealtimeBroker {
         );
         List<SseEmitter> emitters = emittersByUserId.get(userId);
         if (emitters == null || emitters.isEmpty()) {
-            return;
+            return false;
         }
+        boolean delivered = false;
         for (SseEmitter emitter : emitters) {
             try {
                 emitter.send(SseEmitter.event()
                         .id(event.id())
                         .name(type.name().toLowerCase())
                         .data(event, MediaType.APPLICATION_JSON));
-            } catch (IOException ex) {
-                removeEmitter(userId, emitter);
+                delivered = true;
+            } catch (Exception ex) {
+                cleanupEmitter(userId, emitter, ex);
             }
         }
+        return delivered;
     }
 
     @Scheduled(fixedDelay = 25000L)
     public void heartbeat() {
         emittersByUserId.forEach((userId, emitters) -> {
             for (SseEmitter emitter : emitters) {
-                sendRaw(emitter, "ping", Map.of("ts", Instant.now().toString()));
+                if (!sendRaw(emitter, "ping", Map.of("ts", Instant.now().toString()))) {
+                    cleanupEmitter(userId, emitter, new IOException("SSE heartbeat failed"));
+                }
             }
             if (emitters.isEmpty()) {
                 emittersByUserId.remove(userId);
@@ -72,14 +79,25 @@ public class FriendRealtimeBroker {
         });
     }
 
-    private void sendRaw(SseEmitter emitter, String eventName, Object payload) {
+    private boolean sendRaw(SseEmitter emitter, String eventName, Object payload) {
         try {
             emitter.send(SseEmitter.event()
                     .name(eventName)
                     .data(payload, MediaType.APPLICATION_JSON));
-        } catch (IOException ex) {
+            return true;
+        } catch (Exception ex) {
             log.debug("SSE initial send failed: {}", ex.getMessage());
+            return false;
         }
+    }
+
+    private void cleanupEmitter(String userId, SseEmitter emitter, Exception ex) {
+        log.debug("SSE emitter cleanup for userId={}, reason={}", userId, ex.getMessage());
+        try {
+            emitter.complete();
+        } catch (Exception ignored) {
+        }
+        removeEmitter(userId, emitter);
     }
 
     private void removeEmitter(String userId, SseEmitter emitter) {

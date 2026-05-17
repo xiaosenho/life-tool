@@ -25,8 +25,12 @@ public class FriendRealtimeService {
             FriendConversationSummaryResponse conversation,
             String senderDisplayName
     ) {
-        broker.publish(recipientUserId, FriendEventType.FRIEND_MESSAGE_CREATED, new FriendMessageEventPayload(message, conversation));
-        if (!broker.hasActiveSubscriber(recipientUserId)) {
+        boolean delivered = broker.publish(
+                recipientUserId,
+                FriendEventType.FRIEND_MESSAGE_CREATED,
+                new FriendMessageEventPayload(message, conversation)
+        );
+        if (!delivered) {
             pushNotificationService.pushToUser(new PushNotificationCommand(
                     senderDisplayName,
                     summarizeMessage(message),
@@ -41,8 +45,12 @@ public class FriendRealtimeService {
     }
 
     public void publishRequestCreated(String targetUserId, FriendRequest request) {
-        broker.publish(targetUserId, FriendEventType.FRIEND_REQUEST_CREATED, new FriendRequestEventPayload(request));
-        if (!broker.hasActiveSubscriber(targetUserId)) {
+        boolean delivered = broker.publish(
+                targetUserId,
+                FriendEventType.FRIEND_REQUEST_CREATED,
+                new FriendRequestEventPayload(request)
+        );
+        if (!delivered) {
             pushNotificationService.pushToUser(new PushNotificationCommand(
                     "新的好友申请",
                     "有人想添加你为好友",
