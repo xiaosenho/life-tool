@@ -40,7 +40,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
                                     FilterChain filterChain) throws ServletException, IOException {
         DispatcherType dispatcherType = request.getDispatcherType();
-        if (dispatcherType == DispatcherType.ASYNC || dispatcherType == DispatcherType.ERROR) {
+        if (dispatcherType != DispatcherType.REQUEST) {
             filterChain.doFilter(request, response);
             return;
         }
