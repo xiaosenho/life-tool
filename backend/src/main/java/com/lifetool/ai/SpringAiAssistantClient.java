@@ -36,11 +36,13 @@ public class SpringAiAssistantClient implements AiAssistantClient {
     private final String chatModel;
     private final String chatCompletionsPath;
     private final MediaService mediaService;
+    private final AiAudioInputPreparer audioInputPreparer;
 
     public SpringAiAssistantClient(
             ChatClient.Builder chatClientBuilder,
             UserDataTools userDataTools,
             MediaService mediaService,
+            AiAudioInputPreparer audioInputPreparer,
             @Value("${spring.ai.openai.api-key}") String apiKey,
             @Value("${spring.ai.openai.base-url}") String baseUrl,
             @Value("${spring.ai.openai.chat.options.model}") String chatModel,
@@ -55,6 +57,7 @@ public class SpringAiAssistantClient implements AiAssistantClient {
         this.statelessChatClient = chatClientBuilder.build();
         this.userDataTools = userDataTools;
         this.mediaService = mediaService;
+        this.audioInputPreparer = audioInputPreparer;
         this.chatModel = chatModel;
         this.chatCompletionsPath = normalizePath(chatCompletionsPath);
         this.restClient = RestClient.builder()
@@ -186,11 +189,12 @@ public class SpringAiAssistantClient implements AiAssistantClient {
                     content.add(Map.of("type", "text", "text", entry.content()));
                 }
                 if ("audio".equals(mediaInput.kind())) {
+                    AiAudioInputPreparer.PreparedAudio preparedAudio = prepareAudioInput(mediaInput);
                     content.add(Map.of(
                             "type", "input_audio",
                             "input_audio", Map.of(
-                                    "data", fetchAudioAsBase64WithRetry(mediaInput),
-                                    "format", audioFormat(mediaInput.contentType()))));
+                                    "data", Base64.getEncoder().encodeToString(preparedAudio.bytes()),
+                                    "format", preparedAudio.format())));
                 } else {
                     content.add(Map.of(
                             "type", "image_url",
@@ -223,15 +227,11 @@ public class SpringAiAssistantClient implements AiAssistantClient {
         return content == null ? "" : content.toString();
     }
 
-    private String audioFormat(String contentType) {
-        return switch (contentType) {
-            case "audio/wav" -> "wav";
-            case "audio/mpeg", "audio/mp3" -> "mp3";
-            default -> "m4a";
-        };
+    private AiAudioInputPreparer.PreparedAudio prepareAudioInput(MediaInput mediaInput) {
+        return audioInputPreparer.prepare(fetchAudioBytesWithRetry(mediaInput), mediaInput.contentType());
     }
 
-    private String fetchAudioAsBase64WithRetry(MediaInput mediaInput) {
+    private byte[] fetchAudioBytesWithRetry(MediaInput mediaInput) {
         if (canReadOwnedAudioAsset(mediaInput)) {
             byte[] bytes = mediaService.readAssetBytes(
                     mediaInput.ownerUserId(),
@@ -240,13 +240,13 @@ public class SpringAiAssistantClient implements AiAssistantClient {
             if (bytes.length == 0) {
                 throw new IllegalStateException("Failed to load audio bytes");
             }
-            return Base64.getEncoder().encodeToString(bytes);
+            return bytes;
         }
         String currentUrl = mediaInput.url();
         RuntimeException lastException = null;
         for (int attempt = 1; attempt <= AUDIO_FETCH_RETRY_TIMES; attempt++) {
             try {
-                return fetchAudioAsBase64(currentUrl);
+                return fetchAudioBytes(currentUrl);
             } catch (RuntimeException ex) {
                 lastException = ex;
                 if (!isExpiredCosUrl(ex) || attempt >= AUDIO_FETCH_RETRY_TIMES || mediaInput.assetId() == null || mediaInput.assetId().isBlank()) {
@@ -282,7 +282,7 @@ public class SpringAiAssistantClient implements AiAssistantClient {
                 && !mediaInput.ownerUserId().isBlank();
     }
 
-    private String fetchAudioAsBase64(String url) {
+    private byte[] fetchAudioBytes(String url) {
         byte[] bytes = restClient.get()
                 .uri(url)
                 .retrieve()
@@ -290,7 +290,7 @@ public class SpringAiAssistantClient implements AiAssistantClient {
         if (bytes == null || bytes.length == 0) {
             throw new IllegalStateException("Failed to load audio bytes");
         }
-        return Base64.getEncoder().encodeToString(bytes);
+        return bytes;
     }
 
     private boolean isExpiredCosUrl(Throwable ex) {

@@ -15,6 +15,8 @@ FROM eclipse-temurin:21-jre-alpine
 
 WORKDIR /app
 
+RUN apk add --no-cache ffmpeg
+
 RUN addgroup -S lifetool && adduser -S lifetool -G lifetool
 
 COPY --from=builder /app/target/*.jar app.jar

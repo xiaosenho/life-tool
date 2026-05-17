@@ -78,7 +78,7 @@ docker build -t lifetool-backend .
 Dockerfile 采用多阶段构建：
 
 - **Stage 1 (builder)**：`maven:3.9-eclipse-temurin-21-alpine`，使用阿里云 Maven 镜像加速依赖下载，执行 `mvn package`
-- **Stage 2 (runtime)**：`eclipse-temurin:21-jre-alpine`，仅包含 JRE，以 `lifetool` 用户运行
+- **Stage 2 (runtime)**：`eclipse-temurin:21-jre-alpine`，包含 `ffmpeg`（用于 AI 语音转码），以 `lifetool` 用户运行
 
 ### 环境变量
 

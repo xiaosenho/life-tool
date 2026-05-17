@@ -4,12 +4,12 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
-import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 
@@ -74,22 +74,24 @@ class AiAssistantClientTest {
         MediaService mediaService = mock(MediaService.class);
         when(mediaService.readAssetBytes("u1", "asset-audio", "chat_audio"))
                 .thenReturn("hello-audio".getBytes(StandardCharsets.UTF_8));
+        AiAudioInputPreparer audioInputPreparer = mock(AiAudioInputPreparer.class);
 
         SpringAiAssistantClient client = new SpringAiAssistantClient(
                 builder,
                 mock(UserDataTools.class),
                 mediaService,
+                audioInputPreparer,
                 "test-api-key",
                 "https://example.com",
                 "test-model",
                 "/v1/chat/completions");
 
         Method method = SpringAiAssistantClient.class.getDeclaredMethod(
-                "fetchAudioAsBase64WithRetry",
+                "fetchAudioBytesWithRetry",
                 AiAssistantClient.MediaInput.class);
         method.setAccessible(true);
 
-        String base64 = (String) method.invoke(
+        byte[] bytes = (byte[]) method.invoke(
                 client,
                 new AiAssistantClient.MediaInput(
                         "audio",
@@ -98,8 +100,31 @@ class AiAssistantClientTest {
                         "asset-audio",
                         "u1"));
 
-        assertEquals(Base64.getEncoder().encodeToString("hello-audio".getBytes(StandardCharsets.UTF_8)), base64);
+        assertEquals("hello-audio", new String(bytes, StandardCharsets.UTF_8));
         verify(mediaService).readAssetBytes("u1", "asset-audio", "chat_audio");
+        verify(audioInputPreparer, never()).prepare(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void audioInputPreparerLeavesRealMp3Untouched() {
+        AiAudioInputPreparer preparer = new AiAudioInputPreparer();
+
+        byte[] mp3Header = new byte[] {(byte) 0xFF, (byte) 0xFB, 0x50, 0x00};
+        AiAudioInputPreparer.PreparedAudio prepared = preparer.prepare(mp3Header, "audio/mp3");
+
+        assertEquals("mp3", prepared.format());
+        assertEquals(mp3Header.length, prepared.bytes().length);
+    }
+
+    @Test
+    void audioInputPreparerLeavesRealWavUntouched() {
+        AiAudioInputPreparer preparer = new AiAudioInputPreparer();
+
+        byte[] wavHeader = new byte[] {'R', 'I', 'F', 'F', 0, 0, 0, 0, 'W', 'A', 'V', 'E'};
+        AiAudioInputPreparer.PreparedAudio prepared = preparer.prepare(wavHeader, "audio/wav");
+
+        assertEquals("wav", prepared.format());
+        assertEquals(wavHeader.length, prepared.bytes().length);
     }
 
     @Test

@@ -25,10 +25,11 @@ public class AiConfiguration {
             ChatClient.Builder chatClientBuilder,
             UserDataTools userDataTools,
             MediaService mediaService,
+            AiAudioInputPreparer audioInputPreparer,
             @Value("${spring.ai.openai.api-key}") String apiKey,
             @Value("${spring.ai.openai.base-url}") String baseUrl,
             @Value("${spring.ai.openai.chat.options.model}") String model,
             @Value("${spring.ai.openai.chat.completions-path:/v1/chat/completions}") String chatCompletionsPath) {
-        return new SpringAiAssistantClient(chatClientBuilder, userDataTools, mediaService, apiKey, baseUrl, model, chatCompletionsPath);
+        return new SpringAiAssistantClient(chatClientBuilder, userDataTools, mediaService, audioInputPreparer, apiKey, baseUrl, model, chatCompletionsPath);
     }
 }
