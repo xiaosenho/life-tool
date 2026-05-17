@@ -3,6 +3,7 @@ package com.lifetool.auth;
 import java.io.IOException;
 import java.util.List;
 
+import jakarta.servlet.DispatcherType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -26,8 +27,17 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     }
 
     @Override
+    protected boolean shouldNotFilterAsyncDispatch() {
+        return true;
+    }
+
+    @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
                                     FilterChain filterChain) throws ServletException, IOException {
+        if (request.getDispatcherType() == DispatcherType.ASYNC) {
+            filterChain.doFilter(request, response);
+            return;
+        }
         String header = request.getHeader("Authorization");
         String queryToken = request.getParameter("access_token");
         log.info("Auth filter request path={}, hasAuthHeader={}, authPrefix={}", request.getRequestURI(), header != null, header == null ? "" : header.substring(0, Math.min(20, header.length())));
