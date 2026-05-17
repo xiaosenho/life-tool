@@ -22,6 +22,7 @@
 6. [docs/AGENT_CLI.md](docs/AGENT_CLI.md)
 7. [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) — 本地开发环境部署
 8. [docs/ANDROID_BUILD.md](docs/ANDROID_BUILD.md) — Android APK 构建
+9. [docs/PRODUCT_ITERATION_PLAN.md](docs/PRODUCT_ITERATION_PLAN.md) — 下一阶段产品迭代方案
 
 ## 推荐 Agent 分工
 
