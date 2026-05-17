@@ -12,6 +12,7 @@ import com.lifetool.friends.dto.FriendMessageAttachmentRequest;
 import com.lifetool.friends.dto.FriendMessagePageResponse;
 import com.lifetool.friends.dto.FriendMessageResponse;
 import com.lifetool.media.MediaAsset;
+import com.lifetool.media.MediaException;
 import com.lifetool.media.MediaService;
 import com.lifetool.users.User;
 import com.lifetool.users.UserRepository;
@@ -90,7 +91,7 @@ public class FriendService {
         return request;
     }
 
-    public record FriendInfo(String userId, String email, String displayName) {}
+    public record FriendInfo(String userId, String email, String displayName, String avatarUrl) {}
 
     public List<FriendInfo> listFriends(String userId) {
         List<String> friendIds = store.findFriendships(userId).stream()
@@ -103,7 +104,7 @@ public class FriendService {
         return friendIds.stream()
                 .map(friendsById::get)
                 .filter(friend -> friend != null)
-                .map(friend -> new FriendInfo(friend.getId(), friend.getEmail(), friend.getDisplayName()))
+                .map(friend -> new FriendInfo(friend.getId(), friend.getEmail(), friend.getDisplayName(), resolveAvatarUrl(friend)))
                 .toList();
     }
 
@@ -164,7 +165,7 @@ public class FriendService {
                 .distinct()
                 .toList();
         Map<String, FriendInfo> friends = userRepo.findByIds(friendIds).values().stream()
-                .collect(Collectors.toMap(User::getId, user -> new FriendInfo(user.getId(), user.getEmail(), user.getDisplayName())));
+                .collect(Collectors.toMap(User::getId, user -> new FriendInfo(user.getId(), user.getEmail(), user.getDisplayName(), resolveAvatarUrl(user))));
         return messageStore.listConversationSummaries(userId).stream()
                 .map(summary -> {
                     FriendInfo info = friends.get(summary.friendUserId());
@@ -175,6 +176,7 @@ public class FriendService {
                             summary.friendUserId(),
                             info.displayName(),
                             info.email(),
+                            info.avatarUrl(),
                             summary.lastMessage(),
                             summary.lastMessageType(),
                             summary.lastMessageAt(),
@@ -200,6 +202,7 @@ public class FriendService {
                 summary.friendUserId(),
                 friend.getDisplayName(),
                 friend.getEmail(),
+                resolveAvatarUrl(friend),
                 summary.lastMessage(),
                 summary.lastMessageType(),
                 summary.lastMessageAt(),
@@ -294,6 +297,17 @@ public class FriendService {
                     attachment.durationSeconds());
         } catch (RuntimeException ex) {
             return attachment;
+        }
+    }
+
+    private String resolveAvatarUrl(User user) {
+        if (user == null || user.getAvatarAssetId() == null || user.getAvatarAssetId().isBlank()) {
+            return null;
+        }
+        try {
+            return mediaService.generateReadUrl(user.getId(), user.getAvatarAssetId(), "avatar");
+        } catch (MediaException ex) {
+            return null;
         }
     }
 

@@ -92,6 +92,7 @@ export const useFriendBadgeStore = create<FriendBadgeState>((set) => ({
         friendUserId,
         friendDisplayName: conversation?.friendDisplayName ?? existing?.friendDisplayName ?? "",
         friendEmail: conversation?.friendEmail ?? existing?.friendEmail ?? "",
+        friendAvatarUrl: conversation?.friendAvatarUrl ?? existing?.friendAvatarUrl ?? null,
         lastMessage: conversation?.lastMessage ?? message.content,
         lastMessageType: conversation?.lastMessageType ?? message.type,
         lastMessageAt: conversation?.lastMessageAt ?? message.createdAt,

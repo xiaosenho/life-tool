@@ -27,7 +27,7 @@ import com.lifetool.media.MediaService;
 
 public class SpringAiAssistantClient implements AiAssistantClient {
     private static final Logger log = LoggerFactory.getLogger(SpringAiAssistantClient.class);
-    private static final int AUDIO_FETCH_RETRY_TIMES = 2;
+    private static final int AUDIO_FETCH_RETRY_TIMES = 3;
 
     private final ChatClient chatClient;
     private final ChatClient statelessChatClient;
@@ -243,7 +243,7 @@ public class SpringAiAssistantClient implements AiAssistantClient {
                     throw ex;
                 }
                 log.warn(
-                        "AI audio fetch got expired signed URL, refreshing once. nextAttempt={}/{}, assetId={}, url={}",
+                        "AI audio fetch got expired signed URL, refreshing. nextAttempt={}/{}, assetId={}, url={}",
                         attempt + 1,
                         AUDIO_FETCH_RETRY_TIMES,
                         mediaInput.assetId(),
@@ -252,6 +252,12 @@ public class SpringAiAssistantClient implements AiAssistantClient {
                         UserDataTools.requireCurrentUserId(),
                         mediaInput.assetId(),
                         "chat_audio");
+                try {
+                    Thread.sleep(500);
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    throw new RuntimeException("Interrupted during audio fetch retry", ie);
+                }
             }
         }
         throw lastException == null ? new IllegalStateException("Failed to load audio bytes") : lastException;
@@ -273,7 +279,15 @@ public class SpringAiAssistantClient implements AiAssistantClient {
         if (message == null || message.isBlank()) {
             return false;
         }
-        return message.contains("403 Forbidden") && message.contains("Request has expired");
+        boolean has403 = message.contains("403") || message.contains("Forbidden");
+        boolean expired = message.contains("Request has expired")
+                || message.contains("RequestHasExpired")
+                || message.contains("AccessDenied");
+        if (has403 && expired) {
+            return true;
+        }
+        Throwable cause = ex.getCause();
+        return cause != null && isExpiredCosUrl(cause);
     }
 
     private String summarizeUrl(String url) {

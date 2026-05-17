@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Image,
   LayoutAnimation,
   Pressable,
   RefreshControl,
@@ -312,9 +313,13 @@ export default function FriendsScreen() {
                 const unreadCount = conversationUnread[friend.userId] ?? conversation?.unreadCount ?? 0;
                 return (
                   <View key={friend.userId} style={styles.friendCard}>
-                    <View style={styles.avatar}>
-                      <Text style={styles.avatarText}>{friend.displayName.slice(0, 1)}</Text>
-                    </View>
+                    {friend.avatarUrl ? (
+                      <Image source={{ uri: friend.avatarUrl }} style={styles.avatarImage} />
+                    ) : (
+                      <View style={styles.avatar}>
+                        <Text style={styles.avatarText}>{friend.displayName.slice(0, 1)}</Text>
+                      </View>
+                    )}
                     <View style={styles.friendInfo}>
                       <Text style={styles.friendName}>{friend.displayName}</Text>
                       <Text style={styles.friendMeta}>{friend.email}</Text>
@@ -556,6 +561,11 @@ const styles = StyleSheet.create({
     color: colors.accent,
     fontSize: 16,
     fontWeight: "800"
+  },
+  avatarImage: {
+    borderRadius: 20,
+    height: 40,
+    width: 40
   },
   boardChip: {
     backgroundColor: colors.surface,

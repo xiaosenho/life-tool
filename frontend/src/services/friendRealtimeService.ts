@@ -34,9 +34,11 @@ class FriendRealtimeService {
   }
 
   connect() {
+    this.disconnect();
+
     const token = useAuthStore.getState().token;
     const url = friendService.createEventStreamUrl();
-    if (!token || !url || this.eventSource) {
+    if (!token || !url) {
       return;
     }
 

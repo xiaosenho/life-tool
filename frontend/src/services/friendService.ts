@@ -6,6 +6,7 @@ export interface FriendInfo {
   userId: string;
   email: string;
   displayName: string;
+  avatarUrl?: string | null;
 }
 
 export type FriendRequestStatus = "PENDING" | "ACCEPTED" | "REJECTED";
@@ -47,6 +48,7 @@ export interface FriendConversationSummary {
   friendUserId: string;
   friendDisplayName: string;
   friendEmail: string;
+  friendAvatarUrl?: string | null;
   lastMessage: string;
   lastMessageType: FriendMessageMediaType;
   lastMessageAt: string;

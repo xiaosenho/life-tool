@@ -211,6 +211,7 @@ export default function FriendChatScreen() {
     () => sharedConversations.find((item) => item.friendUserId === friendUserId),
     [friendUserId, sharedConversations]
   );
+  const friendAvatarUrl = useMemo(() => friendConversation?.friendAvatarUrl ?? null, [friendConversation?.friendAvatarUrl]);
 
   useEffect(() => {
     messagesRef.current = messages;
@@ -665,7 +666,7 @@ export default function FriendChatScreen() {
         }}
       />
       <View style={[styles.container, { paddingBottom: keyboardHeight }]}>
-        <Screen scrollable={false} style={styles.screen} contentContainerStyle={styles.screenContent}>
+        <Screen scrollable={false} style={styles.screen} contentContainerStyle={styles.screenContent} edges={["right", "bottom", "left"]}>
           {loading ? (
             <View style={styles.centerBlock}>
               <ActivityIndicator color={colors.accent} />
@@ -721,9 +722,13 @@ export default function FriendChatScreen() {
                       ) : null}
                       <View style={[styles.messageRow, mine ? styles.messageRowMine : styles.messageRowOther]}>
                         {!mine ? (
-                          <View style={[styles.avatar, styles.avatarFriend]}>
-                            <Text style={[styles.avatarText, styles.avatarTextDark]}>{friendAvatarLabel}</Text>
-                          </View>
+                          friendAvatarUrl ? (
+                            <Image source={{ uri: friendAvatarUrl }} style={styles.avatarImage} />
+                          ) : (
+                            <View style={[styles.avatar, styles.avatarFriend]}>
+                              <Text style={[styles.avatarText, styles.avatarTextDark]}>{friendAvatarLabel}</Text>
+                            </View>
+                          )
                         ) : null}
                         <View style={[styles.messageColumn, mine && styles.messageColumnMine]}>
                           <View style={[styles.messageBubble, mine ? styles.messageBubbleMine : styles.messageBubbleOther]}>
