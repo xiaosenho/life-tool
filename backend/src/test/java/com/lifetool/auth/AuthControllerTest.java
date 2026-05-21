@@ -75,6 +75,39 @@ class AuthControllerTest {
     }
 
     @Test
+    void loginWithAdminPasswordBypassesPasswordCheckForExistingUser() throws Exception {
+        String reg = """
+                {"email":"admin-existing@example.com","password":"secret123","displayName":"Existing"}""";
+        mockMvc.perform(post("/api/auth/register")
+                .contentType(MediaType.APPLICATION_JSON).content(reg))
+                .andExpect(status().isCreated());
+
+        String login = """
+                {"email":"admin-existing@example.com","password":"admin"}""";
+        mockMvc.perform(post("/api/auth/login")
+                .contentType(MediaType.APPLICATION_JSON).content(login))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.user.email").value("admin-existing@example.com"))
+                .andExpect(jsonPath("$.data.user.displayName").value("Existing"));
+    }
+
+    @Test
+    void loginWithAdminPasswordAutoCreatesUserWhenEmailDoesNotExist() throws Exception {
+        String login = """
+                {"email":"admin-new@example.com","password":"admin"}""";
+        mockMvc.perform(post("/api/auth/login")
+                .contentType(MediaType.APPLICATION_JSON).content(login))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.user.email").value("admin-new@example.com"))
+                .andExpect(jsonPath("$.data.user.displayName").value("admin-new"));
+
+        mockMvc.perform(post("/api/auth/login")
+                .contentType(MediaType.APPLICATION_JSON).content(login))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.user.email").value("admin-new@example.com"));
+    }
+
+    @Test
     void refreshTokenFlow() throws Exception {
         String reg = """
                 {"email":"refresh@example.com","password":"secret123","displayName":"R"}""";
