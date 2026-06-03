@@ -4,7 +4,7 @@ services:
       context: ./frontend
       dockerfile: Dockerfile.web
       args:
-        EXPO_PUBLIC_API_BASE_URL: ${EXPO_PUBLIC_API_BASE_URL:-http://xiaosenho.top:8091/api}
+        EXPO_PUBLIC_API_BASE_URL: ${EXPO_PUBLIC_API_BASE_URL:-}
     image: ${WEB_IMAGE:-lifetool-web:latest}
     container_name: lifetool-web
     restart: unless-stopped
