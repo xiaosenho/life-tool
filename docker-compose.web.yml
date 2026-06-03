@@ -1,0 +1,18 @@
+services:
+  web:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.web
+      args:
+        EXPO_PUBLIC_API_BASE_URL: ${EXPO_PUBLIC_API_BASE_URL:-http://xiaosenho.top:8091/api}
+    image: ${WEB_IMAGE:-lifetool-web:latest}
+    container_name: lifetool-web
+    restart: unless-stopped
+    ports:
+      - "${WEB_PORT:-8101}:80"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/healthz || exit 1"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s

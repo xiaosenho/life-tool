@@ -68,7 +68,13 @@ public class SecurityConfig {
         CorsConfiguration config = new CorsConfiguration();
         config.setAllowedOriginPatterns(java.util.List.of(
                 "http://localhost:*",
-                "http://127.0.0.1:*"
+                "http://127.0.0.1:*",
+                "http://xiaosenho.top",
+                "https://xiaosenho.top",
+                "http://xiaosenho.top:*",
+                "https://xiaosenho.top:*",
+                "http://*.xiaosenho.top:*",
+                "https://*.xiaosenho.top:*"
         ));
         config.setAllowedMethods(java.util.List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(java.util.List.of("*"));
