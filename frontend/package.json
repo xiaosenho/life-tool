@@ -10,7 +10,9 @@
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
     "build": "npm run typecheck",
-    "lint": "npm run typecheck"
+    "lint": "npm run typecheck",
+    "web:dev": "expo start --web",
+    "web:build": "expo export --platform web"
   },
   "dependencies": {
     "@expo/vector-icons": "15.1.1",
