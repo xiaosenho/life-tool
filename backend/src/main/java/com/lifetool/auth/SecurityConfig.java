@@ -74,7 +74,7 @@ public class SecurityConfig {
                 "http://xiaosenho.top:*",
                 "https://xiaosenho.top:*",
                 "http://*.xiaosenho.top:*",
-                "https://*.xiaosenho.top:*"
+                "https://*.xiaosenho.top:*",
                 "http://*.xiaosenho.top",
                 "https://*.xiaosenho.top",
         ));
