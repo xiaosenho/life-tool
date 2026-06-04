@@ -165,7 +165,8 @@ export const friendService = {
     if (!token) {
       return null;
     }
-    const url = new URL(`${API_BASE_URL}/friends/events/stream`);
+    const base = API_BASE_URL.startsWith("http") ? undefined : window.location.origin;
+    const url = new URL(`${API_BASE_URL}/friends/events/stream`, base);
     url.searchParams.set("access_token", token);
     return url.toString();
   }
