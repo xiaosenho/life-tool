@@ -1,4 +1,4 @@
-﻿package com.lifetool.auth;
+package com.lifetool.auth;
 
 import java.io.IOException;
 import jakarta.servlet.DispatcherType;
