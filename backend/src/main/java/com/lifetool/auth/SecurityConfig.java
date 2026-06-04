@@ -1,4 +1,4 @@
-package com.lifetool.auth;
+﻿package com.lifetool.auth;
 
 import java.io.IOException;
 import jakarta.servlet.DispatcherType;
@@ -75,6 +75,8 @@ public class SecurityConfig {
                 "https://xiaosenho.top:*",
                 "http://*.xiaosenho.top:*",
                 "https://*.xiaosenho.top:*"
+                "http://*.xiaosenho.top",
+                "https://*.xiaosenho.top",
         ));
         config.setAllowedMethods(java.util.List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(java.util.List.of("*"));
