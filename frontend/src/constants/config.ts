@@ -1,4 +1,4 @@
-const DEFAULT_API_BASE_URL = "/api";
+const DEFAULT_API_BASE_URL = "http://xiaosenho.top:8091/api";
 
 function normalizeApiBaseUrl(url: string) {
   return url.replace(/\/+$/, "");
