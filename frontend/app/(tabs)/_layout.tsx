@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Tabs } from "expo-router";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { colors } from "@/theme/colors";
 import { useFriendBadgeStore } from "@/store/friendBadgeStore";
@@ -17,6 +18,8 @@ const tabIcons: Record<string, IconName> = {
 
 export default function TabLayout() {
   const friendUnreadCount = useFriendBadgeStore((state) => state.totalUnreadCount);
+  const insets = useSafeAreaInsets();
+  const tabBarBottomInset = Math.max(insets.bottom, 8);
 
   return (
     <Tabs
@@ -28,8 +31,8 @@ export default function TabLayout() {
         tabBarStyle: {
           borderTopColor: colors.border,
           backgroundColor: colors.surface,
-          height: 64,
-          paddingBottom: 8,
+          height: 56 + tabBarBottomInset,
+          paddingBottom: tabBarBottomInset,
           paddingTop: 6
         },
         tabBarIcon: ({ color, size }) => (

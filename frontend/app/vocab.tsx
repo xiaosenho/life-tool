@@ -4,8 +4,10 @@ import { Screen } from '@/components/Screen';
 import { colors } from '@/theme/colors';
 import { vocabService, VocabBook, VocabEntry } from '@/services/vocabService';
 import { useFocusEffect } from 'expo-router';
+import { syncStateRepository } from '@/db/syncStateRepository';
 
 const PAGE_SIZE = 30;
+const LAST_VOCAB_BOOK_KEY = 'vocab_last_selected_book';
 
 export default function VocabScreen() {
   const [books, setBooks] = useState<VocabBook[]>([]);
@@ -24,18 +26,6 @@ export default function VocabScreen() {
     () => books.find((book) => book.code === selectedBookCode && book.variant === selectedVariant) ?? null,
     [books, selectedBookCode, selectedVariant]
   );
-
-  const loadBooks = useCallback(async () => {
-    const response = await vocabService.listBooks();
-    if (!response.success || !response.data) {
-      throw new Error(response.error?.message || '加载词书失败');
-    }
-    setBooks(response.data);
-    if (!response.data.some((book) => book.code === selectedBookCode && book.variant === selectedVariant) && response.data[0]) {
-      setSelectedBookCode(response.data[0].code);
-      setSelectedVariant((response.data[0].variant as 'ordered' | 'shuffled') ?? 'ordered');
-    }
-  }, [selectedBookCode, selectedVariant]);
 
   const loadPage = useCallback(async (bookCode: string, variant: 'ordered' | 'shuffled', nextOffset: number) => {
     const pageResponse = await vocabService.getPage(bookCode, variant, nextOffset, PAGE_SIZE);
@@ -71,11 +61,35 @@ export default function VocabScreen() {
 
   const bootstrap = useCallback(async () => {
     try {
-      await loadBooks();
+      const [response, savedSelection] = await Promise.all([
+        vocabService.listBooks(),
+        syncStateRepository.getValue(LAST_VOCAB_BOOK_KEY)
+      ]);
+      if (!response.success || !response.data) {
+        throw new Error(response.error?.message || '加载词书失败');
+      }
+
+      let preferred: { bookCode?: string; variant?: string } | null = null;
+      if (savedSelection) {
+        try {
+          preferred = JSON.parse(savedSelection);
+        } catch {
+          preferred = null;
+        }
+      }
+      const selected = response.data.find(
+        (book) => book.code === preferred?.bookCode && book.variant === preferred?.variant
+      ) ?? response.data[0];
+
+      setBooks(response.data);
+      if (selected) {
+        setSelectedBookCode(selected.code);
+        setSelectedVariant((selected.variant as 'ordered' | 'shuffled') ?? 'ordered');
+      }
     } catch (error) {
       Alert.alert('加载失败', error instanceof Error ? error.message : '请稍后重试');
     }
-  }, [loadBooks]);
+  }, []);
 
   useEffect(() => {
     bootstrap();
@@ -221,10 +235,15 @@ export default function VocabScreen() {
                     key={`${book.code}-${book.variant ?? 'ordered'}`}
                     style={[styles.modalOption, active && styles.modalOptionActive]}
                     onPress={() => {
+                      const variant = (book.variant as 'ordered' | 'shuffled') ?? 'ordered';
                       setBookPickerVisible(false);
                       setOffset(0);
                       setSelectedBookCode(book.code);
-                      setSelectedVariant((book.variant as 'ordered' | 'shuffled') ?? 'ordered');
+                      setSelectedVariant(variant);
+                      void syncStateRepository.setValue(
+                        LAST_VOCAB_BOOK_KEY,
+                        JSON.stringify({ bookCode: book.code, variant })
+                      );
                     }}
                   >
                     <View style={styles.modalOptionContent}>

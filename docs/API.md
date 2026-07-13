@@ -1098,7 +1098,32 @@ PUT /api/vocab/progress
 - `lastSeqNo` 表示用户当前学到的位置，`hideMeaning` 表示当前词书的中文隐藏偏好。
 - 词条音标优先取原始词书字段，缺失时由后端按同书正序版本回退补齐。
 
-## 16. 错误码
+## 16. App 更新
+
+```text
+GET /api/app/releases/latest
+```
+
+公开接口，无需登录。返回 Android 最新发布信息：
+
+```json
+{
+  "success": true,
+  "data": {
+    "platform": "android",
+    "versionName": "1.1.0",
+    "versionCode": 2,
+    "downloadUrl": "https://gitee.com/your-name/your-repo/releases",
+    "releaseNotes": "修复已知问题并优化使用体验",
+    "forceUpdate": false
+  },
+  "error": null
+}
+```
+
+客户端比较 `versionName`，发现新版后提示用户下载；`downloadUrl` 可以是 APK 直链或 Gitee Releases 页面；`forceUpdate=true` 时不提供“稍后”按钮。
+
+## 17. 错误码
 
 | code | 含义 |
 | --- | --- |

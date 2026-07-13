@@ -17,15 +17,14 @@ import {
 import { CachedAvatar } from "@/components/CachedAvatar";
 import { Screen } from "@/components/Screen";
 import { useAuthStore } from "@/store/authStore";
-import { colors } from "@/theme/colors";
+import { applyAppTheme, appThemeOptions, colors, currentThemeKey, themePalettes } from "@/theme/colors";
 import { authService } from "@/services/authService";
 import { mediaService } from "@/services/mediaService";
 import { syncService } from "@/services/syncService";
 import { syncStateRepository } from "@/db/syncStateRepository";
 import { syncMutationRepository } from "@/db/syncMutationRepository";
 import { formatDateTimeCn } from "@/utils/time";
-
-const APP_VERSION = "1.0.0";
+import { appUpdateService, CURRENT_APP_VERSION } from "@/services/appUpdateService";
 
 export default function ProfileScreen() {
   const { user, clearAuth, updateUser } = useAuthStore();
@@ -191,8 +190,18 @@ export default function ProfileScreen() {
   const handleCheckUpdate = async () => {
     setIsCheckingUpdate(true);
     try {
-      await new Promise((resolve) => setTimeout(resolve, 650));
-      Alert.alert("已是最新版本", `当前版本 ${APP_VERSION}，暂未发现可用更新。`);
+      if (!appUpdateService.isSupported) {
+        Alert.alert("暂不支持", "当前检查更新功能仅用于 Android 安装包。");
+        return;
+      }
+      const result = await appUpdateService.checkForUpdate();
+      if (result.updateAvailable) {
+        appUpdateService.promptForUpdate(result.release);
+      } else {
+        Alert.alert("已是最新版本", `当前版本 ${CURRENT_APP_VERSION}，暂未发现可用更新。`);
+      }
+    } catch (error) {
+      Alert.alert("检查更新失败", error instanceof Error ? error.message : "请稍后重试。");
     } finally {
       setIsCheckingUpdate(false);
     }
@@ -242,7 +251,7 @@ export default function ProfileScreen() {
       <View style={styles.quickGrid}>
         <InfoTile label="隐私状态" value="默认私密" icon="shield-checkmark-outline" />
         <InfoTile label="待同步" value={`${pendingCount} 条`} icon="cloud-upload-outline" danger={pendingCount > 0} />
-        <InfoTile label="版本" value={APP_VERSION} icon="phone-portrait-outline" />
+        <InfoTile label="版本" value={CURRENT_APP_VERSION} icon="phone-portrait-outline" />
       </View>
 
       <View style={styles.section}>
@@ -271,6 +280,31 @@ export default function ProfileScreen() {
       ) : null}
 
       <View style={styles.section}>
+        <Text style={styles.sectionTitle}>外观主题</Text>
+        <View style={styles.themeGrid}>
+          {appThemeOptions.map((theme) => {
+            const active = theme.key === currentThemeKey;
+            const palette = themePalettes[theme.key];
+            return (
+              <TouchableOpacity
+                key={theme.key}
+                activeOpacity={0.82}
+                style={[styles.themeOption, active && styles.themeOptionActive]}
+                onPress={() => {
+                  void applyAppTheme(theme.key).catch(() => {
+                    Alert.alert("切换失败", "主题暂时无法保存，请稍后再试。");
+                  });
+                }}
+              >
+                <View style={[styles.themeColorDot, { backgroundColor: palette.accent }]} />
+                <Text style={styles.themeOptionTitle}>{theme.name}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      </View>
+
+      <View style={styles.section}>
         <Text style={styles.sectionTitle}>账号安全</Text>
         <ActionRow
           icon="key-outline"
@@ -281,7 +315,7 @@ export default function ProfileScreen() {
         <ActionRow
           icon="download-outline"
           title="检查更新"
-          subtitle={`当前版本 ${APP_VERSION}`}
+          subtitle={`当前版本 ${CURRENT_APP_VERSION}`}
           loading={isCheckingUpdate}
           onPress={handleCheckUpdate}
         />
@@ -462,6 +496,41 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     overflow: "hidden",
     width: 72,
+  },
+  themeGrid: {
+    flexDirection: "row",
+    gap: 8,
+    marginBottom: 14,
+    marginTop: 6,
+  },
+  themeOption: {
+    alignItems: "center",
+    backgroundColor: colors.background,
+    borderColor: colors.border,
+    borderRadius: 12,
+    borderWidth: 1,
+    flex: 1,
+    flexDirection: "row",
+    gap: 5,
+    justifyContent: "center",
+    minHeight: 44,
+    paddingHorizontal: 7,
+    paddingVertical: 8,
+  },
+  themeOptionActive: {
+    backgroundColor: `${colors.accent}10`,
+    borderColor: colors.accent,
+    borderWidth: 1.5,
+  },
+  themeColorDot: {
+    borderRadius: 5,
+    height: 10,
+    width: 10,
+  },
+  themeOptionTitle: {
+    color: colors.text,
+    fontSize: 12,
+    fontWeight: "700",
   },
   badge: {
     backgroundColor: colors.error,

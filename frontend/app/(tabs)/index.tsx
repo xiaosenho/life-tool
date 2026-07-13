@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Alert, Image } from "react-native";
 import { Screen } from "@/components/Screen";
 import { colors } from "@/theme/colors";
@@ -13,6 +13,7 @@ import {
 import { useAuthStore } from "@/store/authStore";
 import { router, useFocusEffect } from "expo-router";
 import { newsService, NewsItem } from "@/services/newsService";
+import { useNewsBootstrapStore } from "@/store/newsBootstrapStore";
 
 export default function TodayScreen() {
   const { isAuthenticated } = useAuthStore();
@@ -23,6 +24,8 @@ export default function TodayScreen() {
   const [offlineNotice, setOfflineNotice] = useState<string | null>(null);
   const [newsItems, setNewsItems] = useState<NewsItem[]>([]);
   const [newsLoading, setNewsLoading] = useState(false);
+  const firstFocusRef = useRef(true);
+  const newsRequestInFlightRef = useRef(false);
 
   const todayKey = () => {
     const now = new Date();
@@ -74,6 +77,9 @@ export default function TodayScreen() {
   }, [isAuthenticated]);
 
   const loadNews = useCallback(async () => {
+    // 去重：请求进行中时不重复触发
+    if (newsRequestInFlightRef.current) return;
+    newsRequestInFlightRef.current = true;
     setNewsLoading(true);
     try {
       const response = await newsService.getTopNews();
@@ -87,12 +93,46 @@ export default function TodayScreen() {
       setNewsItems([]);
     } finally {
       setNewsLoading(false);
+      newsRequestInFlightRef.current = false;
     }
   }, []);
 
   useFocusEffect(
     useCallback(() => {
       loadData();
+
+      // 首次进入：尝试消费预取数据
+      if (firstFocusRef.current) {
+        firstFocusRef.current = false;
+        const bootstrap = useNewsBootstrapStore.getState();
+        const prefetched = bootstrap.consume();
+        if (prefetched) {
+          setNewsItems(prefetched);
+          setNewsLoading(false);
+          return;
+        }
+        // 预取还在 loading 或 idle/error 时，正常加载
+        if (bootstrap.status === "loading") {
+          setNewsLoading(true);
+          // 等预取完成后消费结果
+          const unsubscribe = useNewsBootstrapStore.subscribe((state) => {
+            if (state.status === "success" || state.status === "error") {
+              unsubscribe();
+              const result = useNewsBootstrapStore.getState().consume();
+              if (result) {
+                setNewsItems(result);
+              } else {
+                // error 情况 fallback 到手动加载
+                setNewsItems([]);
+              }
+              setNewsLoading(false);
+            }
+          });
+          return () => unsubscribe();
+        }
+      }
+
+      // 后续回焦：正常刷新
       loadNews();
     }, [loadData, loadNews])
   );

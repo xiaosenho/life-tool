@@ -19,6 +19,13 @@ jwt:
   refresh-ttl-ms: 604800000
 
 lifetool:
+  app-update:
+    android:
+      version-name: ${LIFETOOL_APP_UPDATE_ANDROID_VERSION_NAME:1.0.0}
+      version-code: ${LIFETOOL_APP_UPDATE_ANDROID_VERSION_CODE:1}
+      download-url: ${LIFETOOL_APP_UPDATE_ANDROID_DOWNLOAD_URL:}
+      release-notes: ${LIFETOOL_APP_UPDATE_ANDROID_RELEASE_NOTES:暂无更新说明}
+      force-update: ${LIFETOOL_APP_UPDATE_ANDROID_FORCE_UPDATE:false}
   database:
     migration-enabled: ${LIFETOOL_DB_MIGRATION_ENABLED:false}
   ai:
