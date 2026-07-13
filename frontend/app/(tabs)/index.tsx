@@ -144,6 +144,9 @@ export default function TodayScreen() {
         params: {
           url: item.url,
           title: item.source || "新闻",
+          newsTitle: item.title,
+          summary: item.summary,
+          imageUrl: item.imageUrl || "",
         },
       });
     } catch {
